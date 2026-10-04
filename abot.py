@@ -1,0 +1,904 @@
+"""
+Kalshi crypto scalper — trades KXBTC15M-style up/down contracts using a
+volatility-priced probability model instead of guessing from price alone.
+
+READ THIS FIRST:
+  - DRY_RUN = True by default. No orders placed until you flip it.
+  - KALSHI_ENV=demo in .env by default — use it. These markets settle in
+    minutes, so mistakes compound fast; there's no reason to skip testing.
+  - This is a genuinely harder niche than the sports version: 15-minute
+    crypto binaries are actively traded by high-frequency firms with far
+    lower latency than a Python script polling over HTTP. The volatility
+    model gives a real, defensible probability estimate — it does not
+    give you a speed advantage over faster competitors. Expect this to
+    be a much closer contest than the sports edge-detection approach.
+  - Fees and bid-ask spread eat into small edges fast at this trade
+    frequency. min_edge_pct is set higher here than in the sports bot on
+    purpose — don't lower it without a real reason to trust smaller
+    signals survive costs.
+"""
+import json
+import os
+import sys
+import time
+from datetime import datetime, timezone
+import uuid
+from pathlib import Path
+
+from kalshi_client import KalshiClient
+from strategy import discover_crypto_markets, evaluate_crypto_market, \
+    discover_generic_short_markets, evaluate_generic_market, \
+    discover_commodity_markets, evaluate_commodity_market
+from priority import RankedCandidate, potential_points, rank_candidates, size_scale_factor_91_95
+from risk import RiskParams, CircuitBreaker, kelly_size
+from exits import check_exit, current_position_value
+import build_dashboard_data
+import reversion
+import shadow_exit_tracking as sht
+
+DRY_RUN = False   # set to match your established real-trading setup -- this used to
+                   # default to True in every file I shared, which silently reset your
+                   # real setting back off each time you downloaded an update for
+                   # something unrelated. Fixed now so that won't happen again.
+# Separate from DRY_RUN on purpose: this governs the NEW exit-order code
+# path specifically. Entries can go live independently of this -- but
+# exits are new, untested code with no track record, so they default to
+# logging-only regardless of what DRY_RUN is set to. Flip this only once
+# you've watched it behave correctly for a while.
+EXIT_DRY_RUN = False   # enabled after reviewing real "would exit" decisions over time --
+                        # the reasoning (stop_loss, model_reversal, lock_in_near_expiry)
+                        # held up consistently before this was turned on
+
+POLL_SECONDS = 1     # tightened further per explicit request -- checked against Kalshi's ~20 req/s
+                      # limit: ~10 series prefixes + a few open-position checks per loop averages
+                      # to roughly 2.5-6 req/s at this interval, comfortably under budget. Kalshi's
+                      # own guidance is to use WebSockets for anything faster than this on plain REST.
+STARTING_BANKROLL = 10.0   # matches your real Kalshi balance -- Kelly sizing and the
+                           # circuit breaker's 6% daily-loss threshold both scale off this number
+
+# Hard, absolute floor -- separate from the circuit breaker (which is
+# percentage-based and resets daily). This one simply stops all new
+# entries once real bankroll falls to or below this dollar amount, no
+# matter what day it is or how the percentage math works out. Existing
+# open positions still get monitored and can still exit normally --
+# this only blocks NEW bids.
+MIN_BANKROLL_FLOOR = 0.50
+
+# Daily profit target, ported from Omni per explicit request -- once
+# today's real pnl reaches this, no new entries for the rest of the
+# day. Existing open positions are unaffected and still monitored normally.
+DAILY_PROFIT_TARGET = 2000.0
+
+RISK_PARAMS = RiskParams(
+    kelly_fraction=0.15,       # more conservative than the sports bot -- higher-frequency, higher-uncertainty niche
+    min_edge_pct=0.0,          # removed entirely per explicit request -- Kelly sizing still
+                                # scales down naturally for small edges, but there's no longer
+                                # a floor requiring the edge to be worth the real fee cost first
+    max_position_pct=3.0,
+    max_open_positions=35,     # raised from 50 per explicit request
+    max_daily_loss_pct=20.0,   # raised from 6% -- still a real stop, just gives more
+                                # room to trade before it kicks in on a rough day
+)
+
+# Dip/reversion entry and exit thresholds -- see reversion.py for the
+# scoring logic. UNPROVEN hypothesis, wired to real trading at full
+# position sizing per your explicit choice, not because it's been
+# validated the way the volatility model has.
+REVERSION_ENTRY_Z_THRESHOLD = -1.5   # how hard a dip (in stdevs below its own recent avg) triggers a buy
+REVERSION_EXIT_Z_THRESHOLD = 1.0     # how far a recovery needs to go (stdevs above its own recent avg) to trigger a sell
+
+# Sell once a position has captured this much percentage gain, per
+# explicit request applied to both bots.
+PARTIAL_PROFIT_FRACTION = 0.55
+
+# Only bid on markets where the model is at least this confident in
+# whichever side we'd take, per explicit request -- same threshold as Omni.
+# Only bid on contracts priced at or above this, whichever side (yes or
+# no) is priced there -- capturing the small remaining gap to $1.00 on
+# settlement, per explicit request. This is a real-price check, separate
+# from the model-confidence filter above.
+# Absolute floor -- per explicit request. Currently redundant with the
+# 91-96 range below (91 is already above 50), but checked as its own,
+# separate rule so it stays a real safety net even if that range
+# changes later.
+ABSOLUTE_MIN_PRICE_FLOOR = 0.50
+
+# TRIAL structure, per explicit request -- TEMPORARILY replaces the
+# four-tier structure that was here (original bot.py saved separately
+# for restoration when the trial ends):
+#   61-125s -> 93-97%
+#   5-60s  -> 92-98%
+TRIAL_TIER1_THRESHOLD_SECONDS = 125
+TRIAL_TIER1_MIN_PRICE = 0.93
+TRIAL_TIER1_MAX_PRICE = 0.97
+
+TRIAL_TIER2_THRESHOLD_SECONDS = 60
+TRIAL_TIER2_MIN_PRICE = 0.92
+TRIAL_TIER2_MAX_PRICE = 0.98
+
+TRIAL_SHARES_PER_TRADE = 25   # per explicit request, fixed shares instead of dollar-based sizing
+
+# Never place an ask (no) at this price or higher, per explicit request.
+# The 'bid' (yes) side has no equivalent ceiling.
+ASK_MAX_PRICE = 0.98
+
+# Per-coin position size multipliers -- default 1.0 (no change) for any
+# coin not listed. Applied right before sizing, regardless of which
+# entry path (model edge, reversion, longshot) triggered the trade.
+COIN_SIZE_MULTIPLIER = {
+    # NEAR removed entirely (see strategy.py) rather than sized down --
+    # nothing currently listed here, but the mechanism stays in place
+    # for any future coin-specific adjustment.
+}
+
+STATE_FILE = Path("state.json")
+TRADES_FILE = Path("trades.json")
+SETTLEMENTS_FILE = Path("settlements.json")
+SCAN_FILE = Path("scan.json")
+
+
+def load_json(path: Path, default):
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        print(f"WARNING: {path} is corrupted ({e}) — treating it as empty rather than crashing. "
+              f"The corrupted content is still on disk if you want to inspect it before it's overwritten.")
+        return default
+
+
+def save_json(path: Path, data):
+    """Writes atomically: to a temp file first, then renames it into place.
+    A plain write_text() can corrupt the file if two writes overlap (e.g.
+    the bot writing while something else reads at the same instant) --
+    the rename step is atomic at the OS level, so readers only ever see
+    either the old complete file or the new complete file, never a
+    half-written mix of both.
+
+    The temp filename includes the process ID and a random suffix --
+    FIXED after a real crash: two simultaneous instances of this bot
+    were racing on the same shared temp filename, and one process's
+    replace() consumed the file the other had just written, leaving
+    nothing for the second replace() call to find (FileNotFoundError).
+    A unique-per-process temp name makes that collision impossible,
+    regardless of whether multiple instances are running by accident
+    or on purpose."""
+    tmp_path = path.with_suffix(f"{path.suffix}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+    tmp_path.write_text(json.dumps(data, indent=2, default=str))
+    tmp_path.replace(path)
+
+
+def log_trade(result, side: str, price: float, count: float, dry_run: bool, reversion_z=None, entry_reason="model_edge"):
+    trades = load_json(TRADES_FILE, [])
+    trades.append({
+        # getattr fallbacks here, per explicit request to open this up to
+        # generic (non-crypto) hourly markets -- GenericPriceResult has
+        # no coin/edge_pct/model_prob at all, since it's pure-price with
+        # no model. category substitutes for coin; the rest log as None.
+        "timestamp": time.time(), "ticker": result.ticker, "title": result.title,
+        "coin": getattr(result, "coin", None) or getattr(result, "category", None) or getattr(result, "commodity", "UNKNOWN"),
+        "side": side, "price": price, "count": count,
+        "edge_pct": getattr(result, "edge_pct", None), "model_prob": getattr(result, "model_prob", None),
+        "seconds_remaining_at_entry": result.seconds_remaining, "dry_run": dry_run,
+        "reversion_z_at_entry": reversion_z,   # logged for later testing -- NOT used in sizing/entry decisions yet
+        "entry_reason": entry_reason,
+    })
+    save_json(TRADES_FILE, trades)
+
+
+def place_entry(client: KalshiClient, ticker: str, side: str, price: float, count: float, dry_run: bool):
+    print(f"{'DRY-RUN' if dry_run else 'PLACING'} {side.upper()} {ticker} x{count} @ ${price:.2f}")
+    if dry_run:
+        return {"dry_run": True}
+    resp = client.create_order(
+        ticker=ticker, client_order_id=str(uuid.uuid4()),
+        side=side, count=str(count), price=f"{price:.2f}",
+    )
+    # Real fill verification, per explicit request -- an order using
+    # good_till_canceled can be ACCEPTED by Kalshi (this call succeeds,
+    # no error) while sitting UNFILLED on the order book, resting until
+    # matched or canceled. That's the exact gap that caused it: the bot
+    # logged "PLACING" and moved on, but the order was only ever resting
+    # on the watchlist, never actually filled.
+    order = resp.get("order", {})
+    status = order.get("status", "").lower()
+    if status == "resting":
+        # Not filled yet -- check real positions directly rather than
+        # trust the order response alone, since a resting order can
+        # still fill moments later.
+        try:
+            positions_resp = client.get_positions()
+            real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
+            actually_filled = any(
+                p.get("ticker") == ticker and p.get("position", p.get("quantity", 0)) != 0
+                for p in real_positions
+            )
+        except Exception as e:
+            print(f"  Couldn't verify fill via real positions ({e}) -- order accepted but fill status unconfirmed.")
+            actually_filled = False
+        if actually_filled:
+            print(f"  CONFIRMED FILLED: {ticker} {side.upper()} x{count} @ ${price:.2f} -- real position confirmed.")
+        else:
+            print(f"  NOT YET FILLED: {ticker} {side.upper()} x{count} @ ${price:.2f} is resting on the order "
+                  f"book, unfilled -- this is a real, open order, not a confirmed trade yet.")
+    elif status in ("filled", "executed"):
+        print(f"  CONFIRMED FILLED: {ticker} {side.upper()} x{count} @ ${price:.2f} -- Kalshi reports this order as {status}.")
+    else:
+        print(f"  Fill status unclear (order status field: '{status}' -- Kalshi's exact response shape for this "
+              f"wasn't independently verified). Treat this order as UNCONFIRMED until checked manually.")
+    return resp
+
+
+def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool):
+    """close_side is the OPPOSITE of the position's entry side -- selling
+    what you hold. Uses a market-ish aggressive price (0.01/0.99) since
+    the point of an exit is to actually get filled, not to optimize price."""
+    price = 0.01 if close_side == "ask" else 0.99
+    print(f"{'EXIT DRY-RUN' if dry_run else 'EXITING'} {close_side.upper()} {ticker} x{count} @ ~${price:.2f}")
+    if dry_run:
+        return {"dry_run": True}
+    return client.create_order(
+        ticker=ticker, client_order_id=str(uuid.uuid4()),
+        side=close_side, count=str(count), price=f"{price:.2f}",
+    )
+
+
+def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> list:
+    """Re-evaluates every open position for the three exit rules in
+    exits.py. Returns realized PnL for any that exited early, removes
+    them from state so check_settlements() doesn't later double-count
+    them, and adds them to excluded_tickers so the entry logic can never
+    immediately re-open the same position -- without this, a position
+    whose model probability hovers right at the exit threshold can whipsaw
+    enter/exit/enter/exit rapidly, which is exactly what happened before
+    this fix (the same ticker entered and exited 11 times in ~90 seconds,
+    with position sizes spiraling as high as 8,960 contracts)."""
+    settlements = load_json(SETTLEMENTS_FILE, [])
+    realized_pnl = []
+    stop_loss_occurred_this_cycle = False
+
+    for ticker in list(state.keys()):
+        position = state[ticker]
+        try:
+            market = client.get_market(ticker).get("market", {})
+        except Exception:
+            continue
+        if market.get("status") == "finalized":
+            continue   # already settling naturally -- let check_settlements() handle it
+
+        result = evaluate_crypto_market(market)
+        if result is None:
+            # FIXED after a real bug: a Gold/Silver position's ticker
+            # never matches evaluate_crypto_market (it's not in
+            # CRYPTO_SERIES_PREFIXES), which silently skipped the exit
+            # check entirely -- meaning a commodity position would
+            # never get stop-loss or any other exit protection at all.
+            result = evaluate_commodity_market(market)
+        if result is None:
+            continue   # no fresh read available -- can't safely evaluate an exit without one
+
+        reversion_signal = reversion.record_and_score(ticker, result.market_price)
+
+        # Update the peak-gain tracker BEFORE checking exit rules -- the
+        # trailing nickel-to-dime target needs to know the best gain
+        # this position has ever reached, not just its current value.
+        current_value = current_position_value(position, result.market_price)
+        current_gain = current_value - position["entry_price"]
+        position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
+
+        decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
+                               reversion_z=reversion_signal.z_score, partial_profit_fraction=PARTIAL_PROFIT_FRACTION,
+                               peak_gain_per_contract=position["peak_gain_per_contract"])
+        if not decision.should_exit:
+            continue
+
+        position_is_real = position.get("dry_run") is False
+        # Only ever send a REAL closing order if the underlying position is
+        # itself real AND EXIT_DRY_RUN allows it. A demo/dry-run position
+        # was never actually opened on the real exchange -- sending a real
+        # order to "close" it would be a real bug (Kalshi has no concept of
+        # our local dry_run bookkeeping; it could error unpredictably or,
+        # worse, open an unintended new real position). This was caught by
+        # testing before it ever ran live, not found the hard way.
+        send_real_order = position_is_real and not EXIT_DRY_RUN
+
+        close_side = "ask" if position["side"] == "bid" else "bid"
+        try:
+            place_exit(client, ticker, close_side, position["count"], dry_run=not send_real_order)
+        except Exception as e:
+            # A failed exit order must not crash the bot -- that would
+            # also kill monitoring for every other open position. Leave
+            # it tracked; check_settlements() catches it naturally when
+            # the market closes, and the next loop simply retries the exit.
+            print(f"Exit order for {ticker} failed ({e}) -- leaving it tracked, will retry next loop.")
+            continue
+
+        # If the underlying position is REAL MONEY but EXIT_DRY_RUN is still
+        # True, place_exit() above does NOT send a real close order -- so we
+        # must not remove this from state or pretend it settled. Doing so
+        # was a real bug: it silently lost tracking of real open positions
+        # that were still sitting on Kalshi's exchange, un-closed, while the
+        # bot's own bookkeeping claimed they were done. Leave it tracked so
+        # check_settlements() still catches it naturally when the market
+        # actually closes.
+        if position_is_real and EXIT_DRY_RUN:
+            print(f"  (real position -- EXIT_DRY_RUN means no real close order was sent; "
+                  f"leaving it tracked to settle naturally instead of losing it)")
+            continue
+
+        exit_value = current_position_value_for_log(position, result.market_price)
+        pnl = (exit_value - position["entry_price"]) * position["count"]
+        settlements.append({
+            "ticker": ticker, "title": result.title, "result": "early_exit",
+            "side": position["side"], "count": position["count"], "entry_price": position["entry_price"],
+            "exit_value": round(exit_value, 4), "exit_reason": decision.reason,
+            "pnl": round(pnl, 2), "timestamp": time.time(), "dry_run": position.get("dry_run", True),
+        })
+        realized_pnl.append(pnl)
+        print(f"Early exit {ticker}: {decision.reason}, pnl=${pnl:.2f}")
+        sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
+                               exit_value, decision.reason, category="crypto")
+        del state[ticker]
+        # capture_profit is deliberately exempted from this exclusion,
+        # per explicit request -- it's meant to be bought and sold
+        # again and again, unlike stop_loss/model_reversal, where
+        # immediate re-entry is exactly the whipsaw risk this mechanism
+        # exists to prevent (see this function's docstring for the real
+        # incident that caused this rule to be added in the first place).
+        if not decision.reason.startswith("capture_profit"):
+            excluded_tickers.add(ticker)
+        if decision.reason.startswith("stop_loss"):
+            stop_loss_occurred_this_cycle = True
+
+    # Circuit breaker, per explicit request -- tracks a CUMULATIVE
+    # stop_loss count across the whole session (module-level, persists
+    # between loop iterations, resets only when the process restarts),
+    # and shuts the entire bot down once that count EXCEEDS 1 -- i.e.
+    # on the second stop_loss, not the first. Loosened from the
+    # earlier version, which shut down on the very first occurrence.
+    if stop_loss_occurred_this_cycle:
+        _stop_loss_count[0] += 2
+        print(f"Stop-loss count this session: {_stop_loss_count[0]}")
+
+    if realized_pnl:
+        save_json(SETTLEMENTS_FILE, settlements)
+
+    if _stop_loss_count[0] > 1:
+        save_json(STATE_FILE, state)
+        print("\n" + "=" * 60)
+        print(f"STOP LOSS COUNT ({_stop_loss_count[0]}) EXCEEDED 2 -- SHUTTING DOWN PER CIRCUIT BREAKER.")
+        print("The bot will not place or manage any further trades")
+        print("until you manually restart it.")
+        print("=" * 60)
+        try:
+            from email_alert import send_email_alert
+            send_email_alert(
+                "Pulse circuit breaker tripped -- bot stopped",
+                f"Pulse's stop-loss count reached {_stop_loss_count[0]} this session and the "
+                f"circuit breaker shut the bot down. It will not trade again until you "
+                f"manually restart it with 'python3 bot.py'."
+            )
+        except Exception as e:
+            print(f"Email alert attempt failed ({e}) -- continuing with shutdown regardless.")
+        sys.exit(1)
+
+    return realized_pnl
+
+
+def current_position_value_for_log(position: dict, market_price: float) -> float:
+    return market_price if position["side"] == "bid" else (1 - market_price)
+
+
+def check_settlements(client: KalshiClient, state: dict) -> list:
+    """These markets settle within minutes of close_time, so checking every
+    loop (rather than a separate periodic script) makes sense here."""
+    settlements = load_json(SETTLEMENTS_FILE, [])
+    newly_settled_pnl = []
+    for ticker in list(state.keys()):
+        try:
+            market = client.get_market(ticker).get("market", {})
+        except Exception:
+            continue
+        if market.get("status") != "finalized" or not market.get("result"):
+            continue
+        position = state.pop(ticker)
+        won = (position["side"] == "bid" and market["result"] == "yes") or \
+              (position["side"] == "ask" and market["result"] == "no")
+        pnl = ((1.0 if won else 0.0) - position["entry_price"]) * position["count"]
+        settlements.append({
+            "ticker": ticker, "title": market.get("title", ticker), "result": market["result"],
+            "side": position["side"], "count": position["count"], "entry_price": position["entry_price"],
+            "pnl": round(pnl, 2), "timestamp": time.time(),
+            "dry_run": position.get("dry_run", True),   # default True (exclude) for old positions with no marker
+        })
+        newly_settled_pnl.append(pnl)
+        print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
+    if newly_settled_pnl:
+        save_json(SETTLEMENTS_FILE, settlements)
+    return newly_settled_pnl
+
+
+_floor_check_cache = [None, 0.0]   # [cached_balance, cached_at] -- module-level, shared across the run
+_stop_loss_count = [0]   # cumulative stop_loss count for this session -- resets only on process restart
+FLOOR_CHECK_CACHE_SECONDS = 30      # short TTL -- fresh enough for a safety check, without hammering
+                                     # the API on every single market evaluated in a scan
+
+_generic_series_cache = [None, 0.0]   # [cached {ticker: category} dict, cached_at]
+GENERIC_SERIES_CACHE_SECONDS = 300   # 5 min -- series list changes rarely, no need to re-query every cycle
+
+
+def get_cached_generic_short_markets(client: KalshiClient) -> dict:
+    """Per explicit request to open Pulse up to any hourly OR
+    15-minute market, not just crypto -- caches the discovery query
+    since /series is a heavier call and this list changes rarely."""
+    if _generic_series_cache[0] is not None and (time.time() - _generic_series_cache[1]) < GENERIC_SERIES_CACHE_SECONDS:
+        return _generic_series_cache[0]
+    found = discover_generic_short_markets(client)
+    _generic_series_cache[0] = found
+    _generic_series_cache[1] = time.time()
+    return found
+
+
+def get_fresh_balance_for_floor_check(client: KalshiClient, fallback_bankroll: float) -> float:
+    """The $5 floor is a safety-critical check -- it shouldn't trust the
+    in-memory bankroll variable, which only resyncs every 5 minutes and
+    can drift in between. This fetches a genuinely fresh balance, cached
+    briefly so it doesn't add a network call per market evaluated."""
+    if _floor_check_cache[0] is not None and (time.time() - _floor_check_cache[1]) < FLOOR_CHECK_CACHE_SECONDS:
+        return _floor_check_cache[0]
+    try:
+        real_balance = client.get_balance()
+        if "balance" in real_balance:
+            fresh = real_balance["balance"] / 100
+            _floor_check_cache[0] = fresh
+            _floor_check_cache[1] = time.time()
+            return fresh
+    except Exception:
+        pass
+    return fallback_bankroll   # live check failed -- fall back to in-memory tracking rather than block everything
+
+
+def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
+    """TRIAL structure, per explicit request -- temporarily replaces
+    the four-tier structure (saved separately for restoration later):
+      61-125s -> 93-97%
+      5-60s  -> 88-98%
+    Outside 1-125s( 1s lower bound enforced by the caller), nothing
+    qualifies at all."""
+    secs = seconds_remaining
+    up_price = market_price
+    down_price = 1 - market_price
+
+    if secs <= TRIAL_TIER2_THRESHOLD_SECONDS:
+        floor, cap = TRIAL_TIER2_MIN_PRICE, TRIAL_TIER2_MAX_PRICE
+    elif secs <= TRIAL_TIER1_THRESHOLD_SECONDS:
+        floor, cap = TRIAL_TIER1_MIN_PRICE, TRIAL_TIER1_MAX_PRICE
+    else:
+        return None
+
+    if floor <= up_price <= cap:
+        return "bid", up_price
+    elif floor <= down_price <= cap:
+        return "ask", down_price
+    return None
+
+
+def run():
+    client = KalshiClient()
+    state = load_json(STATE_FILE, {})
+    settlements = load_json(SETTLEMENTS_FILE, [])
+
+    # Prefer your REAL Kalshi balance over the hardcoded STARTING_BANKROLL
+    # constant -- otherwise every restart forgets whatever you've actually
+    # won or lost and silently starts sizing trades off a stale number.
+    # Fetched BEFORE the circuit breaker is constructed below, so the
+    # daily-loss threshold is measured against your actual capital, not
+    # a stale constant that may no longer match reality (found this bug
+    # while diagnosing why Omni's breaker tripped on a $1.36 loss --
+    # turned out it was checking against the fallback constant the whole
+    # time, never the real balance, because the breaker was built before
+    # the real balance was even fetched).
+    bankroll = STARTING_BANKROLL
+    try:
+        real_balance = client.get_balance()
+        if "balance" in real_balance:
+            bankroll = real_balance["balance"] / 100   # Kalshi returns cents
+            print(f"Using real Kalshi balance: ${bankroll:.2f} (STARTING_BANKROLL constant is a fallback only)")
+    except Exception as e:
+        print(f"Couldn't fetch real balance ({e}) -- falling back to STARTING_BANKROLL=${STARTING_BANKROLL:.2f}")
+
+    breaker = CircuitBreaker(bankroll, RISK_PARAMS)
+    breaker.prime_from_settlements(settlements)
+
+    print(f"Bot started. DRY_RUN={DRY_RUN}. EXIT_DRY_RUN={EXIT_DRY_RUN}. Bankroll: ${bankroll:.2f}. "
+          f"Today's PnL so far (recovered from settlements): ${breaker.day_pnl:.2f}")
+
+    excluded_tickers = set()   # tickers exited early -- never re-enter these, prevents entry/exit whipsawing
+    last_balance_sync = time.time()
+    BALANCE_SYNC_SECONDS = 300   # re-sync to your REAL balance every 5 minutes -- the in-memory
+                                  # bankroll variable only ever tracks RAW pnl (bankroll += pnl),
+                                  # which never subtracts real Kalshi fees, so it drifts further
+                                  # from reality the longer the bot runs without this correction.
+                                  # Also directly helps recover from a failed startup balance fetch
+                                  # (e.g. an API timeout) -- the next successful sync corrects it.
+
+    last_deposit_check_time = time.time()
+
+    while True:
+        if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
+            try:
+                real_balance = client.get_balance()
+                if "balance" in real_balance:
+                    real_bankroll = real_balance["balance"] / 100
+                    drift = real_bankroll - bankroll
+
+                    # Check for real deposits since the last resync --
+                    # without this, a deposit looks IDENTICAL to
+                    # unexplained trading drift, and gets wrongly blamed
+                    # on fees. Field names here aren't independently
+                    # verified against a live response (no network
+                    # access while building this) -- checks several
+                    # likely candidates defensively; if none match, this
+                    # just falls back to the old fees-only explanation
+                    # rather than crashing.
+                    deposit_total = 0.0
+                    try:
+                        deposits_resp = client.get_deposits(limit=20)
+                        for d in deposits_resp.get("deposits", []):
+                            amount_cents = d.get("amount_cents", d.get("amount"))
+                            created = d.get("created_time", d.get("timestamp", ""))
+                            if amount_cents is None:
+                                continue
+                            try:
+                                created_ts = datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() \
+                                    if isinstance(created, str) and created else 0
+                            except ValueError:
+                                created_ts = 0
+                            if created_ts >= last_deposit_check_time:
+                                deposit_total += amount_cents / 100
+                    except Exception:
+                        pass   # deposit check is best-effort -- falls back to the old behavior below
+
+                    if abs(drift) >= 0.01:
+                        remaining_drift = drift - deposit_total
+                        if deposit_total > 0:
+                            print(f"Bankroll resync: was tracking ${bankroll:.2f} in-memory, real balance is "
+                                  f"${real_bankroll:.2f} (drift of ${drift:+.2f} -- ${deposit_total:.2f} of that "
+                                  f"was a real deposit, ${remaining_drift:+.2f} is unexplained/fees) -- "
+                                  f"correcting to match reality.")
+                        else:
+                            print(f"Bankroll resync: was tracking ${bankroll:.2f} in-memory, real balance is "
+                                  f"${real_bankroll:.2f} (drift of ${drift:+.2f}, mostly real fees never "
+                                  f"subtracted from the in-memory number) -- correcting to match reality.")
+                    bankroll = real_bankroll
+                    last_deposit_check_time = time.time()
+            except Exception as e:
+                print(f"Balance resync failed ({e}) -- keeping the current in-memory bankroll for now.")
+            last_balance_sync = time.time()
+
+            # Real position sync -- checks state.json against Kalshi's
+            # actual open positions, same "trust reality over local
+            # bookkeeping" principle as the balance resync above. Field
+            # names checked defensively (not independently verified
+            # against a live response) -- if none match, this prints
+            # what it actually got back rather than silently doing
+            # nothing or guessing wrong.
+            try:
+                real_positions_resp = client.get_positions()
+                position_list = real_positions_resp.get("market_positions", real_positions_resp.get("positions", []))
+                real_open_tickers = set()
+                for p in position_list:
+                    ticker = p.get("ticker")
+                    qty = p.get("position", p.get("quantity", p.get("count")))
+                    if ticker and qty is not None and qty != 0:
+                        real_open_tickers.add(ticker)
+
+                if position_list:   # only act if we actually got a recognizable response
+                    stale_tickers = [t for t in state if t not in real_open_tickers]
+                    for t in stale_tickers:
+                        print(f"Position sync: {t} is tracked locally but Kalshi shows it's no longer "
+                              f"open -- removing from local tracking (it already resolved on Kalshi's "
+                              f"side; check_settlements should have caught this, but this catches "
+                              f"anything that slipped through).")
+                        del state[t]
+                    unknown_tickers = [t for t in real_open_tickers if t not in state]
+                    for t in unknown_tickers:
+                        print(f"Position sync WARNING: Kalshi shows {t} as open, but it's not in local "
+                              f"tracking at all -- this position exists but this bot doesn't know its "
+                              f"entry price or side, so it can't be managed. Check it manually.")
+                    if stale_tickers:
+                        save_json(STATE_FILE, state)
+                else:
+                    print(f"Position sync: couldn't recognize the response shape -- raw keys were "
+                          f"{list(real_positions_resp.keys())}. Skipping this cycle's sync.")
+            except Exception as e:
+                print(f"Position sync failed ({e}) -- keeping local tracking as-is for now.")
+
+        settled_pnls = check_settlements(client, state)
+        for pnl in settled_pnls:
+            bankroll += pnl
+            breaker.record_pnl(pnl)
+        if settled_pnls:
+            save_json(STATE_FILE, state)
+
+        exit_pnls = check_exits(client, state, excluded_tickers)
+        for pnl in exit_pnls:
+            bankroll += pnl
+            breaker.record_pnl(pnl)
+        if exit_pnls:
+            save_json(STATE_FILE, state)
+
+        shadow_comparisons = sht.check_shadow_positions(client)
+        for c in shadow_comparisons:
+            verdict = "GOOD EXIT" if c["difference"] > 0 else "BAD EXIT" if c["difference"] < 0 else "NEUTRAL"
+            print(f"Exit outcome check [{c['exit_reason']}] {c['ticker']}: actual=${c['pnl_actual']:.2f} "
+                  f"vs if_held=${c['pnl_if_held']:.2f} ({verdict}, diff=${c['difference']:+.2f})")
+
+        scan_results = []
+        pending_candidates = []
+        markets = discover_crypto_markets(client)
+        reversion.cleanup_stale_tickers({m["ticker"] for m in markets})
+        evaluated = 0
+
+        for market in markets:
+            result = evaluate_crypto_market(market)
+            if result is None:
+                continue
+            evaluated += 1
+
+            reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+
+            scan_results.append({
+                "ticker": result.ticker, "title": result.title, "coin": result.coin,
+                "direction": result.direction, "market_price": result.market_price,
+                "model_prob": result.model_prob, "edge_pct": result.edge_pct,
+                "seconds_remaining": result.seconds_remaining, "volume": result.volume,
+                "reversion_z": reversion_signal.z_score,   # logged only -- not used in any trade decision yet
+            })
+            print(
+                f"  [{result.coin}] {result.title[:45]:<45} up=${result.market_price:.2f} "
+                f"down=${1 - result.market_price:.2f} model={result.model_prob:.2f} "
+                f"edge={result.edge_pct:+.1f}pp  t-{int(result.seconds_remaining)}s"
+            )
+
+            if result.ticker in state or result.ticker in excluded_tickers:
+                continue
+            live_bankroll_for_floor = get_fresh_balance_for_floor_check(client, bankroll)
+            if live_bankroll_for_floor <= MIN_BANKROLL_FLOOR:
+                print(f"Bankroll (${live_bankroll_for_floor:.2f}, live-checked) at or below the floor "
+                      f"(${MIN_BANKROLL_FLOOR:.2f}) — skipping new entries.")
+                continue
+            # Daily profit target -- DISABLED per explicit request.
+            # if breaker.day_pnl >= DAILY_PROFIT_TARGET:
+            #     print(f"Daily profit target hit (day PnL ${breaker.day_pnl:.2f} >= ${DAILY_PROFIT_TARGET:.2f}) — "
+            #           f"locking in the win, skipping new entries for the rest of today.")
+            #     continue
+            # Only bid on markets closing today (UTC) -- per explicit
+            # request. In practice this only ever matters right around
+            # the UTC midnight boundary, since these are 15-minute
+            # windows, but it's a real, checked guard rather than an
+            # assumption.
+            if result.close_time is not None and result.close_time.date() != datetime.now(timezone.utc).date():
+                continue
+            # Outer bound now 4005s (66:45), matching the widest tier
+            # below, per explicit request.
+            if not (9 <= result.seconds_remaining <= 4005):
+                continue
+            # Hourly markets, per explicit request -- only the final 15
+            # minutes (900s) of the 60-minute window are ever
+            # considered; the first 45 minutes are ignored entirely.
+            # Once inside that window, the exact same tiered rules
+            # below apply identically to 15-minute markets.
+            if result.is_hourly and result.seconds_remaining > 900:
+                continue
+
+            # Pure raw-market-price entry, per explicit request -- the
+            # model is NOT involved in this decision at all. Tier logic
+            # extracted into decide_entry_side_and_price() so it can be
+            # reused identically for generic (non-crypto) hourly
+            # markets too -- see below.
+            decision = decide_entry_side_and_price(result.seconds_remaining, result.market_price)
+            if decision is None:
+                continue
+            candidate_side, candidate_price = decision
+            # Universal price cap check removed for the trial -- the
+            # trial tiers already cap directly (90c and 95c), so this
+            # would never fire anyway.
+
+            # Collected here, NOT acted on yet -- per explicit request,
+            # candidates are ranked by potential upside (cents of room
+            # remaining to $1.00) after the full scan finishes, so a
+            # trade at 88 cents (12 points of room) gets priority over
+            # one at 96 cents (4 points), rather than whichever coin
+            # happened to be checked first in this loop.
+            pending_candidates.append(RankedCandidate(
+                ticker=result.ticker, side=candidate_side, trade_price=candidate_price,
+                potential_points=potential_points(candidate_price), original=result,
+            ))
+
+        # Gold and Silver's real 15-minute markets, per explicit
+        # request -- added alongside crypto, not replacing it. Same
+        # exact tier logic via decide_entry_side_and_price(), no model
+        # involved (there isn't one for commodities the way there is
+        # for crypto -- pure price and time only).
+        commodity_markets = discover_commodity_markets(client)
+        for market in commodity_markets:
+            result = evaluate_commodity_market(market)
+            if result is None:
+                continue
+            evaluated += 1
+
+            reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+
+            scan_results.append({
+                "ticker": result.ticker, "title": result.title, "coin": result.commodity,
+                "direction": None, "market_price": result.market_price,
+                "model_prob": None, "edge_pct": None,
+                "seconds_remaining": result.seconds_remaining, "volume": result.volume,
+                "reversion_z": reversion_signal.z_score,
+            })
+            print(
+                f"  [{result.commodity}] {result.title[:45]:<45} price=${result.market_price:.2f} "
+                f"t-{int(result.seconds_remaining)}s"
+            )
+
+            if result.ticker in state or result.ticker in excluded_tickers:
+                continue
+            live_bankroll_for_floor = get_fresh_balance_for_floor_check(client, bankroll)
+            if live_bankroll_for_floor <= MIN_BANKROLL_FLOOR:
+                print(f"Bankroll (${live_bankroll_for_floor:.2f}, live-checked) at or below the floor "
+                      f"(${MIN_BANKROLL_FLOOR:.2f}) — skipping new entries.")
+                continue
+            if result.close_time is not None and result.close_time.date() != datetime.now(timezone.utc).date():
+                continue
+            if not (9 <= result.seconds_remaining <= 4005):
+                continue
+
+            decision = decide_entry_side_and_price(result.seconds_remaining, result.market_price)
+            if decision is None:
+                continue
+            candidate_side, candidate_price = decision
+
+            pending_candidates.append(RankedCandidate(
+                ticker=result.ticker, side=candidate_side, trade_price=candidate_price,
+                potential_points=potential_points(candidate_price), original=result,
+            ))
+
+        # Generic (non-crypto) hourly markets, per explicit request to
+        # open this up to any hourly market across any category. Same
+        # exact tier logic via decide_entry_side_and_price(), same
+        # 900-second (last 15 min) restriction as hourly crypto -- but
+        # ONLY for markets tagged "hourly"; a 15min market's entire
+        # window already fits inside that restriction naturally, so it
+        # doesn't get the extra check. No model involved either way
+        # (there isn't one for these categories anyway).
+        generic_series = get_cached_generic_short_markets(client)
+        for prefix, (category, frequency) in generic_series.items():
+            try:
+                resp = client.get_markets(status="open", series_ticker=prefix, limit=50)
+            except Exception as e:
+                print(f"Generic market fetch failed for {prefix}: {e}")
+                continue
+            for market in resp.get("markets", []):
+                result = evaluate_generic_market(market, category)
+                if result is None:
+                    continue
+                evaluated += 1
+                scan_results.append({
+                    "ticker": result.ticker, "title": result.title, "coin": result.category,
+                    "direction": None, "market_price": result.market_price,
+                    "model_prob": None, "edge_pct": None,
+                    "seconds_remaining": result.seconds_remaining, "volume": result.volume,
+                    "reversion_z": None,
+                })
+                print(
+                    f"  [{result.category}] {result.title[:45]:<45} price=${result.market_price:.2f} "
+                    f"t-{int(result.seconds_remaining)}s (generic {frequency})"
+                )
+
+                if result.ticker in state or result.ticker in excluded_tickers:
+                    continue
+                live_bankroll_for_floor = get_fresh_balance_for_floor_check(client, bankroll)
+                if live_bankroll_for_floor <= MIN_BANKROLL_FLOOR:
+                    print(f"Bankroll (${live_bankroll_for_floor:.2f}, live-checked) at or below the floor "
+                          f"(${MIN_BANKROLL_FLOOR:.2f}) — skipping new entries.")
+                    continue
+                if len(state) >= RISK_PARAMS.max_open_positions:
+                    continue
+                if result.close_time is not None and result.close_time.date() != datetime.now(timezone.utc).date():
+                    continue
+                if not (9 <= result.seconds_remaining <= 4005):
+                    continue
+                # Only the final 15 minutes for HOURLY markets -- these
+                # are the "generic hourly" category, the first part of
+                # the window is ignored entirely. 15min markets skip
+                # this restriction, since their whole window already
+                # qualifies naturally.
+                if frequency == "hourly" and result.seconds_remaining > 900:
+                    continue
+
+                decision = decide_entry_side_and_price(result.seconds_remaining, result.market_price)
+                if decision is None:
+                    continue
+                candidate_side, candidate_price = decision
+
+                pending_candidates.append(RankedCandidate(
+                    ticker=result.ticker, side=candidate_side, trade_price=candidate_price,
+                    potential_points=potential_points(candidate_price), original=result,
+                ))
+
+        # Phase 2: act on the collected candidates, best potential
+        # upside first. max_open_positions is re-checked here (not
+        # during collection) since it can be reached partway through
+        # this list as positions get added.
+        for candidate in rank_candidates(pending_candidates):
+            result = candidate.original
+            reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+            side = candidate.side
+            trade_price = max(0.01, min(0.99, candidate.trade_price))
+
+            # Circuit breaker's BLOCKING behavior removed per explicit
+            # request -- day_pnl is still tracked internally (via
+            # record_pnl() calls elsewhere), it just no longer stops
+            # entries. This was found to be silently blocking every
+            # single candidate uniformly, even ones that otherwise
+            # cleared every other check.
+            if len(state) >= RISK_PARAMS.max_open_positions:
+                continue
+
+            # TRIAL sizing, per explicit request -- fixed 5 shares
+            # (contracts) per trade, replacing the dollar/bankroll-
+            # percentage-based sizing that was here. Original logic
+            # saved separately for restoration when the trial ends.
+            entry_reason = "price_range"
+            count = TRIAL_SHARES_PER_TRADE
+
+            ORDER_RETRY_ATTEMPTS = 2
+            ORDER_RETRY_DELAY_SECONDS = 0.5
+            order_succeeded = False
+            last_error = None
+            for attempt in range(1, ORDER_RETRY_ATTEMPTS + 1):
+                try:
+                    place_entry(client, result.ticker, side, trade_price, count, DRY_RUN)
+                    order_succeeded = True
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < ORDER_RETRY_ATTEMPTS:
+                        print(f"Entry order for {result.ticker} failed on attempt {attempt} ({e}) "
+                              f"-- retrying in {ORDER_RETRY_DELAY_SECONDS}s...")
+                        time.sleep(ORDER_RETRY_DELAY_SECONDS)
+            if not order_succeeded:
+                # A rejected real order (e.g. insufficient balance once the
+                # account is fully committed) must not crash the bot --
+                # that would also kill exit/stop-loss monitoring for every
+                # position already open. Retried a few times immediately,
+                # per explicit request, rather than only relying on the
+                # next 5-second scan cycle to try again.
+                print(f"Entry order for {result.ticker} failed after {ORDER_RETRY_ATTEMPTS} attempts "
+                      f"({last_error}) -- skipping this one, continuing to monitor existing positions.")
+                continue
+            state[result.ticker] = {"count": count, "entry_price": trade_price, "side": side,
+                                     "dry_run": DRY_RUN, "peak_gain_per_contract": 0.0,
+                                     "entry_time": time.time()}
+            log_trade(result, side, trade_price, count, DRY_RUN, reversion_z=reversion_signal.z_score, entry_reason=entry_reason)
+
+        save_json(STATE_FILE, state)
+        save_json(SCAN_FILE, {
+            "generated_at": time.time(), "results": scan_results, "bankroll": bankroll,
+            "markets_scanned": len(markets), "markets_evaluated": evaluated,
+            "dry_run": DRY_RUN,
+        })
+
+        try:
+            build_dashboard_data.build()
+        except Exception as e:
+            print(f"Dashboard data rebuild failed (non-fatal, trading continues): {e}")
+
+        print(f"Scanned {len(markets)} market(s); {evaluated} evaluated; {len(state)} open position(s).")
+        time.sleep(POLL_SECONDS)
+
+
+if __name__ == "__main__":
+    run()
