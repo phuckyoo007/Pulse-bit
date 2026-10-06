@@ -543,18 +543,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
         print(f"Stop-loss count this session: {_stop_loss_count[0]}")
     if realized_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
-    if _stop_loss_count[0] >= 2:
-        save_json(STATE_FILE, state)
-        print("\n" + "=" * 60)
-        print(f"STOP LOSS COUNT ({_stop_loss_count[0]}) REACHED 2 -- SHUTTING DOWN PER CIRCUIT BREAKER.")
-        print("=" * 60)
-        try:
-            from email_alert import send_email_alert
-            send_email_alert("Pulse circuit breaker tripped -- bot stopped",
-                              f"Stop-loss count reached {_stop_loss_count[0]}.")
-        except Exception as e:
-            print(f"Email alert attempt failed ({e}) -- continuing with shutdown regardless.")
-        sys.exit(1)
+    # Circuit-breaker shutdown removed: sys.exit() inside the exit thread only killed that
+    # thread, leaving the bot trading with NO stop-loss and NO settlement tracking.
     return realized_pnl
 
 
@@ -621,9 +611,7 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
                     bankroll_and_breaker["breaker"].record_pnl(pnl)
                 if backstop_pnls:
                     save_json(STATE_FILE, state)
-        except SystemExit:
-            raise
-        except Exception as e:
+        except BaseException as e:
             print(f"EXIT PROTECTION THREAD: unexpected error ({e}) -- thread keeps running, retrying next cycle.")
         stop_event.wait(EXIT_CHECK_POLL_SECONDS)
 
