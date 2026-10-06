@@ -311,7 +311,7 @@ def current_position_value_for_log(position: dict, market_price: float) -> float
 
 _floor_check_cache = [None, 0.0]
 _stop_loss_count = [0]
-FLOOR_CHECK_CACHE_SECONDS = 30
+FLOOR_CHECK_CACHE_SECONDS = 2
 _generic_series_cache = [None, 0.0]
 GENERIC_SERIES_CACHE_SECONDS = 300
 
@@ -1081,6 +1081,11 @@ def run():
                               f"not retrying, excluding this ticker for the rest of the session.")
                         excluded_tickers.add(result.ticker)
                         break
+                    if "insufficient_balance" in str(e):
+                        print(f"Entry order for {result.ticker} rejected: insufficient balance -- not retrying.")
+                        _floor_check_cache[0] = 0.0
+                        _floor_check_cache[1] = time.time()
+                        break
                     if attempt < ORDER_RETRY_ATTEMPTS:
                         print(f"Entry order for {result.ticker} failed on attempt {attempt} ({e}) -- retrying...")
                         time.sleep(ORDER_RETRY_DELAY_SECONDS)
@@ -1088,6 +1093,8 @@ def run():
                 if result.ticker not in excluded_tickers:
                     print(f"Entry order for {result.ticker} failed after {ORDER_RETRY_ATTEMPTS} attempts ({last_error}) -- skipping.")
                 continue
+            if _floor_check_cache[0] is not None:
+                _floor_check_cache[0] = max(0.0, _floor_check_cache[0] - this_trade_cost)
             with STATE_LOCK:
                 tracked_entry_price = trade_price if side == "bid" else (1 - trade_price)
                 state[result.ticker] = {"count": count, "entry_price": tracked_entry_price, "side": side,
