@@ -343,7 +343,7 @@ def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
 
-HARD_BACKSTOP_FRACTION = 0.85
+HARD_BACKSTOP_FRACTION = 0.92
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:

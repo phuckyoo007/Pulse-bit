@@ -2,16 +2,16 @@
 Early-exit logic for open positions, separate from entry logic on purpose.
 
 SIMPLIFIED, per explicit request -- ONE uniform rule for everything: if
-a position has lost 14% of what was paid for it (value has fallen to
-86% of entry or below), exit. No per-tier variation, no trailing/peak
-logic, no exceptions. A $10 bet exits no later than $8.60.
+a position has lost 8% of what was paid for it (value has fallen to
+92% of entry or below), exit. No per-tier variation, no trailing/peak
+logic, no exceptions. A $10 bet exits no later than $9.20.
 """
 from dataclasses import dataclass
 from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.86   # fires when value falls to <= 86% of original principal
+UNIVERSAL_STOP_LOSS_FRACTION = 0.92   # fires when value falls to <= 92% of original principal
 
 
 @dataclass
