@@ -1083,6 +1083,11 @@ def run():
                         break
                     if "insufficient_balance" in str(e):
                         print(f"Entry order for {result.ticker} rejected: insufficient balance -- not retrying.")
+                        try:
+                            print(f"  DIAG raw /portfolio/balance: {client.get_balance()}")
+                            print(f"  DIAG resting orders: {client._request('GET', '/portfolio/orders', params={'status': 'resting'})}")
+                        except Exception as diag_e:
+                            print(f"  DIAG lookup failed: {diag_e}")
                         _floor_check_cache[0] = 0.0
                         _floor_check_cache[1] = time.time()
                         break
