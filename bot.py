@@ -72,8 +72,8 @@ TRIPLE_90_SHARES = 1
 CROSS_CONFIRM_MIN_PRICE = 0.70
 TIGHT_TIME_THRESHOLD_SECONDS = 105
 TIGHT_TIME_MIN_PRICE = 0.75
-MIN_EDGE_FOR_87_TIERS = 0.5
-EDGE_FILTER_ENABLED = False
+MIN_EDGE_FOR_87_TIERS = 1.49
+EDGE_FILTER_ENABLED = True
 EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
@@ -1051,7 +1051,10 @@ def run():
                     p.get("entry_price", 0) * p.get("count", 0) for p in state.values()
                 )
             this_trade_cost = entry_cost_per_share * count
-            available_for_new_trade = live_balance_for_cap - TOTAL_CAPITAL_SAFETY_MARGIN_DOLLARS - already_committed_dollars
+            # Kalshi's live balance ALREADY excludes cash tied up in open positions,
+            # so subtracting 'committed' again double-counted it -- and positions whose
+            # markets had expired but not yet finalized kept blocking all new entries.
+            available_for_new_trade = live_balance_for_cap - TOTAL_CAPITAL_SAFETY_MARGIN_DOLLARS
             if this_trade_cost > available_for_new_trade + 1e-9:
                 print(f"  Skipping {result.ticker} -- total capital cap: live balance ${live_balance_for_cap:.2f}, "
                       f"already committed ${already_committed_dollars:.2f} across {len(state)} open position(s), "
