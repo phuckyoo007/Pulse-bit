@@ -88,6 +88,21 @@ class KalshiClient:
             params["tags"] = tags
         return self._request("GET", "/series", params=params)
 
+    def get_balance_by_shard(self):
+        """Returns {exchange_index: dollars} from /portfolio/balance's balance_breakdown."""
+        resp = self.get_balance()
+        out = {}
+        for row in resp.get("balance_breakdown", []) or []:
+            out[int(row["exchange_index"])] = float(row["balance"])
+        return out
+
+    def transfer_between_shards(self, source_shard: int, dest_shard: int, dollars: float):
+        """Moves cash between exchange shards inside the same account (amount is in centicents)."""
+        body = {"source": "event_contract", "destination": "event_contract",
+                "source_exchange_shard": int(source_shard), "destination_exchange_shard": int(dest_shard),
+                "amount": int(round(dollars * 10000))}
+        return self._request("POST", "/portfolio/intra_exchange_instance_transfer", json_body=body)
+
     def get_market(self, ticker: str):
         return self._request("GET", f"/markets/{ticker}")
 

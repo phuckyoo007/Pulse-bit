@@ -340,6 +340,36 @@ def get_fresh_balance_for_floor_check(client: KalshiClient, fallback_bankroll: f
     return fallback_bankroll
 
 
+def ensure_shard_funds(client: KalshiClient, ticker: str, needed_dollars: float) -> None:
+    """Kalshi keeps cash per exchange shard (crypto/commodities live on one shard). If the market's shard
+    holds less than this trade needs, move the shortfall in from the shard with the most cash."""
+    try:
+        market = client.get_market(ticker).get("market", {})
+        shard = market.get("exchange_index")
+        if shard is None:
+            return
+        shard = int(shard)
+        balances = client.get_balance_by_shard()
+        have = balances.get(shard, 0.0)
+        need = needed_dollars + 0.05
+        if have + 1e-9 >= need:
+            return
+        shortfall = round(need - have + 0.50, 2)   # small cushion so the next trade doesn't need another transfer
+        donors = sorted(((v, i) for i, v in balances.items() if i != shard), reverse=True)
+        if not donors or donors[0][0] < 0.01:
+            print(f"  SHARD FUNDS: shard {shard} has ${have:.2f}, needs ${need:.2f}, and no other shard has cash.")
+            return
+        donor_balance, donor = donors[0]
+        amount = min(shortfall, donor_balance)
+        client.transfer_between_shards(donor, shard, amount)
+        print(f"  SHARD FUNDS: moved ${amount:.2f} from shard {donor} to shard {shard} "
+              f"(shard {shard} had ${have:.2f}, trade needs ${needed_dollars:.2f}).")
+        _floor_check_cache[0] = None
+        time.sleep(1.0)
+    except Exception as e:
+        print(f"  SHARD FUNDS: transfer check failed ({e}) -- placing the order anyway.")
+
+
 def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
@@ -1066,6 +1096,8 @@ def run():
             ORDER_RETRY_DELAY_SECONDS = 0.5
             order_succeeded = False
             last_error = None
+            if not entry_dry_run:
+                ensure_shard_funds(client, result.ticker, this_trade_cost)
             for attempt in range(1, ORDER_RETRY_ATTEMPTS + 1):
                 try:
                     if side == "bid":
