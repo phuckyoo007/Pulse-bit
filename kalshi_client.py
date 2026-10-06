@@ -1,76 +1,47 @@
 """
-Thin Kalshi REST client: RSA-PSS or Ed25519 request signing (auto-detected
-from the loaded key) plus wrapper methods for the endpoints this bot needs.
-
-FIXED, per real evidence of repeated market_not_found/user_not_found
-errors on order placement: create_order() was using an OUTDATED
-endpoint and schema (/portfolio/events/orders, with side="bid"/"ask"
-and a decimal-string price). Current (2026) documentation confirms
-the real, current endpoint and schema is:
-
-    POST /portfolio/orders
-    {
-        "ticker": ...,
-        "action": "buy" or "sell",
-        "side": "yes" or "no",
-        "type": "limit",
-        "count": <int>,
-        "yes_price": <int, PRICE IN CENTS, not a decimal string>,
-        "client_order_id": ...
-    }
-
-This matches the original kalshi_client.py's own docstring note that
-Kalshi's order API was "mid-transition as of 2026" -- this fix
-reflects the transition having completed. bot.py's callers still pass
-"bid"/"ask" as their side parameter (matching the rest of this
-project's terminology); create_order() below translates that into
-the real action/side pair internally, so bot.py itself doesn't need
-to change.
-
-SIGNING FIX (this revision): _sign() previously always called
-self.private_key.sign(message, padding.PSS(...), hashes.SHA256()) --
-the RSA-PSS calling convention. That only works for an RSA key. This
-account's key is Ed25519, whose sign() method takes exactly one
-argument (just the message -- EdDSA has its own fixed internal
-hashing and no padding scheme), so every signed request was failing
-with "Ed25519PrivateKey.sign() takes 1 positional arguments but 3
-were given". _sign() now checks the loaded key's actual type and
-signs the correct way for either key type, so this client keeps
-working if the key is ever rotated to an RSA key instead.
+Thin Kalshi REST client: RSA-PSS request signing plus wrapper methods for
+the endpoints this bot needs.
 """
 import base64
+import os
 import time
 from urllib.parse import urlparse
 
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from config import Config
 
 
 class KalshiClient:
     def __init__(self):
-        Config.validate()
+        # Key can come from the KALSHI_PRIVATE_KEY env var (the PEM text
+        # itself) -- no file needed. Falls back to the .pem file path.
+        pem_text = os.getenv("KALSHI_PRIVATE_KEY", "").strip()
+        try:
+            Config.validate()
+        except Exception as e:
+            if not pem_text:
+                raise
+            print(f"Config.validate() complained ({e}) -- continuing because KALSHI_PRIVATE_KEY is set.")
         self.base_url = Config.base_url()
-        with open(Config.PRIVATE_KEY_PATH, "rb") as f:
-            self.private_key = serialization.load_pem_private_key(f.read(), password=None)
+        if pem_text:
+            pem_text = pem_text.strip('"').strip("'").replace("\\n", "\n")
+            pem_bytes = pem_text.encode("utf-8")
+        else:
+            with open(Config.PRIVATE_KEY_PATH, "rb") as f:
+                pem_bytes = f.read()
+        self.private_key = serialization.load_pem_private_key(pem_bytes, password=None)
 
     def _sign(self, method: str, path: str) -> dict:
         timestamp_ms = str(int(time.time() * 1000))
         message = f"{timestamp_ms}{method}{path}".encode("utf-8")
-        if isinstance(self.private_key, Ed25519PrivateKey):
-            # Ed25519: sign() takes just the message. No padding/hash
-            # arguments -- EdDSA does its own fixed internal hashing.
-            signature = self.private_key.sign(message)
-        else:
-            # RSA-PSS (Kalshi's other supported key type).
-            signature = self.private_key.sign(
-                message,
-                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32),
-                hashes.SHA256(),
-            )
+        signature = self.private_key.sign(
+            message,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32),
+            hashes.SHA256(),
+        )
         return {
             "KALSHI-ACCESS-KEY": Config.API_KEY_ID,
             "KALSHI-ACCESS-TIMESTAMP": timestamp_ms,
@@ -93,7 +64,6 @@ class KalshiClient:
             )
         return resp.json()
 
-    # --- Market data (these work unauthenticated too, but signed headers are harmless) ---
     def get_markets(self, status="open", series_ticker=None, event_ticker=None, limit=100, cursor=None):
         params = {"status": status, "limit": limit}
         if series_ticker:
@@ -118,7 +88,6 @@ class KalshiClient:
     def get_orderbook(self, ticker: str):
         return self._request("GET", f"/markets/{ticker}/orderbook")
 
-    # --- Portfolio (require real auth) ---
     def get_balance(self):
         return self._request("GET", "/portfolio/balance")
 
@@ -137,18 +106,9 @@ class KalshiClient:
     def create_order(self, ticker: str, client_order_id: str, side: str, count: str, price: str,
                       time_in_force: str = "good_till_canceled"):
         """side: 'bid' (buy yes) or 'ask' (sell yes / economically long no).
-
-        REVERTED, per Kalshi's own error response confirming the real,
-        current endpoint: my earlier "fix" to /portfolio/orders with a
-        separate action/yes-no split was WRONG -- based on a stale
-        search result, not Kalshi's actual current docs. The real
-        current endpoint (confirmed via the exact URL Kalshi's own
-        deprecated_v1_order_endpoint error pointed to) is
-        /portfolio/events/orders, with side=bid/ask directly and price
-        always denominated in YES terms -- exactly what this client
-        originally did before that incorrect "fix". time_in_force and
-        self_trade_prevention_type are both REQUIRED fields per the
-        confirmed schema.
+        price always denominated in YES terms, even for 'ask' orders --
+        confirmed via Kalshi's own official create-order-v2 docs, the
+        exact page their deprecated_v1_order_endpoint error pointed to.
         """
         body = {
             "ticker": ticker,
@@ -159,10 +119,6 @@ class KalshiClient:
             "time_in_force": time_in_force,
             "self_trade_prevention_type": "taker_at_cross",
         }
-        # DEBUG, per explicit request -- print the EXACT raw request
-        # body being sent, to rule out any formatting/conversion
-        # discrepancy between what bot.py's own summary print claims
-        # and what's actually transmitted to Kalshi.
         print(f"  [RAW ORDER BODY]: {body}")
         return self._request("POST", "/portfolio/events/orders", json_body=body)
 
