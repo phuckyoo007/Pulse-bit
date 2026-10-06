@@ -876,6 +876,8 @@ def run():
                     "seconds_remaining": result.seconds_remaining, "volume": result.volume,
                     "reversion_z": reversion_signal.z_score,
                 })
+                print(f"  [{result.commodity}] {result.title[:45]:<45} up=${result.market_price:.2f} "
+                      f"down=${1 - result.market_price:.2f} t-{int(result.seconds_remaining)}s")
                 if result.ticker in state or result.ticker in excluded_tickers:
                     continue
                 if len(state) >= RISK_PARAMS.max_open_positions:

@@ -187,6 +187,8 @@ def _discover_prefix_table(client, table: dict, kind: str) -> list:
             found = resp.get("markets", [])
             if not found:
                 _log_throttled(f"empty_{prefix}", f"  [{kind}] {prefix}: 0 open markets (closed right now, or wrong ticker).")
+            else:
+                _log_throttled(f"ok_{prefix}", f"  [{kind}] {prefix}: {len(found)} open market(s) found.", 300.0)
             markets.extend(found)
         except Exception as e:
             _log_throttled(f"err_{prefix}", f"  [{kind}] {prefix}: API ERROR {e} -- skipping this series.")

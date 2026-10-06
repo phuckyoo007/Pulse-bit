@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from config import Config
 
@@ -33,6 +33,12 @@ class KalshiClient:
             with open(Config.PRIVATE_KEY_PATH, "rb") as f:
                 pem_bytes = f.read()
         self.private_key = serialization.load_pem_private_key(pem_bytes, password=None)
+        if not isinstance(self.private_key, rsa.RSAPrivateKey):
+            raise ValueError(
+                f"The private key loaded is a {type(self.private_key).__name__}, not an RSA key. "
+                f"Kalshi API keys are RSA -- this is the wrong key (probably from another service). "
+                f"Use the .pem Kalshi gave you when you created the API key."
+            )
 
     def _sign(self, method: str, path: str) -> dict:
         timestamp_ms = str(int(time.time() * 1000))
