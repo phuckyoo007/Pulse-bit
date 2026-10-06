@@ -41,28 +41,28 @@ RISK_PARAMS = RiskParams(
 )
 BTC_87_THRESHOLD_SECONDS = 180
 BTC_87_MIN_PRICE = 0.88
-BTC_87_SHARES = 1
+BTC_87_SHARES = 2
 XRP_87_THRESHOLD_SECONDS = 180
 XRP_87_MIN_PRICE = 0.88
-XRP_87_SHARES = 1
+XRP_87_SHARES = 2
 SOL_87_THRESHOLD_SECONDS = 180
 SOL_87_MIN_PRICE = 0.88
-SOL_87_SHARES = 1
+SOL_87_SHARES = 2
 DOGE_87_THRESHOLD_SECONDS = 180
 DOGE_87_MIN_PRICE = 0.88
-DOGE_87_SHARES = 1
+DOGE_87_SHARES = 2
 BNB_87_THRESHOLD_SECONDS = 180
 BNB_87_MIN_PRICE = 0.88
-BNB_87_SHARES = 1
+BNB_87_SHARES = 2
 BCH_87_THRESHOLD_SECONDS = 180
 BCH_87_MIN_PRICE = 0.88
-BCH_87_SHARES = 1
+BCH_87_SHARES = 2
 ETH_87_THRESHOLD_SECONDS = 180
 ETH_87_MIN_PRICE = 0.88
-ETH_87_SHARES = 1
+ETH_87_SHARES = 2
 HYPE_87_THRESHOLD_SECONDS = 180
 HYPE_87_MIN_PRICE = 0.88
-HYPE_87_SHARES = 1
+HYPE_87_SHARES = 2
 LATCH2_90_THRESHOLD_SECONDS = 240
 LATCH2_90_MIN_PRICE = 0.90
 LATCH2_90_SHARES = 1
@@ -78,22 +78,22 @@ EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
 EARLY_60_SHARES = 1
-TRIAL_SHARES_PER_TRADE = 1
+TRIAL_SHARES_PER_TRADE = 2
 ASK_MAX_PRICE = 0.99
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 240
+CFX_87_THRESHOLD_SECONDS = 300
 CFX_87_MIN_PRICE = 0.83     # entry when side probability is STRICTLY above this
-CFX_87_SHARES = 1
-# "Bid on anything" tier for crypto: t < 240s, side price > 0.83,
+CFX_87_SHARES = 2
+# "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 240
+ANY_THRESHOLD_SECONDS = 300
 ANY_MIN_PRICE = 0.83
 ANY_MIN_MODEL_PROB = 0.83
 ANY_MIN_EDGE_PP = 1.5
-ANY_SHARES = 1
+ANY_SHARES = 2
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
 GENERIC_SHARES = 1
@@ -1024,7 +1024,7 @@ def run():
                 count = HYPE_87_SHARES
             elif candidate.ticker in any_tier_tickers:
                 count = ANY_SHARES
-                entry_reason = "any_240"
+                entry_reason = "any_300"
             elif candidate.ticker in cfx_tier_tickers:
                 count = CFX_87_SHARES
                 entry_reason = "commodity_fx_87"
