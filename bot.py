@@ -84,15 +84,16 @@ COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 360
-CFX_87_MIN_PRICE = 0.83     # entry when side probability is STRICTLY above this
+CFX_87_THRESHOLD_SECONDS = 300
+CFX_87_MIN_PRICE = 0.82     # entry when side price is at or above this
 CFX_87_SHARES = 3
-# "Bid on anything" tier for crypto: t < 360s, side price > 0.83,
+# "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 360
-ANY_MIN_PRICE = 0.83
-ANY_MIN_MODEL_PROB = 0.83
+ANY_THRESHOLD_SECONDS = 300
+ANY_MIN_PRICE = 0.82
+ANY_MIN_MODEL_PROB = 0.80
 ANY_MIN_EDGE_PP = 1.5
+ANY_EDGE_FILTER_ENABLED = False   # edge/pp check OFF; model + price + time still apply
 ANY_SHARES = 3
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
@@ -821,12 +822,12 @@ def run():
             if decision is None and result.seconds_remaining < ANY_THRESHOLD_SECONDS:
                 up_price = result.market_price
                 down_price = 1 - result.market_price
-                if (up_price > ANY_MIN_PRICE and result.model_prob > ANY_MIN_MODEL_PROB
-                        and result.edge_pct > ANY_MIN_EDGE_PP):
+                if (up_price >= ANY_MIN_PRICE and result.model_prob > ANY_MIN_MODEL_PROB
+                        and (not ANY_EDGE_FILTER_ENABLED or result.edge_pct > ANY_MIN_EDGE_PP)):
                     decision = ("bid", up_price)
                     any_tier_tickers.add(result.ticker)
-                elif (down_price > ANY_MIN_PRICE and (1 - result.model_prob) > ANY_MIN_MODEL_PROB
-                        and (-result.edge_pct) > ANY_MIN_EDGE_PP):
+                elif (down_price >= ANY_MIN_PRICE and (1 - result.model_prob) > ANY_MIN_MODEL_PROB
+                        and (not ANY_EDGE_FILTER_ENABLED or (-result.edge_pct) > ANY_MIN_EDGE_PP)):
                     decision = ("ask", down_price)
                     any_tier_tickers.add(result.ticker)
             if (False and decision is None and result.coin in ("BTC", "XRP", "SOL", "DOGE", "BNB", "BCH", "ETH", "HYPE")
@@ -887,9 +888,9 @@ def run():
                 up_price = result.market_price
                 down_price = 1 - result.market_price
                 decision = None
-                if up_price > CFX_87_MIN_PRICE:
+                if up_price >= CFX_87_MIN_PRICE:
                     decision = ("bid", up_price)
-                elif down_price > CFX_87_MIN_PRICE:
+                elif down_price >= CFX_87_MIN_PRICE:
                     decision = ("ask", down_price)
                 if decision is None:
                     continue
@@ -1002,7 +1003,11 @@ def run():
             else:
                 real_fill_price = getattr(result, "yes_bid", candidate.trade_price)
             real_fill_price = max(0.01, real_fill_price)
-            if real_fill_price > 0.95:
+            # Real cost per share: the YES price for a bid, but (1 - YES bid)
+            # for a NO buy (ask). The price ceiling and the capital cap
+            # must use this number, not the raw YES price.
+            entry_cost_per_share = real_fill_price if side == "bid" else (1 - real_fill_price)
+            if entry_cost_per_share > 0.98:
                 continue
             trade_price = real_fill_price
             if len(state) >= RISK_PARAMS.max_open_positions:
@@ -1026,7 +1031,7 @@ def run():
                 count = HYPE_87_SHARES
             elif candidate.ticker in any_tier_tickers:
                 count = ANY_SHARES
-                entry_reason = "any_360"
+                entry_reason = "any_300"
             elif candidate.ticker in cfx_tier_tickers:
                 count = CFX_87_SHARES
                 entry_reason = "commodity_fx_87"
@@ -1045,7 +1050,7 @@ def run():
                 already_committed_dollars = sum(
                     p.get("entry_price", 0) * p.get("count", 0) for p in state.values()
                 )
-            this_trade_cost = trade_price * count
+            this_trade_cost = entry_cost_per_share * count
             available_for_new_trade = live_balance_for_cap - TOTAL_CAPITAL_SAFETY_MARGIN_DOLLARS - already_committed_dollars
             if this_trade_cost > available_for_new_trade + 1e-9:
                 print(f"  Skipping {result.ticker} -- total capital cap: live balance ${live_balance_for_cap:.2f}, "
