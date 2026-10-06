@@ -84,12 +84,12 @@ COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 300
+CFX_87_THRESHOLD_SECONDS = 360
 CFX_87_MIN_PRICE = 0.83     # entry when side probability is STRICTLY above this
 CFX_87_SHARES = 3
-# "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
+# "Bid on anything" tier for crypto: t < 360s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 300
+ANY_THRESHOLD_SECONDS = 360
 ANY_MIN_PRICE = 0.83
 ANY_MIN_MODEL_PROB = 0.83
 ANY_MIN_EDGE_PP = 1.5
@@ -1024,7 +1024,7 @@ def run():
                 count = HYPE_87_SHARES
             elif candidate.ticker in any_tier_tickers:
                 count = ANY_SHARES
-                entry_reason = "any_300"
+                entry_reason = "any_360"
             elif candidate.ticker in cfx_tier_tickers:
                 count = CFX_87_SHARES
                 entry_reason = "commodity_fx_87"
