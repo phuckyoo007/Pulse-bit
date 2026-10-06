@@ -32,7 +32,35 @@ CRYPTO_SERIES_PREFIXES = {
 }
 HOURLY_CRYPTO_SERIES_PREFIXES = {}
 COMMODITY_SERIES_PREFIXES = {
+    "KXGOLD15M": "GOLD",
+    "KXSILVER15M": "SILVER",
     "KXWTI15M": "OIL",
+    # Unconfirmed pattern guesses -- harmless if wrong (logged, skipped).
+    "KXCOPPER15M": "COPPER",
+    "KXTIN15M": "TIN",
+    "KXPLAT15M": "PLATINUM",
+    "KXPLATINUM15M": "PLATINUM",
+    "KXPALLADIUM15M": "PALLADIUM",
+    "KXPALL15M": "PALLADIUM",
+}
+# Foreign-exchange 15-minute markets (EUR/USD, GBP/USD, USD/JPY). These
+# three prefixes are PATTERN GUESSES (KX{PAIR}15M) -- not independently
+# confirmed. discover_dynamic_series() below also scans Kalshi's real
+# series list for any "...15M" series whose title mentions these pairs,
+# so a wrong guess here gets corrected at runtime and is logged.
+FX_SERIES_PREFIXES = {
+    "KXEURUSD15M": "EURUSD",
+    "KXGBPUSD15M": "GBPUSD",
+    "KXUSDJPY15M": "USDJPY",
+}
+# Extra commodities that exist as 15-min markets but whose tickers are
+# not confirmed -- only picked up if the live series list shows them.
+_DYNAMIC_KEYWORDS = {
+    "FX": {"EUR/USD": "EURUSD", "EURUSD": "EURUSD", "GBP/USD": "GBPUSD", "GBPUSD": "GBPUSD",
+           "USD/JPY": "USDJPY", "USDJPY": "USDJPY"},
+    "COMMODITY": {"NATURAL GAS": "NATGAS", "NATGAS": "NATGAS", "COPPER": "COPPER",
+                  "TIN": "TIN", "PLATINUM": "PLATINUM", "PALLADIUM": "PALLADIUM",
+                  "GOLD": "GOLD", "SILVER": "SILVER", "CRUDE": "OIL", "WTI": "OIL"},
 }
 INDEX_SERIES_PREFIXES = {
     "KXNDQ15M": "NASDAQ100",
@@ -111,15 +139,66 @@ def _time_to_expiry_years(market: dict) -> Optional[float]:
     if seconds_remaining <= 0:
         return None
     return seconds_remaining / (365.25 * 24 * 3600)
-def discover_commodity_markets(client) -> list:
+_dynamic_cache = [0.0]
+_log_times = {}
+
+
+def _log_throttled(key: str, msg: str, every_seconds: float = 600.0):
+    import time
+    now = time.time()
+    if now - _log_times.get(key, 0.0) >= every_seconds:
+        _log_times[key] = now
+        print(msg)
+
+
+def discover_dynamic_series(client, refresh_seconds: float = 900.0):
+    """Scan Kalshi's real series list for 15-minute FX / commodity series
+    not already configured, and add them at runtime. Never raises."""
+    import time
+    if time.time() - _dynamic_cache[0] < refresh_seconds:
+        return
+    _dynamic_cache[0] = time.time()
+    try:
+        resp = client.get_series(limit=1000)
+    except Exception as e:
+        _log_throttled("dyn_fail", f"Dynamic FX/commodity series discovery failed (non-fatal): {e}")
+        return
+    known = set(CRYPTO_SERIES_PREFIXES) | set(INDEX_SERIES_PREFIXES) | set(FX_SERIES_PREFIXES) | set(COMMODITY_SERIES_PREFIXES)
+    for srs in resp.get("series", []):
+        ticker = srs.get("ticker", "")
+        if not ticker.endswith("15M") or ticker in known:
+            continue
+        text = f"{ticker} {srs.get('title', '')}".upper()
+        for kind, table in (("FX", FX_SERIES_PREFIXES), ("COMMODITY", COMMODITY_SERIES_PREFIXES)):
+            label = next((v for k, v in _DYNAMIC_KEYWORDS[kind].items()
+                          if re.search(r'(?<![A-Z])' + re.escape(k) + r'(?![A-Z])', text)), None)
+            if label:
+                table[ticker] = label
+                print(f"Dynamic discovery: added {kind} series {ticker} ({label}) from Kalshi's live series list.")
+                break
+
+
+def _discover_prefix_table(client, table: dict, kind: str) -> list:
+    discover_dynamic_series(client)
     markets = []
-    for prefix in COMMODITY_SERIES_PREFIXES:
+    for prefix in list(table):
         try:
             resp = client.get_markets(status="open", series_ticker=prefix, limit=50)
-            markets.extend(resp.get("markets", []))
-        except Exception:
-            continue
+            found = resp.get("markets", [])
+            if not found:
+                _log_throttled(f"empty_{prefix}", f"  [{kind}] {prefix}: 0 open markets (closed right now, or wrong ticker).")
+            markets.extend(found)
+        except Exception as e:
+            _log_throttled(f"err_{prefix}", f"  [{kind}] {prefix}: API ERROR {e} -- skipping this series.")
     return markets
+
+
+def discover_commodity_markets(client) -> list:
+    return _discover_prefix_table(client, COMMODITY_SERIES_PREFIXES, "COMMODITY")
+
+
+def discover_fx_markets(client) -> list:
+    return _discover_prefix_table(client, FX_SERIES_PREFIXES, "FX")
 @dataclass
 class CommodityPriceResult:
     ticker: str
@@ -133,7 +212,8 @@ class CommodityPriceResult:
     yes_bid: float = 0.0
 def evaluate_commodity_market(market: dict) -> Optional[CommodityPriceResult]:
     ticker = market.get("ticker", "")
-    commodity = next((c for prefix, c in COMMODITY_SERIES_PREFIXES.items() if ticker.startswith(prefix)), None)
+    commodity = next((c for prefix, c in {**COMMODITY_SERIES_PREFIXES, **FX_SERIES_PREFIXES}.items()
+                      if ticker.startswith(prefix)), None)
     if not commodity:
         return None
     close_time_str = market.get("close_time")
@@ -211,7 +291,8 @@ def evaluate_index_market(market: dict) -> Optional[IndexPriceResult]:
 GENERIC_MAX_SECONDS_REMAINING = 600  # TIGHTENED further from 800s to 600s (10 min), per explicit request
 def discover_generic_short_markets(client) -> dict:
     known_prefixes = (set(CRYPTO_SERIES_PREFIXES) | set(HOURLY_CRYPTO_SERIES_PREFIXES)
-                      | set(COMMODITY_SERIES_PREFIXES) | set(INDEX_SERIES_PREFIXES))
+                      | set(COMMODITY_SERIES_PREFIXES) | set(INDEX_SERIES_PREFIXES)
+                      | set(FX_SERIES_PREFIXES))
     found = {}
     try:
         resp = client.get_series(limit=200)

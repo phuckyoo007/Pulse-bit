@@ -15,7 +15,7 @@ import requests
 from kalshi_client import KalshiClient
 from strategy import discover_crypto_markets, evaluate_crypto_market, \
     discover_generic_short_markets, evaluate_generic_market, \
-    discover_commodity_markets, evaluate_commodity_market, \
+    discover_commodity_markets, evaluate_commodity_market, discover_fx_markets, \
     discover_index_markets, evaluate_index_market, GENERIC_MAX_SECONDS_REMAINING
 from priority import RankedCandidate, potential_points, rank_candidates, size_scale_factor_91_95
 from risk import RiskParams, CircuitBreaker, kelly_size
@@ -81,6 +81,19 @@ EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 1
 ASK_MAX_PRICE = 0.99
 COIN_SIZE_MULTIPLIER = {}
+# Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
+# 15-min markets: same rule as the crypto 87-tiers, but price-only
+# (there is no vol model for these).
+CFX_87_THRESHOLD_SECONDS = 240
+CFX_87_MIN_PRICE = 0.83     # entry when side probability is STRICTLY above this
+CFX_87_SHARES = 1
+# "Bid on anything" tier for crypto: t < 240s, side price > 0.83,
+# model probability for that side > 0.83, and edge for that side > 1.5pp.
+ANY_THRESHOLD_SECONDS = 240
+ANY_MIN_PRICE = 0.83
+ANY_MIN_MODEL_PROB = 0.83
+ANY_MIN_EDGE_PP = 1.5
+ANY_SHARES = 1
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
 GENERIC_SHARES = 1
@@ -666,6 +679,8 @@ def run():
         early_60_tier_tickers = set()
         latch_90_tier_tickers = set()
         generic_tier_tickers = set()
+        cfx_tier_tickers = set()
+        any_tier_tickers = set()
 
         markets = discover_crypto_markets(client)
         reversion.cleanup_stale_tickers({m["ticker"] for m in markets})
@@ -803,6 +818,17 @@ def run():
                 elif down_price >= HYPE_87_MIN_PRICE and (not EDGE_FILTER_ENABLED or (-result.edge_pct) > MIN_EDGE_FOR_87_TIERS):
                     decision = ("ask", down_price)
                     hype_87_tier_tickers.add(result.ticker)
+            if decision is None and result.seconds_remaining < ANY_THRESHOLD_SECONDS:
+                up_price = result.market_price
+                down_price = 1 - result.market_price
+                if (up_price > ANY_MIN_PRICE and result.model_prob > ANY_MIN_MODEL_PROB
+                        and result.edge_pct > ANY_MIN_EDGE_PP):
+                    decision = ("bid", up_price)
+                    any_tier_tickers.add(result.ticker)
+                elif (down_price > ANY_MIN_PRICE and (1 - result.model_prob) > ANY_MIN_MODEL_PROB
+                        and (-result.edge_pct) > ANY_MIN_EDGE_PP):
+                    decision = ("ask", down_price)
+                    any_tier_tickers.add(result.ticker)
             if (False and decision is None and result.coin in ("BTC", "XRP", "SOL", "DOGE", "BNB", "BCH", "ETH", "HYPE")
                     and result.seconds_remaining <= LATCH2_90_THRESHOLD_SECONDS):
                 up_price = result.market_price
@@ -835,20 +861,47 @@ def run():
                 potential_points=potential_points(candidate_price), original=result,
             ))
 
-        commodity_markets = discover_commodity_markets(client)
-        for market in commodity_markets:
-            result = evaluate_commodity_market(market)
-            if result is None:
-                continue
-            evaluated += 1
-            reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
-            scan_results.append({
-                "ticker": result.ticker, "title": result.title, "coin": result.commodity,
-                "direction": None, "market_price": result.market_price,
-                "model_prob": None, "edge_pct": None,
-                "seconds_remaining": result.seconds_remaining, "volume": result.volume,
-                "reversion_z": reversion_signal.z_score,
-            })
+        for _kind, _markets in (("commodity", discover_commodity_markets(client)),
+                                ("fx", discover_fx_markets(client))):
+            for market in _markets:
+                result = evaluate_commodity_market(market)
+                if result is None:
+                    continue
+                evaluated += 1
+                reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+                scan_results.append({
+                    "ticker": result.ticker, "title": result.title, "coin": result.commodity,
+                    "direction": None, "market_price": result.market_price,
+                    "model_prob": None, "edge_pct": None,
+                    "seconds_remaining": result.seconds_remaining, "volume": result.volume,
+                    "reversion_z": reversion_signal.z_score,
+                })
+                if result.ticker in state or result.ticker in excluded_tickers:
+                    continue
+                if len(state) >= RISK_PARAMS.max_open_positions:
+                    continue
+                if not (9 <= result.seconds_remaining < CFX_87_THRESHOLD_SECONDS):
+                    continue
+                up_price = result.market_price
+                down_price = 1 - result.market_price
+                decision = None
+                if up_price > CFX_87_MIN_PRICE:
+                    decision = ("bid", up_price)
+                elif down_price > CFX_87_MIN_PRICE:
+                    decision = ("ask", down_price)
+                if decision is None:
+                    continue
+                candidate_side, candidate_price = decision
+                liquidity = get_shares_available(client, result.ticker, candidate_side)
+                if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
+                    print(f"  Skipping {result.ticker} -- only {liquidity} shares available on the "
+                          f"{candidate_side} side (need {MIN_SHARES_LIQUIDITY_REQUIRED}+).")
+                    continue
+                cfx_tier_tickers.add(result.ticker)
+                pending_candidates.append(RankedCandidate(
+                    ticker=result.ticker, side=candidate_side, trade_price=candidate_price,
+                    potential_points=potential_points(candidate_price), original=result,
+                ))
 
         index_markets = discover_index_markets(client)
         for market in index_markets:
@@ -969,6 +1022,12 @@ def run():
                 count = ETH_87_SHARES
             elif candidate.ticker in hype_87_tier_tickers:
                 count = HYPE_87_SHARES
+            elif candidate.ticker in any_tier_tickers:
+                count = ANY_SHARES
+                entry_reason = "any_240"
+            elif candidate.ticker in cfx_tier_tickers:
+                count = CFX_87_SHARES
+                entry_reason = "commodity_fx_87"
             elif candidate.ticker in latch2_90_tier_tickers:
                 count = LATCH2_90_SHARES
                 entry_reason = "latch2_90"
@@ -1024,7 +1083,7 @@ def run():
                 tracked_entry_price = trade_price if side == "bid" else (1 - trade_price)
                 state[result.ticker] = {"count": count, "entry_price": tracked_entry_price, "side": side,
                                          "dry_run": entry_dry_run, "peak_gain_per_contract": 0.0,
-                                         "entry_time": time.time(), "coin": getattr(result, "coin", None),
+                                         "entry_time": time.time(), "coin": getattr(result, "coin", None) or getattr(result, "commodity", None),
                                          "latch_90_tier": candidate.ticker in latch_90_tier_tickers,
                                          "latch2_90_tier": candidate.ticker in latch2_90_tier_tickers,
                                          "triple_90_tier": candidate.ticker in triple_90_tier_tickers,
@@ -1036,7 +1095,9 @@ def run():
                                          "bch_87_tier": candidate.ticker in bch_87_tier_tickers,
                                          "eth_87_tier": candidate.ticker in eth_87_tier_tickers,
                                          "hype_87_tier": candidate.ticker in hype_87_tier_tickers,
-                                         "generic_tier": candidate.ticker in generic_tier_tickers}
+                                         "generic_tier": candidate.ticker in generic_tier_tickers,
+                                         "commodity_fx_tier": candidate.ticker in cfx_tier_tickers,
+                                         "any_tier": candidate.ticker in any_tier_tickers}
             log_trade(result, side, trade_price, count, entry_dry_run, reversion_z=reversion_signal.z_score, entry_reason=entry_reason)
 
         with STATE_LOCK:
