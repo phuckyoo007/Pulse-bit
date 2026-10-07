@@ -198,22 +198,25 @@ def get_spot_and_vol(coin: str) -> tuple:
 
 
 # ---------------------------------------------------------------------------
-# Commodities / FX via Pyth Network (keyless). Kalshi settles its gold/FX/commodity
-# 15-minute markets on Pyth feeds, so Pyth is the right reference price (a futures or
-# other spot source would sit on a different basis than the strike).
-#   history: Pyth Benchmarks (TradingView-style shim)   symbols like "Metal.XAU/USD"
-#   search:  Hermes /v2/price_feeds?query=...           used to find symbols we don't hardcode
+# Commodities / FX via Pyth Network's Hermes API (keyless). Kalshi settles its gold/FX/commodity
+# 15-minute markets on Pyth feeds, so Pyth is the right reference price (any other source would sit on a
+# different basis than the strike). Pyth's old keyless history endpoint was shut down, so the bot builds its
+# OWN price history by sampling Hermes' latest price every few seconds; volatility is estimated from that
+# (it needs ~3 minutes of samples after each restart before it will produce a model).
 # Everything here FAILS CLOSED: any problem returns (None, None) and the caller skips the trade.
 # ---------------------------------------------------------------------------
-PYTH_BENCHMARKS_BASE = "https://benchmarks.pyth.network/v1/shims/tradingview"
+from collections import deque
+
 PYTH_HERMES_BASE = "https://hermes.pyth.network"
-PYTH_LOOKBACK_MINUTES = 60
-PYTH_MAX_STALENESS_SECONDS = 600     # newest 1-min bar must be this fresh, else the market is closed/stale
-PYTH_MAX_REFERENCE_DEVIATION = 0.05  # chosen feed must sit within 5% of the Kalshi strike, else it's the wrong feed
+PYTH_SAMPLE_SECONDS = 4              # sample spacing for the self-built history
+PYTH_HISTORY_SECONDS = 3600          # keep up to an hour of samples
+PYTH_MIN_SAMPLES = 36                # ~3 minutes of 5s samples before a vol estimate is trusted
+PYTH_MAX_STALENESS_SECONDS = 120     # newest Pyth publish must be this fresh, else market closed/stale -> no model
+PYTH_MAX_REFERENCE_DEVIATION = 0.05  # chosen feed must sit within 5% of the Kalshi strike, else wrong feed
 
 PYTH_SYMBOLS = {
-    "GOLD": ["Metal.XAU/USD", "Metal.Index.GOLD/USD"],
-    "SILVER": ["Metal.XAG/USD", "Metal.Index.SILVER/USD"],
+    "GOLD": ["Metal.Index.GOLD/USD", "Metal.XAU/USD"],
+    "SILVER": ["Metal.Index.SILVER/USD", "Metal.XAG/USD"],
     "PLATINUM": ["Metal.XPT/USD"],
     "PALLADIUM": ["Metal.XPD/USD"],
     "EURUSD": ["FX.EUR/USD"],
@@ -221,7 +224,6 @@ PYTH_SYMBOLS = {
     "USDJPY": ["FX.USD/JPY"],
     "OIL": [], "NATGAS": [], "COPPER": [],
 }
-# Hermes search terms used to discover symbols for the assets above (and as a backup for all of them).
 PYTH_SEARCH_TERMS = {
     "GOLD": ["XAU", "gold"], "SILVER": ["XAG", "silver"], "PLATINUM": ["XPT", "platinum"], "PALLADIUM": ["XPD", "palladium"],
     "EURUSD": ["EUR/USD"], "GBPUSD": ["GBP/USD"], "USDJPY": ["USD/JPY"],
@@ -232,37 +234,23 @@ PYTH_VOL_FLOORS = {"EURUSD": 0.03, "GBPUSD": 0.03, "USDJPY": 0.03, "GOLD": 0.08,
                    "PLATINUM": 0.12, "PALLADIUM": 0.15, "OIL": 0.15, "NATGAS": 0.25, "COPPER": 0.10}
 PYTH_ASSETS = set(PYTH_SYMBOLS)
 
-_pyth_chosen_symbol = {}   # asset -> symbol that passed validation
+_pyth_feed_ids = {}        # symbol -> hermes feed id (hex, no 0x)
+_pyth_chosen = {}          # asset -> (symbol, feed id) that passed validation
 _pyth_search_cache = {}    # asset -> (symbols, fetched_at)
-_pyth_fail_log = {}
+_pyth_samples = {}         # asset -> deque[(publish_time, price)]
+_pyth_last_poll = {}       # asset -> time of last Hermes poll
+_pyth_log_times = {}
 
 
 def _pyth_log(key: str, msg: str, every: float = 300.0):
     now = time.time()
-    if now - _pyth_fail_log.get(key, 0.0) >= every:
-        _pyth_fail_log[key] = now
+    if now - _pyth_log_times.get(key, 0.0) >= every:
+        _pyth_log_times[key] = now
         print(msg)
 
 
-def _pyth_fetch_history(symbol: str, minutes: int = PYTH_LOOKBACK_MINUTES):
-    """Returns (closes oldest-first, timestamp of newest bar) or ([], None)."""
-    end = int(time.time())
-    resp = requests.get(f"{PYTH_BENCHMARKS_BASE}/history",
-                        params={"symbol": symbol, "resolution": "1", "from": end - minutes * 60, "to": end},
-                        timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("s") != "ok":
-        return [], None
-    ts, closes = data.get("t", []), data.get("c", [])
-    pairs = sorted(zip(ts, closes), key=lambda p: p[0])
-    pairs = [(t, c) for t, c in pairs if c is not None and c > 0]
-    if not pairs:
-        return [], None
-    return [c for _, c in pairs], pairs[-1][0]
-
-
 def _pyth_search_symbols(asset: str) -> list:
+    """Symbols (best guesses first) for an asset: hardcoded ones, then whatever Hermes' search returns."""
     cached = _pyth_search_cache.get(asset)
     if cached and time.time() - cached[1] < 3600:
         return cached[0]
@@ -273,49 +261,101 @@ def _pyth_search_symbols(asset: str) -> list:
             resp.raise_for_status()
             for feed in resp.json():
                 sym = (feed.get("attributes") or {}).get("symbol")
-                if sym and sym not in found and not sym.startswith("Crypto."):
+                fid = feed.get("id")
+                if not sym or not fid:
+                    continue
+                _pyth_feed_ids[sym] = fid.lower().replace("0x", "")
+                if sym not in found and not sym.startswith(("Crypto.", "Equity.")):
                     found.append(sym)
         except Exception as e:
             _pyth_log(f"pyth_search_{asset}", f"Pyth symbol search for {asset} ('{term}') failed: {e}")
-    _pyth_search_cache[asset] = (found, time.time())
-    if found:
-        print(f"Pyth symbol search for {asset}: {found[:12]}")
-    return found
+    # prefer Kalshi-style "Index" feeds, then everything else
+    found.sort(key=lambda sy: (0 if ".Index." in sy and "/R" not in sy else 1))
+    ordered = list(PYTH_SYMBOLS.get(asset, [])) + [sy for sy in found if sy not in PYTH_SYMBOLS.get(asset, [])]
+    _pyth_search_cache[asset] = (ordered, time.time())
+    if ordered:
+        print(f"Pyth symbol search for {asset}: {ordered[:10]}")
+    return ordered
+
+
+def _pyth_latest(feed_ids: list) -> dict:
+    """{feed_id: (price, publish_time)} for the given Hermes feed ids (one request)."""
+    resp = requests.get(f"{PYTH_HERMES_BASE}/v2/updates/price/latest",
+                        params=[("ids[]", i) for i in feed_ids] + [("parsed", "true")], timeout=10)
+    resp.raise_for_status()
+    out = {}
+    for item in resp.json().get("parsed", []):
+        pr = item.get("price") or {}
+        try:
+            out[item["id"].lower().replace("0x", "")] = (int(pr["price"]) * (10 ** int(pr["expo"])), int(pr["publish_time"]))
+        except (KeyError, ValueError, TypeError):
+            continue
+    return out
+
+
+def _pyth_choose_feed(asset: str, reference_price: Optional[float]):
+    symbols = _pyth_search_symbols(asset)
+    ids = {sy: _pyth_feed_ids[sy] for sy in symbols if sy in _pyth_feed_ids}
+    if not ids:
+        _pyth_log(f"pyth_noid_{asset}", f"Pyth {asset}: Hermes returned no feed ids for {symbols[:6]} -- no model, so no trade.")
+        return None
+    latest = _pyth_latest(list(ids.values()))
+    for sym, fid in ids.items():
+        if fid not in latest:
+            continue
+        price, pub = latest[fid]
+        if reference_price and (price <= 0 or abs(math.log(price / reference_price)) > PYTH_MAX_REFERENCE_DEVIATION):
+            _pyth_log(f"pyth_ref_{sym}", f"Pyth {asset}: {sym} price {price} is >5% from the Kalshi strike {reference_price} -- not the right feed, skipping it.")
+            continue
+        _pyth_chosen[asset] = (sym, fid)
+        print(f"Pyth feed for {asset}: using {sym} (price {price}, last publish {int(time.time()) - pub}s ago)")
+        return _pyth_chosen[asset]
+    _pyth_log(f"pyth_none_{asset}", f"Pyth {asset}: none of {list(ids)[:8]} gave a usable price near the Kalshi strike -- no model, so no trade.")
+    return None
 
 
 def get_pyth_spot_and_vol(asset: str, reference_price: Optional[float] = None) -> tuple:
-    """(spot, annualized_vol) for a commodity/FX asset using the Pyth feed Kalshi settles on.
-    reference_price (the market's strike) is used to reject a wrongly-guessed feed. Fails closed."""
+    """(spot, annualized_vol) for a commodity/FX asset from Pyth (the feed Kalshi settles on). Builds its own price
+    history by sampling every PYTH_SAMPLE_SECONDS. Returns (None, None) until enough samples exist / when stale."""
     try:
         if asset not in PYTH_ASSETS:
             return None, None
-        symbols = ([_pyth_chosen_symbol[asset]] if asset in _pyth_chosen_symbol else
-                   list(PYTH_SYMBOLS[asset]) + [s for s in _pyth_search_symbols(asset) if s not in PYTH_SYMBOLS[asset]][:10])
-        for sym in symbols:
-            try:
-                prices, newest = _pyth_fetch_history(sym)
-            except Exception as e:
-                _pyth_log(f"pyth_hist_{sym}", f"Pyth history for {sym} failed: {e}")
-                continue
-            if len(prices) < 10 or newest is None:
-                continue
-            if time.time() - newest > PYTH_MAX_STALENESS_SECONDS:
-                _pyth_log(f"pyth_stale_{asset}", f"Pyth {asset} ({sym}): newest bar is {int(time.time() - newest)}s old -- market closed/stale, no model.")
-                return None, None
-            spot = prices[-1]
-            if reference_price and abs(math.log(spot / reference_price)) > PYTH_MAX_REFERENCE_DEVIATION:
-                _pyth_log(f"pyth_ref_{sym}", f"Pyth {asset}: {sym} spot {spot} is >5% from the Kalshi strike {reference_price} -- wrong feed, skipping it.")
-                continue
-            vol = realized_volatility(prices, 60)
-            floor = PYTH_VOL_FLOORS.get(asset, 0.10)
-            if vol is not None and vol < floor:
-                vol = floor
-            if asset not in _pyth_chosen_symbol:
-                _pyth_chosen_symbol[asset] = sym
-                print(f"Pyth feed for {asset}: using {sym} (spot {spot}, annualized vol {vol})")
-            return spot, vol
-        _pyth_log(f"pyth_none_{asset}", f"Pyth {asset}: no usable feed found among {symbols[:8]} -- no model, so no trade.")
-        return None, None
+        chosen = _pyth_chosen.get(asset) or _pyth_choose_feed(asset, reference_price)
+        if not chosen:
+            return None, None
+        sym, fid = chosen
+        buf = _pyth_samples.setdefault(asset, deque())
+        now = time.time()
+        if now - _pyth_last_poll.get(asset, 0.0) >= 1.0:
+            _pyth_last_poll[asset] = now
+            got = _pyth_latest([fid]).get(fid)
+            if got:
+                price, pub = got
+                if now - pub > PYTH_MAX_STALENESS_SECONDS:
+                    _pyth_log(f"pyth_stale_{asset}", f"Pyth {asset} ({sym}): last publish {int(now - pub)}s ago -- market closed/stale, no model.")
+                    buf.clear()
+                    return None, None
+                if price > 0 and (not buf or pub - buf[-1][0] >= PYTH_SAMPLE_SECONDS):
+                    buf.append((pub, price))
+                while buf and buf[-1][0] - buf[0][0] > PYTH_HISTORY_SECONDS:
+                    buf.popleft()
+        if not buf or now - buf[-1][0] > PYTH_MAX_STALENESS_SECONDS:
+            return None, None
+        spot = buf[-1][1]
+        if reference_price and abs(math.log(spot / reference_price)) > PYTH_MAX_REFERENCE_DEVIATION:
+            _pyth_log(f"pyth_drift_{asset}", f"Pyth {asset} ({sym}): price {spot} drifted >5% from strike {reference_price} -- re-selecting feed.")
+            _pyth_chosen.pop(asset, None); buf.clear()
+            return None, None
+        if len(buf) < PYTH_MIN_SAMPLES:
+            _pyth_log(f"pyth_warm_{asset}", f"Pyth {asset}: warming up ({len(buf)}/{PYTH_MIN_SAMPLES} samples) -- no model yet.", 60.0)
+            return None, None
+        prices = [p for _, p in buf]
+        span = buf[-1][0] - buf[0][0]
+        vol = realized_volatility(prices, span / (len(prices) - 1))
+        floor = PYTH_VOL_FLOORS.get(asset, 0.10)
+        if vol is not None and vol < floor:
+            vol = floor
+        return spot, vol
     except Exception as e:
         _pyth_log(f"pyth_err_{asset}", f"Pyth price feed error for {asset}: {e}")
         return None, None
