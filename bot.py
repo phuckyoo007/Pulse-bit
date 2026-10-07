@@ -83,6 +83,7 @@ TRIAL_SHARES_PER_TRADE = 2
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
 ENTRY_RECHECK_MIN_PRICE = 0.84   # live price must still be at/above this right before the order goes out
+FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
@@ -549,6 +550,24 @@ def placed_by_pulse(client: KalshiClient, ticker: str):
     except Exception as e:
         print(f"  Couldn't read order history for {ticker} ({e}) -- treating its origin as unknown.")
         return None
+
+
+def actual_fill_cost(client: KalshiClient, ticker: str, tries: int = 4, delay: float = 0.4):
+    """Real average cost per contract of the position Kalshi shows for this ticker (exposure / count), or None."""
+    for _ in range(tries):
+        try:
+            resp = client.get_positions()
+            for p in resp.get("market_positions", resp.get("positions", [])):
+                if p.get("ticker") != ticker:
+                    continue
+                fp = abs(float(p.get("position_fp", p.get("position", 0)) or 0))
+                exp = float(p.get("market_exposure_dollars", 0) or 0)
+                if fp > 0 and exp > 0 and 0.01 <= exp / fp <= 1.0:
+                    return exp / fp
+        except Exception:
+            pass
+        time.sleep(delay)
+    return None
 
 
 def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
@@ -1330,6 +1349,24 @@ def run():
                                          "generic_tier": candidate.ticker in generic_tier_tickers,
                                          "commodity_fx_tier": candidate.ticker in cfx_tier_tickers,
                                          "any_tier": candidate.ticker in any_tier_tickers}
+            if not entry_dry_run:
+                # FILL-PRICE GUARD: a limit order only caps what we pay; if the book moves between the live re-check and
+                # the fill, Kalshi fills at the new (different) price. Read the REAL fill and, if it is outside the
+                # tolerance or under the floor, exit immediately instead of holding a trade the rules would never take.
+                real_cost = actual_fill_cost(client, result.ticker)
+                if real_cost is not None:
+                    with STATE_LOCK:
+                        if result.ticker in state:
+                            state[result.ticker]["entry_price"] = real_cost
+                            if real_cost < ENTRY_RECHECK_MIN_PRICE - 1e-9 or abs(real_cost - tracked_entry_price) > FILL_PRICE_TOLERANCE + 1e-9:
+                                state[result.ticker]["force_exit"] = True
+                    if real_cost < ENTRY_RECHECK_MIN_PRICE - 1e-9 or abs(real_cost - tracked_entry_price) > FILL_PRICE_TOLERANCE + 1e-9:
+                        print(f"  FILL OUTSIDE TOLERANCE: {result.ticker} intended ${tracked_entry_price:.2f} but Kalshi filled at "
+                              f"${real_cost:.2f} (floor ${ENTRY_RECHECK_MIN_PRICE:.2f}, tolerance ${FILL_PRICE_TOLERANCE:.2f}) -- exiting immediately.")
+                    else:
+                        print(f"  FILL CHECK OK: {result.ticker} intended ${tracked_entry_price:.2f}, real fill ${real_cost:.2f}.")
+                else:
+                    print(f"  FILL CHECK: couldn't read the real fill price for {result.ticker} -- keeping the intended entry price.")
             log_trade(result, side, trade_price, count, entry_dry_run, reversion_z=reversion_signal.z_score, entry_reason=entry_reason)
 
         with STATE_LOCK:

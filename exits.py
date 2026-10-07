@@ -38,6 +38,10 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     if not STOP_LOSS_ENABLED:
         return ExitDecision(False)
 
+    # Filled outside the allowed price tolerance / below the floor: get out immediately.
+    if position.get("force_exit"):
+        return ExitDecision(True, f"fill_outside_tolerance (real entry ${entry_price:.2f} -- exiting immediately)")
+
     # ONE rule, for everything, tag-independent -- checked purely on
     # entry_price and current value, regardless of which tier, coin,
     # or market type placed this position (crypto, manual, sports,
