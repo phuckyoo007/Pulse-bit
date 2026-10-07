@@ -92,7 +92,7 @@ CFX_87_SHARES = 2
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
 CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
-CFX_MODEL_REQUIRED = True
+CFX_MODEL_REQUIRED = False   # OFF: Pyth now returns 401 (needs an API key) for commodity/FX feeds, so no model is possible keyless
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
@@ -901,7 +901,7 @@ def run():
         for _kind, _markets in (("commodity", discover_commodity_markets(client)),
                                 ("fx", discover_fx_markets(client))):
             for market in _markets:
-                result = evaluate_commodity_market(market, with_model=True)
+                result = evaluate_commodity_market(market, with_model=CFX_MODEL_REQUIRED)
                 if result is None:
                     continue
                 evaluated += 1
