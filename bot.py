@@ -407,7 +407,7 @@ def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
 
-HARD_BACKSTOP_FRACTION = 0.92
+HARD_BACKSTOP_FRACTION = 0.94
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:
@@ -697,9 +697,19 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
 
 def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: set,
                           bankroll_and_breaker: dict, stop_event: threading.Event):
+    last_adopt = 0.0
     while not stop_event.is_set():
         try:
             with STATE_LOCK:
+                # Pick up any position Kalshi shows that we aren't tracking (e.g. one entered by another copy of the bot
+                # or before a restart) every ~2 seconds, so the primary stop-loss protects it almost immediately instead
+                # of waiting for the next ~15-second scan pass.
+                if time.time() - last_adopt >= 2.0:
+                    last_adopt = time.time()
+                    before = set(state)
+                    adopt_manual_positions(client, state)
+                    if set(state) != before:
+                        save_json(STATE_FILE, state)
                 settled_pnls = check_settlements(client, state)
                 for pnl in settled_pnls:
                     bankroll_and_breaker["bankroll"] += pnl
