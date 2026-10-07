@@ -80,6 +80,7 @@ EARLY_60_MAX_PRICE = 0.62
 EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 2
 ASK_MAX_PRICE = 0.99
+ENTRY_RECHECK_MIN_PRICE = 0.84   # live price must still be at/above this right before the order goes out
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
@@ -1147,6 +1148,29 @@ def run():
             order_succeeded = False
             last_error = None
             if not entry_dry_run:
+                # LIVE PRICE RE-CHECK: the scan loop takes ~15 seconds, so the price this decision was based on can be
+                # stale by the time the order goes out. Because the order is a limit order priced at the OLD quote, it
+                # fills at whatever the CURRENT price is -- even far below the floor if the market just moved (that is how
+                # a "0.91" bid filled around 0.755 on EUR/USD). So re-read the live quote right before ordering, skip if
+                # it no longer meets the floor, and price the limit at the live quote.
+                try:
+                    _lm = client.get_market(result.ticker).get("market", {})
+                    _ya, _yb = _lm.get("yes_ask_dollars"), _lm.get("yes_bid_dollars")
+                    if _ya is not None and _yb is not None:
+                        _ya, _yb = float(_ya), float(_yb)
+                        _live_mid = (_ya + _yb) / 2
+                        _live_side_price = _live_mid if side == "bid" else 1 - _live_mid
+                        _live_cost = _ya if side == "bid" else 1 - _yb
+                        if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > 0.98:
+                            print(f"  PRICE RE-CHECK: {result.ticker} {side.upper()} moved to {_live_side_price:.2f} "
+                                  f"(cost {_live_cost:.2f}) since the scan -- below the {ENTRY_RECHECK_MIN_PRICE:.2f} floor or above "
+                                  f"the 0.98 ceiling now, skipping.")
+                            continue
+                        trade_price = _ya if side == "bid" else _yb
+                except Exception as _e:
+                    print(f"  PRICE RE-CHECK: couldn't read the live quote for {result.ticker} ({_e}) -- skipping rather than "
+                          f"ordering on a stale price.")
+                    continue
                 # ENTRY SAFETY CHECK (pairs with the exit safety check): if Kalshi already shows a position in this
                 # market -- e.g. a second overlapping copy of the bot just entered it -- do not enter again.
                 try:
