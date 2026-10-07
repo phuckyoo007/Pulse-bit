@@ -100,8 +100,9 @@ CFX_MIN_EDGE_PP = 1.5
 # Set True to require a model number before bidding (needs a working price feed).
 CRYPTO_GATE_MIN_MODEL = 0.80   # crypto entries need side model prob above this
 CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
-CFX_ENABLED = True             # FX only (commodities are off)
-CFX_ALLOWED = {"EURUSD", "GBPUSD", "USDJPY"}   # only these FX pairs may trade; all commodities are off
+CFX_COMMODITIES_ENABLED = True   # commodities ON
+CFX_FX_ENABLED = False           # FX (EUR/USD, GBP/USD, USD/JPY) OFF
+CFX_ENABLED = CFX_COMMODITIES_ENABLED or CFX_FX_ENABLED
 CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
@@ -1047,12 +1048,15 @@ def run():
                 potential_points=potential_points(candidate_price), original=result,
             ))
 
-        for _kind, _markets in ((("fx", discover_fx_markets(client)),) if CFX_ENABLED else ()):
+        _cfx_groups = []
+        if CFX_COMMODITIES_ENABLED:
+            _cfx_groups.append(("commodity", discover_commodity_markets(client)))
+        if CFX_FX_ENABLED:
+            _cfx_groups.append(("fx", discover_fx_markets(client)))
+        for _kind, _markets in _cfx_groups:
             for market in _markets:
                 result = evaluate_commodity_market(market, with_model=CFX_MODEL_REQUIRED)
                 if result is None:
-                    continue
-                if result.commodity not in CFX_ALLOWED:
                     continue
                 evaluated += 1
                 reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
