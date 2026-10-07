@@ -80,6 +80,7 @@ EARLY_60_MAX_PRICE = 0.62
 EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 2
 ASK_MAX_PRICE = 0.99
+ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
 ENTRY_RECHECK_MIN_PRICE = 0.84   # live price must still be at/above this right before the order goes out
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
@@ -179,7 +180,7 @@ def place_entry_yes(client: KalshiClient, ticker: str, price: float, count: floa
     if dry_run:
         return {"dry_run": True}
     resp = client.create_order(
-        ticker=ticker, client_order_id=str(uuid.uuid4()),
+        ticker=ticker, client_order_id=f"pulse-{uuid.uuid4()}",
         side="bid", count=str(count), price=f"{price:.2f}",
     )
     order = resp.get("order", {})
@@ -220,7 +221,7 @@ def place_entry_no(client: KalshiClient, ticker: str, price: float, count: float
         return {"dry_run": True}
     yes_denominated_price = 1 - price
     resp = client.create_order(
-        ticker=ticker, client_order_id=str(uuid.uuid4()),
+        ticker=ticker, client_order_id=f"pulse-{uuid.uuid4()}",
         side="ask", count=str(count), price=f"{yes_denominated_price:.2f}",
     )
     order = resp.get("order", {})
@@ -288,7 +289,7 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
     except Exception as e:
         print(f"EXIT SAFETY: couldn't verify the real position for {ticker} ({e}) -- exiting anyway.")
     return client.create_order(
-        ticker=ticker, client_order_id=str(uuid.uuid4()),
+        ticker=ticker, client_order_id=f"pulse-x-{uuid.uuid4()}",
         side=close_side, count=str(count), price=f"{price:.2f}",
     )
 
@@ -482,6 +483,36 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
     return triggered_pnls
 
 
+BOT_ORDER_ID_PREFIX = "pulse-"
+PROCESS_START_TIME = time.time()
+
+
+def placed_by_pulse(client: KalshiClient, ticker: str):
+    """True if Kalshi's order history for this market contains an order this bot placed (its client_order_id starts with
+    'pulse-'), False if it has orders but none are ours (i.e. placed by hand), None if the lookup failed or found nothing."""
+    try:
+        resp = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 100})
+        orders = resp.get("orders", []) or []
+        if not orders:
+            return None
+        if any(str(o.get("client_order_id", "")).startswith(BOT_ORDER_ID_PREFIX) for o in orders):
+            return True
+        # No tagged order. Orders placed by an OLDER bot version (before tagging existed, or before this process started)
+        # carry no marker either, so only call it manual if at least one order was created after this process started.
+        newest = None
+        for o in orders:
+            ct = o.get("created_time")
+            if ct:
+                t = datetime.fromisoformat(str(ct).replace("Z", "+00:00")).timestamp()
+                newest = t if newest is None else max(newest, t)
+        if newest is None or newest < PROCESS_START_TIME:
+            return None
+        return False
+    except Exception as e:
+        print(f"  Couldn't read order history for {ticker} ({e}) -- treating its origin as unknown.")
+        return None
+
+
 def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     try:
         positions_resp = client.get_positions()
@@ -509,11 +540,18 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                   f"computed count={count}, computed exposure={exposure}")
             continue
         side = "bid" if position_fp > 0 else "ask"
+        # Who placed it? Only a position with NO order from this bot in its history is treated as manual (100% stop).
+        # A bot-placed position that was merely forgotten across a restart keeps the normal stop; if the origin can't be
+        # determined, it also gets the normal stop (safer than selling something the bot itself bought).
+        by_bot = placed_by_pulse(client, ticker)
+        is_manual = (by_bot is False)
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side,
                           "dry_run": False, "peak_gain_per_contract": 0.0,
-                          "entry_time": time.time(), "manually_adopted": True}
-        print(f"  ADOPTED manual position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
-              f"(derived from Kalshi's real position data) -- trailing stop-loss now protecting it.")
+                          "entry_time": time.time(), "manually_adopted": is_manual, "adopted": True}
+        origin = ("MANUAL (no Pulse order in its history) -- 100% stop" if is_manual else
+                  "bot-placed" if by_bot else "origin unknown -- normal stop")
+        print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
+              f"(derived from Kalshi's real position data; {origin}) -- stop-loss now protecting it.")
 
 
 STATE_LOCK = threading.Lock()
@@ -1161,6 +1199,11 @@ def run():
                         _live_mid = (_ya + _yb) / 2
                         _live_side_price = _live_mid if side == "bid" else 1 - _live_mid
                         _live_cost = _ya if side == "bid" else 1 - _yb
+                        _live_spread = _ya - _yb
+                        if _live_spread > ENTRY_MAX_SPREAD + 1e-9:
+                            print(f"  SPREAD FILTER: {result.ticker} bid-ask gap is {_live_spread:.2f} (bid {_yb:.2f} / ask {_ya:.2f}), "
+                                  f"wider than {ENTRY_MAX_SPREAD:.2f} -- skipping, a stop-loss here would sell far below the quote.")
+                            continue
                         if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > 0.98:
                             print(f"  PRICE RE-CHECK: {result.ticker} {side.upper()} moved to {_live_side_price:.2f} "
                                   f"(cost {_live_cost:.2f}) since the scan -- below the {ENTRY_RECHECK_MIN_PRICE:.2f} floor or above "

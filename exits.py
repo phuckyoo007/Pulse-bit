@@ -12,6 +12,7 @@ from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
 UNIVERSAL_STOP_LOSS_FRACTION = 0.94   # initial stop: exit when value falls to <= 94% of what was paid
+PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
 MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
 
@@ -48,7 +49,7 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     # (only ever moves up).
     peak_gain = max(peak_gain_per_contract or 0.0, 0.0)
     peak_value = entry_price + peak_gain
-    if peak_gain > 1e-9:
+    if PROFIT_TRAIL_ENABLED and peak_gain > 1e-9:
         threshold_dollars = peak_value * count * PROFIT_TRAIL_FRACTION
         rule = f"trailing {PROFIT_TRAIL_FRACTION*100:.1f}% of peak value ${peak_value*count:.2f}"
     else:
