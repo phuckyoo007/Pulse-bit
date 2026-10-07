@@ -38,7 +38,6 @@ HOURLY_CRYPTO_SERIES_PREFIXES = {}
 COMMODITY_SERIES_PREFIXES = {
     "KXGOLD15M": "GOLD",
     "KXSILVER15M": "SILVER",
-    "KXWTI15M": "OIL",
     # Unconfirmed pattern guesses -- harmless if wrong (logged, skipped).
     "KXCOPPER15M": "COPPER",
     "KXTIN15M": "TIN",
@@ -64,7 +63,7 @@ _DYNAMIC_KEYWORDS = {
            "USD/JPY": "USDJPY", "USDJPY": "USDJPY"},
     "COMMODITY": {"NATURAL GAS": "NATGAS", "NATGAS": "NATGAS", "COPPER": "COPPER",
                   "TIN": "TIN", "PLATINUM": "PLATINUM", "PALLADIUM": "PALLADIUM",
-                  "GOLD": "GOLD", "SILVER": "SILVER", "CRUDE": "OIL", "WTI": "OIL"},
+                  "GOLD": "GOLD", "SILVER": "SILVER"},
 }
 INDEX_SERIES_PREFIXES = {
     "KXNDQ15M": "NASDAQ100",
