@@ -262,6 +262,30 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
     print(f"{'EXIT DRY-RUN' if dry_run else 'EXITING'} {close_side.upper()} {ticker} x{count} -- {real_side_desc}")
     if dry_run:
         return {"dry_run": True}
+    # EXIT SAFETY CHECK: an exit order that finds nothing to close does not do nothing -- it OPENS a new opposite
+    # position (a bid up to 0.99 simply buys YES). That happened when two copies of the bot (overlapping deploys)
+    # both exited the same trade. So before exiting, ask Kalshi what is really held, sell only that, and skip the
+    # exit if the position is already gone or points the other way. If the lookup itself fails, exit anyway --
+    # protecting against a loss matters more than the (rare) risk of a duplicate.
+    try:
+        positions_resp = client.get_positions()
+        real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
+        held = 0.0
+        for p in real_positions:
+            if p.get("ticker") == ticker:
+                held = float(p.get("position_fp", p.get("position", 0)) or 0)
+                break
+        closable = held if close_side == "ask" else -held   # ask closes a long YES position, bid closes a short
+        if closable < 1e-9:
+            print(f"EXIT SAFETY: {ticker} -- Kalshi shows no {'YES' if close_side == 'ask' else 'NO'} position left to close "
+                  f"(held={held}) -- skipping the exit so it can't open a new opposite position.")
+            return {"skipped": True, "reason": "nothing_to_close"}
+        if float(count) > closable + 1e-9:
+            print(f"EXIT SAFETY: {ticker} -- trying to close {count} but Kalshi only shows {closable:g} held -- "
+                  f"closing {closable:g} instead.")
+            count = closable
+    except Exception as e:
+        print(f"EXIT SAFETY: couldn't verify the real position for {ticker} ({e}) -- exiting anyway.")
     return client.create_order(
         ticker=ticker, client_order_id=str(uuid.uuid4()),
         side=close_side, count=str(count), price=f"{price:.2f}",
@@ -432,7 +456,11 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                   f"the primary stop-loss system.")
             close_side = "ask" if side == "bid" else "bid"
             try:
-                place_exit(client, ticker, close_side, count, dry_run=False)
+                exit_resp = place_exit(client, ticker, close_side, count, dry_run=False)
+                if isinstance(exit_resp, dict) and exit_resp.get("skipped"):
+                    if ticker in state:
+                        del state[ticker]
+                    continue
             except Exception as e:
                 if "market_closed" in str(e) or "market_not_found" in str(e):
                     _permanently_unexitable_tickers.add(ticker)
@@ -542,7 +570,12 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             send_real_order = position_is_real and not EXIT_DRY_RUN
             close_side = "ask" if position["side"] == "bid" else "bid"
             try:
-                place_exit(client, ticker, close_side, position["count"], dry_run=not send_real_order)
+                exit_resp = place_exit(client, ticker, close_side, position["count"], dry_run=not send_real_order)
+                if isinstance(exit_resp, dict) and exit_resp.get("skipped"):
+                    # Position was already closed (e.g. by another copy of the bot) -- stop tracking it, record nothing.
+                    del state[ticker]
+                    excluded_tickers.add(ticker)
+                    continue
             except Exception as e:
                 if "market_closed" in str(e) or "market_not_found" in str(e):
                     _permanently_unexitable_tickers.add(ticker)
@@ -1114,6 +1147,19 @@ def run():
             order_succeeded = False
             last_error = None
             if not entry_dry_run:
+                # ENTRY SAFETY CHECK (pairs with the exit safety check): if Kalshi already shows a position in this
+                # market -- e.g. a second overlapping copy of the bot just entered it -- do not enter again.
+                try:
+                    _pos_resp = client.get_positions()
+                    _held = [p for p in _pos_resp.get("market_positions", _pos_resp.get("positions", []))
+                             if p.get("ticker") == result.ticker
+                             and float(p.get("position_fp", p.get("position", 0)) or 0) != 0]
+                    if _held:
+                        print(f"ENTRY SAFETY: {result.ticker} -- Kalshi already shows a position here, not entering again "
+                              f"(it will be picked up and protected by the adopt step).")
+                        continue
+                except Exception as _e:
+                    print(f"ENTRY SAFETY: couldn't verify existing positions for {result.ticker} ({_e}) -- continuing.")
                 ensure_shard_funds(client, result.ticker, this_trade_cost)
             for attempt in range(1, ORDER_RETRY_ATTEMPTS + 1):
                 try:
