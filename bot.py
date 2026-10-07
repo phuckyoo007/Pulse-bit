@@ -95,9 +95,9 @@ CFX_87_SHARES = 1
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
 CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
-# Commodity/FX model + edge checks are ON: prices come from Pyth when it works, else Yahoo Finance (no key).
-# No model number (feed down/stale/mismatched) = no bid.
-CFX_MODEL_REQUIRED = True
+# Commodity/FX model + edge checks are OFF for now (see below).
+# Set True to require a model number before bidding (needs a working price feed).
+CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
