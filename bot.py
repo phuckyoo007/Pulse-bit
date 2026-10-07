@@ -42,34 +42,34 @@ RISK_PARAMS = RiskParams(
 )
 BTC_87_THRESHOLD_SECONDS = 300
 BTC_87_MIN_PRICE = 0.84
-BTC_87_SHARES = 1
+BTC_87_SHARES = 2
 XRP_87_THRESHOLD_SECONDS = 300
 XRP_87_MIN_PRICE = 0.84
-XRP_87_SHARES = 1
+XRP_87_SHARES = 2
 SOL_87_THRESHOLD_SECONDS = 300
 SOL_87_MIN_PRICE = 0.84
-SOL_87_SHARES = 1
+SOL_87_SHARES = 2
 DOGE_87_THRESHOLD_SECONDS = 300
 DOGE_87_MIN_PRICE = 0.84
-DOGE_87_SHARES = 1
+DOGE_87_SHARES = 2
 BNB_87_THRESHOLD_SECONDS = 300
 BNB_87_MIN_PRICE = 0.84
-BNB_87_SHARES = 1
+BNB_87_SHARES = 2
 BCH_87_THRESHOLD_SECONDS = 300
 BCH_87_MIN_PRICE = 0.84
-BCH_87_SHARES = 1
+BCH_87_SHARES = 2
 ETH_87_THRESHOLD_SECONDS = 300
 ETH_87_MIN_PRICE = 0.84
-ETH_87_SHARES = 1
+ETH_87_SHARES = 2
 HYPE_87_THRESHOLD_SECONDS = 300
 HYPE_87_MIN_PRICE = 0.84
-HYPE_87_SHARES = 1
+HYPE_87_SHARES = 2
 LATCH2_90_THRESHOLD_SECONDS = 300
 LATCH2_90_MIN_PRICE = 0.90
-LATCH2_90_SHARES = 1
+LATCH2_90_SHARES = 2
 TRIPLE_90_THRESHOLD_SECONDS = 300
 TRIPLE_90_MIN_PRICE = 0.90
-TRIPLE_90_SHARES = 1
+TRIPLE_90_SHARES = 2
 CROSS_CONFIRM_MIN_PRICE = 0.70
 TIGHT_TIME_THRESHOLD_SECONDS = 105
 TIGHT_TIME_MIN_PRICE = 0.75
@@ -78,7 +78,7 @@ EDGE_FILTER_ENABLED = True
 EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
-EARLY_60_SHARES = 1
+EARLY_60_SHARES = 2
 TRIAL_SHARES_PER_TRADE = 2
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
@@ -90,7 +90,7 @@ COIN_SIZE_MULTIPLIER = {}
 # (there is no vol model for these).
 CFX_87_THRESHOLD_SECONDS = 300
 CFX_87_MIN_PRICE = 0.84     # entry when side price is at or above this
-CFX_87_SHARES = 1
+CFX_87_SHARES = 2
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
@@ -98,6 +98,9 @@ CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
+CRYPTO_GATE_MIN_MODEL = 0.80   # crypto entries need side model prob above this
+CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
+CFX_ENABLED = False            # OFF: no commodity/FX bidding at all (crypto only)
 CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
@@ -107,10 +110,10 @@ ANY_MIN_PRICE = 0.84
 ANY_MIN_MODEL_PROB = 0.80
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = True    # edge for the side must be > ANY_MIN_EDGE_PP
-ANY_SHARES = 1
+ANY_SHARES = 2
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
-GENERIC_SHARES = 1
+GENERIC_SHARES = 2
 MIN_SHARES_LIQUIDITY_REQUIRED = 5
 
 STATE_FILE = Path("state.json")
@@ -1027,6 +1030,11 @@ def run():
                     triple_90_tier_tickers.add(result.ticker)
             if decision is None:
                 continue
+            # CRYPTO GATE: every crypto entry (any tier) must have the model AND edge agree for the chosen side.
+            _gate_side_model = result.model_prob if decision[0] == "bid" else (1 - result.model_prob)
+            _gate_side_edge = result.edge_pct if decision[0] == "bid" else (-result.edge_pct)
+            if not (_gate_side_model > CRYPTO_GATE_MIN_MODEL and _gate_side_edge > CRYPTO_GATE_MIN_EDGE_PP):
+                continue
             candidate_side, candidate_price = decision
             liquidity = get_shares_available(client, result.ticker, candidate_side)
             if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1038,8 +1046,8 @@ def run():
                 potential_points=potential_points(candidate_price), original=result,
             ))
 
-        for _kind, _markets in (("commodity", discover_commodity_markets(client)),
-                                ("fx", discover_fx_markets(client))):
+        for _kind, _markets in ((("commodity", discover_commodity_markets(client)),
+                                 ("fx", discover_fx_markets(client))) if CFX_ENABLED else ()):
             for market in _markets:
                 result = evaluate_commodity_market(market, with_model=CFX_MODEL_REQUIRED)
                 if result is None:
