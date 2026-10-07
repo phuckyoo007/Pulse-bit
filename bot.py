@@ -101,7 +101,7 @@ CFX_MIN_EDGE_PP = 1.5
 CRYPTO_GATE_MIN_MODEL = 0.80   # crypto entries need side model prob above this
 CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
 CFX_ENABLED = True             # FX only (commodities are off)
-CFX_ALLOWED = {"EURUSD", "USDJPY"}   # only these may trade; GBPUSD and all commodities are off
+CFX_ALLOWED = {"EURUSD", "GBPUSD", "USDJPY"}   # only these FX pairs may trade; all commodities are off
 CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
