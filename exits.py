@@ -11,7 +11,7 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.92   # fires when value falls to <= 92% of original principal
+UNIVERSAL_STOP_LOSS_FRACTION = 0.96   # trailing: fires when value falls to <= 96% of the peak (peak starts at entry)
 
 
 @dataclass
@@ -41,11 +41,15 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     # anything). This is deliberately the ONLY exit rule in this file.
     bet_amount_dollars = entry_price * count
     current_dollars = value_now * count
-    threshold_dollars = bet_amount_dollars * UNIVERSAL_STOP_LOSS_FRACTION
+    # TRAILING: the stop follows the best value the position has reached. Peak value per contract is
+    # entry + best gain seen so far (never below entry), so the stop only ever moves up.
+    peak_gain = max(peak_gain_per_contract or 0.0, 0.0)
+    peak_value = entry_price + peak_gain
+    threshold_dollars = peak_value * count * UNIVERSAL_STOP_LOSS_FRACTION
     if current_dollars <= threshold_dollars + 1e-9:
         return ExitDecision(True, f"stop_loss (bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
                                    f"threshold ${threshold_dollars:.2f} -- "
-                                   f"{UNIVERSAL_STOP_LOSS_FRACTION*100:.0f}% of original investment, "
+                                   f"{UNIVERSAL_STOP_LOSS_FRACTION*100:.0f}% of peak value ${peak_value*count:.2f}, "
                                    f"entry ${entry_price:.2f})")
 
     return ExitDecision(False)
