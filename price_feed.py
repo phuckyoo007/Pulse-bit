@@ -434,30 +434,33 @@ def get_pyth_spot_and_vol(asset: str, reference_price: Optional[float] = None) -
 # ---------------------------------------------------------------------------
 # Yahoo Finance fallback for commodities / FX (no API key). Used whenever Pyth isn't giving prices.
 # Unofficial endpoint, so everything FAILS CLOSED: any problem returns (None, None) and the caller skips the trade.
-# Prices are spot where Yahoo has a spot quote (metals, FX) and front-month futures otherwise (copper, natgas);
-# each candidate is checked against the Kalshi strike and rejected if it is too far from it (wrong basis/feed).
+# Yahoo has no spot metals quotes, so metals/copper/natgas use front-month futures. A futures price sits a fixed
+# amount away from the spot index Kalshi settles on, so for those the price is BASIS-CALIBRATED: the gap between
+# Yahoo's price at the moment the market opened and the Kalshi strike (which is the index price at that moment)
+# is subtracted from the live price. FX pairs are real spot quotes and are used as-is.
 # ---------------------------------------------------------------------------
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
 YAHOO_SYMBOLS = {
-    "GOLD": ["XAUUSD=X", "GC=F"], "SILVER": ["XAGUSD=X", "SI=F"],
-    "PLATINUM": ["XPTUSD=X", "PL=F"], "PALLADIUM": ["XPDUSD=X", "PA=F"],
+    "GOLD": ["GC=F"], "SILVER": ["SI=F"], "PLATINUM": ["PL=F"], "PALLADIUM": ["PA=F"],
     "COPPER": ["HG=F"], "NATGAS": ["NG=F"],
     "EURUSD": ["EURUSD=X"], "GBPUSD": ["GBPUSD=X"], "USDJPY": ["JPY=X"],
 }
-# How far a Yahoo price may sit from the Kalshi strike before it is treated as the wrong feed / wrong basis.
-YAHOO_MAX_DEVIATION = {"GOLD": 0.01, "SILVER": 0.015, "PLATINUM": 0.015, "PALLADIUM": 0.02,
-                       "COPPER": 0.02, "NATGAS": 0.04, "EURUSD": 0.005, "GBPUSD": 0.005, "USDJPY": 0.006}
+YAHOO_CALIBRATE = {"GOLD", "SILVER", "PLATINUM", "PALLADIUM", "COPPER", "NATGAS"}   # futures-based assets
+# Largest allowed gap between Yahoo's price and the Kalshi strike before it is treated as the wrong feed.
+YAHOO_MAX_DEVIATION = {"GOLD": 0.03, "SILVER": 0.04, "PLATINUM": 0.04, "PALLADIUM": 0.05,
+                       "COPPER": 0.04, "NATGAS": 0.08, "EURUSD": 0.005, "GBPUSD": 0.005, "USDJPY": 0.006}
 YAHOO_MAX_STALENESS_SECONDS = 150
 YAHOO_MIN_BARS = 20
-_yahoo_cache = {}       # symbol -> (spot, pub_time, vol, fetched_at)
+MARKET_LENGTH_SECONDS = 900
+_yahoo_cache = {}       # symbol -> (pts, spot, pub, vol, fetched_at)
 _yahoo_blocked_until = [0.0]
 
 
 def _yahoo_fetch(sym: str):
-    """(spot, last_publish_epoch, annualized_vol) for a Yahoo symbol, cached 4 s."""
+    """(pts, spot, last_publish_epoch, annualized_vol) for a Yahoo symbol, cached 4 s. pts = [(epoch_of_bar_end, close)]."""
     cached = _yahoo_cache.get(sym)
-    if cached and time.time() - cached[3] < 4:
-        return cached[:3]
+    if cached and time.time() - cached[4] < 4:
+        return cached[:4]
     if time.time() < _yahoo_blocked_until[0]:
         return None
     resp = requests.get(YAHOO_CHART_URL.format(sym=requests.utils.quote(sym, safe="")),
@@ -470,63 +473,84 @@ def _yahoo_fetch(sym: str):
     resp.raise_for_status()
     result = (resp.json().get("chart", {}).get("result") or [None])[0]
     if not result:
+        _pyth_log(f"yahoo_empty_{sym}", f"Yahoo {sym}: empty result.")
         return None
     stamps = result.get("timestamp") or []
     closes = ((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
-    pts = [(t, c) for t, c in zip(stamps, closes) if c is not None and c > 0]
+    pts = [(t + 60, c) for t, c in zip(stamps, closes) if c is not None and c > 0]   # bar labelled T closes at T+60
     if len(pts) < YAHOO_MIN_BARS:
+        _pyth_log(f"yahoo_bars_{sym}", f"Yahoo {sym}: only {len(pts)} price bars in the last hour (market closed or thin) -- no model.")
         return None
     meta = result.get("meta") or {}
-    spot, pub = pts[-1][1], pts[-1][0]
+    spot, pub = pts[-1][1], pts[-1][0] - 60
     if meta.get("regularMarketPrice") and meta.get("regularMarketTime", 0) >= pub:
         spot, pub = float(meta["regularMarketPrice"]), int(meta["regularMarketTime"])
     span = pts[-1][0] - pts[0][0]
     vol = realized_volatility([c for _, c in pts], span / (len(pts) - 1)) if span > 0 else None
-    _yahoo_cache[sym] = (spot, pub, vol, time.time())
-    return spot, pub, vol
+    _yahoo_cache[sym] = (pts, spot, pub, vol, time.time())
+    return pts, spot, pub, vol
+
+
+def _yahoo_price_at(pts: list, epoch: float):
+    """Linear interpolation of the bar-close series at an epoch; None if outside the series."""
+    if epoch < pts[0][0] or epoch > pts[-1][0]:
+        return None
+    for (t0, c0), (t1, c1) in zip(pts, pts[1:]):
+        if t0 <= epoch <= t1:
+            return c0 + (c1 - c0) * ((epoch - t0) / (t1 - t0)) if t1 > t0 else c1
+    return None
 
 
 _yahoo_chosen = {}
 
 
-def get_yahoo_spot_and_vol(asset: str, reference_price: Optional[float] = None) -> tuple:
-    """(spot, annualized_vol) for a commodity/FX asset from Yahoo Finance, or (None, None)."""
-    try:
-        candidates = YAHOO_SYMBOLS.get(asset)
-        if not candidates:
-            return None, None
-        order = ([_yahoo_chosen[asset]] if asset in _yahoo_chosen else []) + [c for c in candidates if _yahoo_chosen.get(asset) != c]
-        tol = YAHOO_MAX_DEVIATION.get(asset, 0.01)
-        for sym in order:
+def get_yahoo_spot_and_vol(asset: str, reference_price: Optional[float] = None, close_epoch: Optional[float] = None) -> tuple:
+    """(spot, annualized_vol) for a commodity/FX asset from Yahoo Finance, or (None, None).
+    close_epoch (the Kalshi market's close time) enables the futures-basis calibration."""
+    for sym in YAHOO_SYMBOLS.get(asset, []):
+        try:
             got = _yahoo_fetch(sym)
             if not got:
                 continue
-            spot, pub, vol = got
+            pts, spot, pub, vol = got
             if time.time() - pub > YAHOO_MAX_STALENESS_SECONDS:
                 _pyth_log(f"yahoo_stale_{sym}", f"Yahoo {asset} ({sym}): last price {int(time.time() - pub)}s old -- market closed/stale, no model.")
                 continue
-            if reference_price and abs(math.log(spot / reference_price)) > tol:
-                _pyth_log(f"yahoo_ref_{sym}_{int(reference_price)}",
-                          f"Yahoo {asset}: {sym} price {spot} is >{tol*100:.1f}% from the Kalshi strike {reference_price} -- not a usable match, skipping it.")
-                continue
             if vol is None:
                 continue
-            floor = PYTH_VOL_FLOORS.get(asset, 0.10)
-            vol = max(vol, floor)
+            adj_spot = spot
+            if asset in YAHOO_CALIBRATE:
+                if not (reference_price and close_epoch):
+                    continue
+                at_open = _yahoo_price_at(pts, close_epoch - MARKET_LENGTH_SECONDS)
+                if at_open is None:
+                    _pyth_log(f"yahoo_nocal_{sym}", f"Yahoo {asset} ({sym}): no price bar covers this market's open time -- can't calibrate, no model.")
+                    continue
+                basis = at_open - reference_price
+                adj_spot = spot - basis
+                if abs(math.log(at_open / reference_price)) > YAHOO_MAX_DEVIATION.get(asset, 0.03):
+                    _pyth_log(f"yahoo_ref_{sym}_{int(reference_price)}",
+                              f"Yahoo {asset}: {sym} price at market open {at_open:.4f} is too far from the Kalshi strike {reference_price} -- wrong feed, skipping.")
+                    continue
+            elif reference_price and abs(math.log(spot / reference_price)) > YAHOO_MAX_DEVIATION.get(asset, 0.01):
+                _pyth_log(f"yahoo_ref_{sym}_{int(reference_price)}",
+                          f"Yahoo {asset}: {sym} price {spot} is too far from the Kalshi strike {reference_price} -- not a usable match, skipping it.")
+                continue
+            vol = max(vol, PYTH_VOL_FLOORS.get(asset, 0.10))
             if _yahoo_chosen.get(asset) != sym:
                 _yahoo_chosen[asset] = sym
-                print(f"Yahoo feed for {asset}: using {sym} (price {spot}, vol {vol:.3f}, last price {int(time.time() - pub)}s old)")
-            return spot, vol
-        return None, None
-    except Exception as e:
-        _pyth_log(f"yahoo_err_{asset}", f"Yahoo Finance error for {asset}: {e}")
-        return None, None
+                extra = f", basis-adjusted by {spot - adj_spot:+.4f}" if asset in YAHOO_CALIBRATE else ""
+                print(f"Yahoo feed for {asset}: using {sym} (price {spot}{extra}, vol {vol:.3f}, last price {int(time.time() - pub)}s old)")
+            return adj_spot, vol
+        except Exception as e:      # one bad symbol must not stop the others
+            _pyth_log(f"yahoo_err_{sym}", f"Yahoo Finance error for {asset} ({sym}): {e}")
+    return None, None
 
 
 _pyth_probe_at = [0.0]
 
 
-def get_cfx_spot_and_vol(asset: str, reference_price: Optional[float] = None) -> tuple:
+def get_cfx_spot_and_vol(asset: str, reference_price: Optional[float] = None, close_epoch: Optional[float] = None) -> tuple:
     """Commodity/FX spot + vol: Pyth when it is actually delivering prices, otherwise Yahoo Finance."""
     if pyth_key_configured() and (_pyth_channel[0] or time.time() - _pyth_probe_at[0] > 600):
         if not _pyth_channel[0]:
@@ -534,4 +558,4 @@ def get_cfx_spot_and_vol(asset: str, reference_price: Optional[float] = None) ->
         spot, vol = get_pyth_spot_and_vol(asset, reference_price)
         if spot is not None and vol is not None:
             return spot, vol
-    return get_yahoo_spot_and_vol(asset, reference_price)
+    return get_yahoo_spot_and_vol(asset, reference_price, close_epoch)

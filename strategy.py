@@ -231,14 +231,15 @@ class CommodityPriceResult:
     edge_pct: Optional[float] = None
     direction: Optional[str] = None
 _cfx_feed_cache = {}
-def _get_cfx_spot_and_vol(commodity: str, strike: Optional[float]):
+def _get_cfx_spot_and_vol(commodity: str, strike: Optional[float], close_epoch: Optional[float] = None):
     """Pyth/Yahoo spot/vol for a commodity/FX asset, cached 5s (failures too, so a dead feed isn't hammered every loop)."""
     import time
-    cached = _cfx_feed_cache.get(commodity)
+    key = (commodity, round(strike, 6) if strike else None)
+    cached = _cfx_feed_cache.get(key)
     if cached and (time.time() - cached[2]) < 5:
         return cached[0], cached[1]
-    spot, vol = get_cfx_spot_and_vol(commodity, reference_price=strike)
-    _cfx_feed_cache[commodity] = (spot, vol, time.time())
+    spot, vol = get_cfx_spot_and_vol(commodity, reference_price=strike, close_epoch=close_epoch)
+    _cfx_feed_cache[key] = (spot, vol, time.time())
     return spot, vol
 def evaluate_commodity_market(market: dict, with_model: bool = False) -> Optional[CommodityPriceResult]:
     ticker = market.get("ticker", "")
@@ -263,7 +264,7 @@ def evaluate_commodity_market(market: dict, with_model: bool = False) -> Optiona
         strike = _extract_strike(market)
         direction = _extract_direction(market)
         if strike is not None:
-            spot, vol = _get_cfx_spot_and_vol(commodity, strike)
+            spot, vol = _get_cfx_spot_and_vol(commodity, strike, close_time.timestamp() if close_time else None)
             if spot is not None and vol is not None:
                 t_years = seconds_remaining / (365.25 * 24 * 3600)
                 model_prob = (probability_above_strike(spot, strike, t_years, vol) if direction == "above"
