@@ -87,6 +87,13 @@ COIN_SIZE_MULTIPLIER = {}
 CFX_87_THRESHOLD_SECONDS = 240
 CFX_87_MIN_PRICE = 0.84     # entry when side price is at or above this
 CFX_87_SHARES = 2
+# Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
+# above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
+# (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
+CFX_MIN_MODEL_PROB = 0.82
+CFX_MIN_EDGE_PP = 1.5
+CFX_MODEL_REQUIRED = True
+_cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
 ANY_THRESHOLD_SECONDS = 240
@@ -894,20 +901,21 @@ def run():
         for _kind, _markets in (("commodity", discover_commodity_markets(client)),
                                 ("fx", discover_fx_markets(client))):
             for market in _markets:
-                result = evaluate_commodity_market(market)
+                result = evaluate_commodity_market(market, with_model=True)
                 if result is None:
                     continue
                 evaluated += 1
                 reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
                 scan_results.append({
                     "ticker": result.ticker, "title": result.title, "coin": result.commodity,
-                    "direction": None, "market_price": result.market_price,
-                    "model_prob": None, "edge_pct": None,
+                    "direction": result.direction, "market_price": result.market_price,
+                    "model_prob": result.model_prob, "edge_pct": result.edge_pct,
                     "seconds_remaining": result.seconds_remaining, "volume": result.volume,
                     "reversion_z": reversion_signal.z_score,
                 })
+                _m = f"model={result.model_prob:.2f} edge={result.edge_pct:+.1f}pp " if result.model_prob is not None else "model=n/a "
                 print(f"  [{result.commodity}] {result.title[:45]:<45} up=${result.market_price:.2f} "
-                      f"down=${1 - result.market_price:.2f} t-{int(result.seconds_remaining)}s")
+                      f"down=${1 - result.market_price:.2f} {_m}t-{int(result.seconds_remaining)}s")
                 if result.ticker in state or result.ticker in excluded_tickers:
                     continue
                 if len(state) >= RISK_PARAMS.max_open_positions:
@@ -917,9 +925,18 @@ def run():
                 up_price = result.market_price
                 down_price = 1 - result.market_price
                 decision = None
-                if up_price >= CFX_87_MIN_PRICE:
+                if CFX_MODEL_REQUIRED and (up_price >= CFX_87_MIN_PRICE or down_price >= CFX_87_MIN_PRICE) \
+                        and (result.model_prob is None or result.edge_pct is None):
+                    if result.ticker not in _cfx_nomodel_logged:
+                        _cfx_nomodel_logged.add(result.ticker)
+                        print(f"  Skipping {result.ticker} -- price qualifies but no model probability is available "
+                              f"(price feed down/stale/wrong feed) and the model is required.")
+                    continue
+                if up_price >= CFX_87_MIN_PRICE and (not CFX_MODEL_REQUIRED or (
+                        result.model_prob > CFX_MIN_MODEL_PROB and result.edge_pct > CFX_MIN_EDGE_PP)):
                     decision = ("bid", up_price)
-                elif down_price >= CFX_87_MIN_PRICE:
+                elif down_price >= CFX_87_MIN_PRICE and (not CFX_MODEL_REQUIRED or (
+                        (1 - result.model_prob) > CFX_MIN_MODEL_PROB and (-result.edge_pct) > CFX_MIN_EDGE_PP)):
                     decision = ("ask", down_price)
                 if decision is None:
                     continue

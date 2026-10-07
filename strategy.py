@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
-from price_feed import get_spot_and_vol
+from price_feed import get_spot_and_vol, get_pyth_spot_and_vol, COINBASE_PRODUCT_MAP, COINGECKO_ID_MAP
 from vol_model import probability_above_strike, probability_below_strike
 CRYPTO_SERIES_PREFIXES = {
     "KXBTC15M": "BTC",
@@ -29,6 +29,10 @@ CRYPTO_SERIES_PREFIXES = {
     # exist), but NOT independently confirmed the way ETH now is.
     # Watch the console's market discovery output once this deploys.
     "KXHYPE15M": "HYPE",
+    # NEAR is confirmed to exist on Kalshi and Coinbase has NEAR-USD; SUI is a ticker guess (harmless if wrong).
+    # Both go through the same volatility model + edge checks as the other crypto coins.
+    "KXNEAR15M": "NEAR",
+    "KXSUI15M": "SUI",
 }
 HOURLY_CRYPTO_SERIES_PREFIXES = {}
 COMMODITY_SERIES_PREFIXES = {
@@ -42,12 +46,6 @@ COMMODITY_SERIES_PREFIXES = {
     "KXPLATINUM15M": "PLATINUM",
     "KXPALLADIUM15M": "PALLADIUM",
     "KXPALL15M": "PALLADIUM",
-    # Extra crypto 15-min series WITHOUT a volatility model: traded price-only, exactly like commodities/FX
-    # (same 0.84 floor / t<240 window, no edge or model filter). KXNEAR15M is confirmed to exist on Kalshi;
-    # KXSUI15M is a pattern guess (harmless if wrong). Any other crypto 15M series Kalshi lists is added
-    # automatically at runtime by discover_dynamic_series().
-    "KXNEAR15M": "NEAR",
-    "KXSUI15M": "SUI",
 }
 # Foreign-exchange 15-minute markets (EUR/USD, GBP/USD, USD/JPY). These
 # three prefixes are PATTERN GUESSES (KX{PAIR}15M) -- not independently
@@ -183,11 +181,16 @@ def discover_dynamic_series(client, refresh_seconds: float = 900.0):
                 print(f"Dynamic discovery: added {kind} series {ticker} ({label}) from Kalshi's live series list.")
                 break
         else:
-            # Not FX/commodity: pick up ANY other crypto 15-minute series Kalshi lists (price-only trading).
+            # Not FX/commodity: pick up any other crypto 15-minute series Kalshi lists, but ONLY if we have a real
+            # price source for the coin (so it gets the same model + edge checks as the rest).
             if "CRYPTO" in str(srs.get("category", "")).upper() and ticker.startswith("KX"):
                 label = ticker[2:-3]
-                COMMODITY_SERIES_PREFIXES[ticker] = label
-                print(f"Dynamic discovery: added CRYPTO (price-only) series {ticker} ({label}) from Kalshi's live series list.")
+                if label in COINBASE_PRODUCT_MAP or label in COINGECKO_ID_MAP:
+                    CRYPTO_SERIES_PREFIXES[ticker] = label
+                    print(f"Dynamic discovery: added CRYPTO series {ticker} ({label}) from Kalshi's live series list.")
+                else:
+                    _log_throttled(f"nocoin_{ticker}", f"Dynamic discovery: crypto series {ticker} ({label}) found but no price source "
+                                                        f"configured for it in price_feed.py -- not trading it.", 3600.0)
 
 
 def _discover_prefix_table(client, table: dict, kind: str) -> list:
@@ -224,7 +227,21 @@ class CommodityPriceResult:
     close_time: Optional[datetime] = None
     yes_ask: float = 0.0
     yes_bid: float = 0.0
-def evaluate_commodity_market(market: dict) -> Optional[CommodityPriceResult]:
+    strike: Optional[float] = None
+    model_prob: Optional[float] = None
+    edge_pct: Optional[float] = None
+    direction: Optional[str] = None
+_cfx_feed_cache = {}
+def _get_cfx_spot_and_vol(commodity: str, strike: Optional[float]):
+    """Pyth spot/vol for a commodity/FX asset, cached 20s (failures too, so a dead feed isn't hammered every loop)."""
+    import time
+    cached = _cfx_feed_cache.get(commodity)
+    if cached and (time.time() - cached[2]) < 20:
+        return cached[0], cached[1]
+    spot, vol = get_pyth_spot_and_vol(commodity, reference_price=strike)
+    _cfx_feed_cache[commodity] = (spot, vol, time.time())
+    return spot, vol
+def evaluate_commodity_market(market: dict, with_model: bool = False) -> Optional[CommodityPriceResult]:
     ticker = market.get("ticker", "")
     commodity = next((c for prefix, c in {**COMMODITY_SERIES_PREFIXES, **FX_SERIES_PREFIXES}.items()
                       if ticker.startswith(prefix)), None)
@@ -241,11 +258,25 @@ def evaluate_commodity_market(market: dict) -> Optional[CommodityPriceResult]:
     if yes_ask is None or yes_bid is None:
         return None
     market_price = (float(yes_ask) + float(yes_bid)) / 2
+    strike = model_prob = edge_pct = direction = None
+    if with_model and seconds_remaining > 0:
+        # Same Black-Scholes digital model as crypto, fed by the Pyth feed Kalshi settles on.
+        strike = _extract_strike(market)
+        direction = _extract_direction(market)
+        if strike is not None:
+            spot, vol = _get_cfx_spot_and_vol(commodity, strike)
+            if spot is not None and vol is not None:
+                t_years = seconds_remaining / (365.25 * 24 * 3600)
+                model_prob = (probability_above_strike(spot, strike, t_years, vol) if direction == "above"
+                              else probability_below_strike(spot, strike, t_years, vol))
+                if model_prob is not None:
+                    edge_pct = (model_prob - market_price) * 100
     return CommodityPriceResult(
         ticker=ticker, title=market.get("title", ticker), commodity=commodity,
         market_price=market_price, seconds_remaining=seconds_remaining,
         volume=float(market.get("volume_fp", 0)), close_time=close_time,
         yes_ask=float(yes_ask), yes_bid=float(yes_bid),
+        strike=strike, model_prob=model_prob, edge_pct=edge_pct, direction=direction,
     )
 def discover_index_markets(client) -> list:
     markets = []
