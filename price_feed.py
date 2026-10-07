@@ -207,15 +207,15 @@ def get_spot_and_vol(coin: str) -> tuple:
 # ---------------------------------------------------------------------------
 from collections import deque
 
-PYTH_HERMES_BASE = "https://hermes.pyth.network"
+PYTH_HERMES_BASE = "https://pyth.dourolabs.app/hermes"   # upgraded Hermes (the old hermes.pyth.network host now rejects our key)
 import os as _os
 
 
 def _pyth_headers() -> dict:
     """Hermes now needs an API key (Pyth Terminal, free signup). Set it as the PYTH_API_KEY variable on Railway.
-    Sent both as a Bearer token and x-api-key so either scheme is accepted. Never printed."""
+    Sent as a Bearer token. Never printed."""
     key = _os.environ.get("PYTH_API_KEY", "").strip()
-    return {"Authorization": f"Bearer {key}", "x-api-key": key} if key else {}
+    return {"Authorization": f"Bearer {key}"} if key else {}
 
 
 def pyth_key_configured() -> bool:
