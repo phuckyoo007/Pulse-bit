@@ -208,6 +208,18 @@ def get_spot_and_vol(coin: str) -> tuple:
 from collections import deque
 
 PYTH_HERMES_BASE = "https://hermes.pyth.network"
+import os as _os
+
+
+def _pyth_headers() -> dict:
+    """Hermes now needs an API key (Pyth Terminal, free signup). Set it as the PYTH_API_KEY variable on Railway.
+    Sent both as a Bearer token and x-api-key so either scheme is accepted. Never printed."""
+    key = _os.environ.get("PYTH_API_KEY", "").strip()
+    return {"Authorization": f"Bearer {key}", "x-api-key": key} if key else {}
+
+
+def pyth_key_configured() -> bool:
+    return bool(_os.environ.get("PYTH_API_KEY", "").strip())
 PYTH_SAMPLE_SECONDS = 4              # sample spacing for the self-built history
 PYTH_HISTORY_SECONDS = 3600          # keep up to an hour of samples
 PYTH_MIN_SAMPLES = 36                # ~3 minutes of 5s samples before a vol estimate is trusted
@@ -257,7 +269,7 @@ def _pyth_search_symbols(asset: str) -> list:
     found = []
     for term in PYTH_SEARCH_TERMS.get(asset, []):
         try:
-            resp = requests.get(f"{PYTH_HERMES_BASE}/v2/price_feeds", params={"query": term}, timeout=10)
+            resp = requests.get(f"{PYTH_HERMES_BASE}/v2/price_feeds", params={"query": term}, headers=_pyth_headers(), timeout=10)
             resp.raise_for_status()
             for feed in resp.json():
                 sym = (feed.get("attributes") or {}).get("symbol")
@@ -281,7 +293,7 @@ def _pyth_search_symbols(asset: str) -> list:
 def _pyth_latest(feed_ids: list) -> dict:
     """{feed_id: (price, publish_time)} for the given Hermes feed ids (one request)."""
     resp = requests.get(f"{PYTH_HERMES_BASE}/v2/updates/price/latest",
-                        params=[("ids[]", i) for i in feed_ids] + [("parsed", "true")], timeout=10)
+                        params=[("ids[]", i) for i in feed_ids] + [("parsed", "true")], headers=_pyth_headers(), timeout=10)
     resp.raise_for_status()
     out = {}
     for item in resp.json().get("parsed", []):

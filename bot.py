@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 import requests
 from kalshi_client import KalshiClient
+from price_feed import pyth_key_configured
 from strategy import discover_crypto_markets, evaluate_crypto_market, \
     discover_generic_short_markets, evaluate_generic_market, \
     discover_commodity_markets, evaluate_commodity_market, discover_fx_markets, \
@@ -94,7 +95,9 @@ CFX_87_SHARES = 2
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
 CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
-CFX_MODEL_REQUIRED = False   # OFF: Pyth now returns 401 (needs an API key) for commodity/FX feeds, so no model is possible keyless
+# Commodity/FX model + edge checks need a Pyth API key (PYTH_API_KEY variable on Railway). Key set -> checks ON
+# (no model = no bid); no key -> OFF, price-only like before.
+CFX_MODEL_REQUIRED = pyth_key_configured()
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
