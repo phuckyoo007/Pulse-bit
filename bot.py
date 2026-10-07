@@ -407,6 +407,41 @@ def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
 
+_market_cache = {}          # ticker -> (market dict, fetched_at)
+_MARKET_CACHE_TTL = 1.0     # seconds: one stop-loss pass reuses a single price lookup per market
+
+
+def get_market_cached(client: KalshiClient, ticker: str) -> dict:
+    """Market data for the stop-loss path. Settlement, stop-loss and backstop checks used to each fetch the same market
+    separately (3 lookups per open position per pass); now they share one if it is under a second old."""
+    cached = _market_cache.get(ticker)
+    if cached and (time.time() - cached[1]) < _MARKET_CACHE_TTL:
+        return cached[0]
+    market = client.get_market(ticker).get("market", {})
+    _market_cache[ticker] = (market, time.time())
+    if len(_market_cache) > 500:
+        for k in [k for k, v in _market_cache.items() if time.time() - v[1] > 60]:
+            _market_cache.pop(k, None)
+    return market
+
+
+def prefetch_markets(client: KalshiClient, tickers: list) -> None:
+    """Fetch several markets at the same time (instead of one after another) and fill the cache."""
+    tickers = [t for t in tickers if t]
+    if len(tickers) < 2:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _one(t):
+        try:
+            _market_cache[t] = (client.get_market(t).get("market", {}), time.time())
+        except Exception:
+            pass   # the normal per-check fetch will retry and log the error itself
+
+    with ThreadPoolExecutor(max_workers=min(8, len(tickers))) as pool:
+        list(pool.map(_one, tickers))
+
+
 HARD_BACKSTOP_FRACTION = 0.94
 
 
@@ -438,7 +473,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                       f"unreasonable -- skipping rather than risk acting on bad data.")
                 continue
             side = "bid" if position_fp > 0 else "ask"
-            market = client.get_market(ticker).get("market", {})
+            market = get_market_cached(client, ticker)
             if market.get("status") == "finalized":
                 continue
             yes_ask = market.get("yes_ask_dollars")
@@ -568,7 +603,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
         position = state[ticker]
         try:
             try:
-                market = client.get_market(ticker).get("market", {})
+                market = get_market_cached(client, ticker)
             except Exception as e:
                 # ADDED, per real evidence of a position that silently
                 # never got its stop-loss checked -- this used to fail
@@ -662,7 +697,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
     newly_settled_pnl = []
     for ticker in list(state.keys()):
         try:
-            market = client.get_market(ticker).get("market", {})
+            market = get_market_cached(client, ticker)
         except Exception:
             continue
         status = market.get("status")
@@ -710,6 +745,7 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
                     adopt_manual_positions(client, state)
                     if set(state) != before:
                         save_json(STATE_FILE, state)
+                prefetch_markets(client, list(state.keys()))
                 settled_pnls = check_settlements(client, state)
                 for pnl in settled_pnls:
                     bankroll_and_breaker["bankroll"] += pnl
