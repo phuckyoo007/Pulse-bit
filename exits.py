@@ -12,7 +12,8 @@ from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
 UNIVERSAL_STOP_LOSS_FRACTION = 0.93   # initial stop: exit when value falls to <= 93% of what was paid
-PROFIT_TRAIL_FRACTION = 0.995         # once a position has gone into profit: exit if value falls to <= 99.5% of its peak
+PROFIT_TRAIL_FRACTION = 0.96          # once a position has gone into profit: exit if value falls to <= 96% of its peak
+MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
 
 
 @dataclass
@@ -53,6 +54,11 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     else:
         threshold_dollars = bet_amount_dollars * UNIVERSAL_STOP_LOSS_FRACTION
         rule = f"{UNIVERSAL_STOP_LOSS_FRACTION*100:.0f}% of original investment"
+    if position.get("manually_adopted"):
+        manual_floor = bet_amount_dollars * MANUAL_STOP_LOSS_FRACTION
+        if manual_floor > threshold_dollars:
+            threshold_dollars = manual_floor
+            rule = f"{MANUAL_STOP_LOSS_FRACTION*100:.0f}% of original investment (manual bid)"
     if current_dollars <= threshold_dollars + 1e-9:
         return ExitDecision(True, f"stop_loss (bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
                                    f"threshold ${threshold_dollars:.2f} -- {rule}, entry ${entry_price:.2f})")
