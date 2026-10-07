@@ -100,7 +100,7 @@ CFX_MIN_EDGE_PP = 1.5
 # Set True to require a model number before bidding (needs a working price feed).
 CRYPTO_GATE_MIN_MODEL = 0.80   # crypto entries need side model prob above this
 CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
-CFX_COMMODITIES_ENABLED = True   # commodities ON
+CFX_COMMODITIES_ENABLED = False  # commodities OFF
 CFX_FX_ENABLED = False           # FX (EUR/USD, GBP/USD, USD/JPY) OFF
 CFX_ENABLED = CFX_COMMODITIES_ENABLED or CFX_FX_ENABLED
 CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
