@@ -208,6 +208,7 @@ def get_spot_and_vol(coin: str) -> tuple:
 from collections import deque
 
 PYTH_PRO_BASE = "https://pyth-lazer.dourolabs.app"   # Pyth Pro REST (the key from Pyth Terminal / "Acquire an API Key")
+PYTH_PRO_SYMBOL_HOSTS = ["https://pyth-lazer-0.dourolabs.app", "https://pyth-lazer.dourolabs.app", "https://pyth.dourolabs.app"]
 import os as _os
 
 
@@ -268,8 +269,18 @@ def _pyth_all_feeds() -> list:
     """Pyth Pro's full feed list (GET /v1/symbols), cached for an hour."""
     if _pyth_symbol_list[0] is not None and time.time() - _pyth_symbol_list[1] < 3600:
         return _pyth_symbol_list[0]
-    resp = requests.get(f"{PYTH_PRO_BASE}/v1/symbols", headers=_pyth_headers(), timeout=15)
-    resp.raise_for_status()
+    resp = None
+    last_err = None
+    for base in PYTH_PRO_SYMBOL_HOSTS:   # the docs put /v1/symbols on a different host than /v1/latest_price
+        try:
+            r = requests.get(f"{base}/v1/symbols", headers=_pyth_headers(), timeout=15)
+            r.raise_for_status()
+            resp = r
+            break
+        except Exception as e:
+            last_err = e
+    if resp is None:
+        raise last_err
     data = resp.json()
     if isinstance(data, dict):
         data = data.get("symbols") or data.get("data") or []
