@@ -42,6 +42,12 @@ COMMODITY_SERIES_PREFIXES = {
     "KXPLATINUM15M": "PLATINUM",
     "KXPALLADIUM15M": "PALLADIUM",
     "KXPALL15M": "PALLADIUM",
+    # Extra crypto 15-min series WITHOUT a volatility model: traded price-only, exactly like commodities/FX
+    # (same 0.84 floor / t<240 window, no edge or model filter). KXNEAR15M is confirmed to exist on Kalshi;
+    # KXSUI15M is a pattern guess (harmless if wrong). Any other crypto 15M series Kalshi lists is added
+    # automatically at runtime by discover_dynamic_series().
+    "KXNEAR15M": "NEAR",
+    "KXSUI15M": "SUI",
 }
 # Foreign-exchange 15-minute markets (EUR/USD, GBP/USD, USD/JPY). These
 # three prefixes are PATTERN GUESSES (KX{PAIR}15M) -- not independently
@@ -176,6 +182,12 @@ def discover_dynamic_series(client, refresh_seconds: float = 900.0):
                 table[ticker] = label
                 print(f"Dynamic discovery: added {kind} series {ticker} ({label}) from Kalshi's live series list.")
                 break
+        else:
+            # Not FX/commodity: pick up ANY other crypto 15-minute series Kalshi lists (price-only trading).
+            if "CRYPTO" in str(srs.get("category", "")).upper() and ticker.startswith("KX"):
+                label = ticker[2:-3]
+                COMMODITY_SERIES_PREFIXES[ticker] = label
+                print(f"Dynamic discovery: added CRYPTO (price-only) series {ticker} ({label}) from Kalshi's live series list.")
 
 
 def _discover_prefix_table(client, table: dict, kind: str) -> list:

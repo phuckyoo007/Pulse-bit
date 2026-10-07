@@ -11,8 +11,8 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.93   # initial stop: exit when value falls to <= 93% of what was paid
-PROFIT_TRAIL_FRACTION = 0.96          # once a position has gone into profit: exit if value falls to <= 96% of its peak
+UNIVERSAL_STOP_LOSS_FRACTION = 0.95   # initial stop: exit when value falls to <= 95% of what was paid
+PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
 MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
 
 
