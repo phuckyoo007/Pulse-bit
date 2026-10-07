@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
-from price_feed import get_spot_and_vol, get_pyth_spot_and_vol, COINBASE_PRODUCT_MAP, COINGECKO_ID_MAP
+from price_feed import get_spot_and_vol, get_pyth_spot_and_vol, get_cfx_spot_and_vol, COINBASE_PRODUCT_MAP, COINGECKO_ID_MAP
 from vol_model import probability_above_strike, probability_below_strike
 CRYPTO_SERIES_PREFIXES = {
     "KXBTC15M": "BTC",
@@ -232,12 +232,12 @@ class CommodityPriceResult:
     direction: Optional[str] = None
 _cfx_feed_cache = {}
 def _get_cfx_spot_and_vol(commodity: str, strike: Optional[float]):
-    """Pyth spot/vol for a commodity/FX asset, cached 5s (failures too, so a dead feed isn't hammered every loop)."""
+    """Pyth/Yahoo spot/vol for a commodity/FX asset, cached 5s (failures too, so a dead feed isn't hammered every loop)."""
     import time
     cached = _cfx_feed_cache.get(commodity)
     if cached and (time.time() - cached[2]) < 5:
         return cached[0], cached[1]
-    spot, vol = get_pyth_spot_and_vol(commodity, reference_price=strike)
+    spot, vol = get_cfx_spot_and_vol(commodity, reference_price=strike)
     _cfx_feed_cache[commodity] = (spot, vol, time.time())
     return spot, vol
 def evaluate_commodity_market(market: dict, with_model: bool = False) -> Optional[CommodityPriceResult]:

@@ -331,17 +331,20 @@ _pyth_feed_meta = {}
 
 
 def _pyth_latest(feed_ids: list) -> dict:
-    """{feed_id: (price, publish_time_seconds)} from Pyth Pro POST /v1/latest_price (one request)."""
-    channels = [_pyth_channel[0]] if _pyth_channel[0] else ["real_time", "fixed_rate@200ms", "fixed_rate@1000ms"]
+    """{feed_id: (price, publish_time_seconds)} from Pyth Pro POST /v1/latest_price (one request).
+    Tries the cheapest channel first; a 403/400 on one channel (plan restriction) moves on to the next."""
+    channels = [_pyth_channel[0]] if _pyth_channel[0] else ["fixed_rate@1000ms", "fixed_rate@200ms", "real_time"]
     last_err = None
     for ch in channels:
         body = {"priceFeedIds": list(feed_ids), "properties": ["price", "exponent", "publisherCount"],
                 "formats": [], "channel": ch, "parsed": True, "jsonBinaryEncoding": "hex"}
         resp = requests.post(f"{PYTH_PRO_BASE}/v1/latest_price", json=body, headers=_pyth_headers(), timeout=10)
-        if resp.status_code in (400, 404, 422) and not _pyth_channel[0]:
-            last_err = f"{resp.status_code} {resp.text[:200]}"
+        if resp.status_code in (400, 403, 404, 422) and not _pyth_channel[0]:
+            last_err = f"channel {ch}: HTTP {resp.status_code} {resp.text[:300]}"
+            _pyth_log(f"pyth_ch_{ch}", f"Pyth Pro latest_price rejected ({last_err})", 600.0)
             continue
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Pyth Pro latest_price HTTP {resp.status_code}: {resp.text[:300]}")
         _pyth_channel[0] = ch
         data = resp.json()
         parsed = data.get("parsed") or data
@@ -357,7 +360,7 @@ def _pyth_latest(feed_ids: list) -> dict:
             except (KeyError, ValueError, TypeError):
                 continue
         return out
-    raise RuntimeError(f"no working Pyth Pro channel ({last_err})")
+    raise RuntimeError(f"Pyth Pro refused every channel -- last: {last_err}")
 
 
 def _pyth_choose_feed(asset: str, reference_price: Optional[float]):
@@ -426,3 +429,109 @@ def get_pyth_spot_and_vol(asset: str, reference_price: Optional[float] = None) -
     except Exception as e:
         _pyth_log(f"pyth_err_{asset}", f"Pyth price feed error for {asset}: {e}")
         return None, None
+
+
+# ---------------------------------------------------------------------------
+# Yahoo Finance fallback for commodities / FX (no API key). Used whenever Pyth isn't giving prices.
+# Unofficial endpoint, so everything FAILS CLOSED: any problem returns (None, None) and the caller skips the trade.
+# Prices are spot where Yahoo has a spot quote (metals, FX) and front-month futures otherwise (copper, natgas);
+# each candidate is checked against the Kalshi strike and rejected if it is too far from it (wrong basis/feed).
+# ---------------------------------------------------------------------------
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
+YAHOO_SYMBOLS = {
+    "GOLD": ["XAUUSD=X", "GC=F"], "SILVER": ["XAGUSD=X", "SI=F"],
+    "PLATINUM": ["XPTUSD=X", "PL=F"], "PALLADIUM": ["XPDUSD=X", "PA=F"],
+    "COPPER": ["HG=F"], "NATGAS": ["NG=F"],
+    "EURUSD": ["EURUSD=X"], "GBPUSD": ["GBPUSD=X"], "USDJPY": ["JPY=X"],
+}
+# How far a Yahoo price may sit from the Kalshi strike before it is treated as the wrong feed / wrong basis.
+YAHOO_MAX_DEVIATION = {"GOLD": 0.01, "SILVER": 0.015, "PLATINUM": 0.015, "PALLADIUM": 0.02,
+                       "COPPER": 0.02, "NATGAS": 0.04, "EURUSD": 0.005, "GBPUSD": 0.005, "USDJPY": 0.006}
+YAHOO_MAX_STALENESS_SECONDS = 150
+YAHOO_MIN_BARS = 20
+_yahoo_cache = {}       # symbol -> (spot, pub_time, vol, fetched_at)
+_yahoo_blocked_until = [0.0]
+
+
+def _yahoo_fetch(sym: str):
+    """(spot, last_publish_epoch, annualized_vol) for a Yahoo symbol, cached 4 s."""
+    cached = _yahoo_cache.get(sym)
+    if cached and time.time() - cached[3] < 4:
+        return cached[:3]
+    if time.time() < _yahoo_blocked_until[0]:
+        return None
+    resp = requests.get(YAHOO_CHART_URL.format(sym=requests.utils.quote(sym, safe="")),
+                        params={"interval": "1m", "range": "1h", "includePrePost": "false"},
+                        headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+    if resp.status_code == 429:
+        _yahoo_blocked_until[0] = time.time() + 60
+        _pyth_log("yahoo_429", "Yahoo Finance rate-limited (429) -- pausing Yahoo lookups for 60s.", 60.0)
+        return None
+    resp.raise_for_status()
+    result = (resp.json().get("chart", {}).get("result") or [None])[0]
+    if not result:
+        return None
+    stamps = result.get("timestamp") or []
+    closes = ((result.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+    pts = [(t, c) for t, c in zip(stamps, closes) if c is not None and c > 0]
+    if len(pts) < YAHOO_MIN_BARS:
+        return None
+    meta = result.get("meta") or {}
+    spot, pub = pts[-1][1], pts[-1][0]
+    if meta.get("regularMarketPrice") and meta.get("regularMarketTime", 0) >= pub:
+        spot, pub = float(meta["regularMarketPrice"]), int(meta["regularMarketTime"])
+    span = pts[-1][0] - pts[0][0]
+    vol = realized_volatility([c for _, c in pts], span / (len(pts) - 1)) if span > 0 else None
+    _yahoo_cache[sym] = (spot, pub, vol, time.time())
+    return spot, pub, vol
+
+
+_yahoo_chosen = {}
+
+
+def get_yahoo_spot_and_vol(asset: str, reference_price: Optional[float] = None) -> tuple:
+    """(spot, annualized_vol) for a commodity/FX asset from Yahoo Finance, or (None, None)."""
+    try:
+        candidates = YAHOO_SYMBOLS.get(asset)
+        if not candidates:
+            return None, None
+        order = ([_yahoo_chosen[asset]] if asset in _yahoo_chosen else []) + [c for c in candidates if _yahoo_chosen.get(asset) != c]
+        tol = YAHOO_MAX_DEVIATION.get(asset, 0.01)
+        for sym in order:
+            got = _yahoo_fetch(sym)
+            if not got:
+                continue
+            spot, pub, vol = got
+            if time.time() - pub > YAHOO_MAX_STALENESS_SECONDS:
+                _pyth_log(f"yahoo_stale_{sym}", f"Yahoo {asset} ({sym}): last price {int(time.time() - pub)}s old -- market closed/stale, no model.")
+                continue
+            if reference_price and abs(math.log(spot / reference_price)) > tol:
+                _pyth_log(f"yahoo_ref_{sym}_{int(reference_price)}",
+                          f"Yahoo {asset}: {sym} price {spot} is >{tol*100:.1f}% from the Kalshi strike {reference_price} -- not a usable match, skipping it.")
+                continue
+            if vol is None:
+                continue
+            floor = PYTH_VOL_FLOORS.get(asset, 0.10)
+            vol = max(vol, floor)
+            if _yahoo_chosen.get(asset) != sym:
+                _yahoo_chosen[asset] = sym
+                print(f"Yahoo feed for {asset}: using {sym} (price {spot}, vol {vol:.3f}, last price {int(time.time() - pub)}s old)")
+            return spot, vol
+        return None, None
+    except Exception as e:
+        _pyth_log(f"yahoo_err_{asset}", f"Yahoo Finance error for {asset}: {e}")
+        return None, None
+
+
+_pyth_probe_at = [0.0]
+
+
+def get_cfx_spot_and_vol(asset: str, reference_price: Optional[float] = None) -> tuple:
+    """Commodity/FX spot + vol: Pyth when it is actually delivering prices, otherwise Yahoo Finance."""
+    if pyth_key_configured() and (_pyth_channel[0] or time.time() - _pyth_probe_at[0] > 600):
+        if not _pyth_channel[0]:
+            _pyth_probe_at[0] = time.time()   # Pyth hasn't worked yet: only re-probe it every 10 minutes
+        spot, vol = get_pyth_spot_and_vol(asset, reference_price)
+        if spot is not None and vol is not None:
+            return spot, vol
+    return get_yahoo_spot_and_vol(asset, reference_price)
