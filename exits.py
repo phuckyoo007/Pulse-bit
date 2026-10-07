@@ -11,7 +11,7 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.96   # trailing: fires when value falls to <= 96% of the peak (peak starts at entry)
+UNIVERSAL_STOP_LOSS_FRACTION = 0.99   # trailing: fires when value falls to <= 99% of the peak (peak starts at entry)
 
 
 @dataclass
