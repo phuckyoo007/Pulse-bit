@@ -14,7 +14,7 @@ STOP_LOSS_ENABLED = True
 UNIVERSAL_STOP_LOSS_FRACTION = 0.92   # initial stop: exit when value falls to <= 92% of what was paid
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
-MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
+MANUAL_STOP_LOSS_FRACTION = 0.88      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
 
 
 @dataclass
