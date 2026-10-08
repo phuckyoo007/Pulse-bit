@@ -40,34 +40,34 @@ RISK_PARAMS = RiskParams(
     max_open_positions=10000,
     max_daily_loss_pct=20.0,
 )
-BTC_87_THRESHOLD_SECONDS = 300
-BTC_87_MIN_PRICE = 0.84
+BTC_87_THRESHOLD_SECONDS = 180
+BTC_87_MIN_PRICE = 0.86
 BTC_87_SHARES = 1
-XRP_87_THRESHOLD_SECONDS = 300
-XRP_87_MIN_PRICE = 0.84
+XRP_87_THRESHOLD_SECONDS = 180
+XRP_87_MIN_PRICE = 0.86
 XRP_87_SHARES = 1
-SOL_87_THRESHOLD_SECONDS = 300
-SOL_87_MIN_PRICE = 0.84
+SOL_87_THRESHOLD_SECONDS = 180
+SOL_87_MIN_PRICE = 0.86
 SOL_87_SHARES = 1
-DOGE_87_THRESHOLD_SECONDS = 300
-DOGE_87_MIN_PRICE = 0.84
+DOGE_87_THRESHOLD_SECONDS = 180
+DOGE_87_MIN_PRICE = 0.86
 DOGE_87_SHARES = 1
-BNB_87_THRESHOLD_SECONDS = 300
-BNB_87_MIN_PRICE = 0.84
+BNB_87_THRESHOLD_SECONDS = 180
+BNB_87_MIN_PRICE = 0.86
 BNB_87_SHARES = 1
-BCH_87_THRESHOLD_SECONDS = 300
-BCH_87_MIN_PRICE = 0.84
+BCH_87_THRESHOLD_SECONDS = 180
+BCH_87_MIN_PRICE = 0.86
 BCH_87_SHARES = 1
-ETH_87_THRESHOLD_SECONDS = 300
-ETH_87_MIN_PRICE = 0.84
+ETH_87_THRESHOLD_SECONDS = 180
+ETH_87_MIN_PRICE = 0.86
 ETH_87_SHARES = 1
-HYPE_87_THRESHOLD_SECONDS = 300
-HYPE_87_MIN_PRICE = 0.84
+HYPE_87_THRESHOLD_SECONDS = 180
+HYPE_87_MIN_PRICE = 0.86
 HYPE_87_SHARES = 1
-LATCH2_90_THRESHOLD_SECONDS = 300
+LATCH2_90_THRESHOLD_SECONDS = 180
 LATCH2_90_MIN_PRICE = 0.90
 LATCH2_90_SHARES = 1
-TRIPLE_90_THRESHOLD_SECONDS = 300
+TRIPLE_90_THRESHOLD_SECONDS = 180
 TRIPLE_90_MIN_PRICE = 0.90
 TRIPLE_90_SHARES = 1
 CROSS_CONFIRM_MIN_PRICE = 0.70
@@ -82,14 +82,14 @@ EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 1
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_RECHECK_MIN_PRICE = 0.84   # live price must still be at/above this right before the order goes out
+ENTRY_RECHECK_MIN_PRICE = 0.86   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 300
-CFX_87_MIN_PRICE = 0.84     # entry when side price is at or above this
+CFX_87_THRESHOLD_SECONDS = 180
+CFX_87_MIN_PRICE = 0.86     # entry when side price is at or above this
 CFX_87_SHARES = 1
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
@@ -107,8 +107,8 @@ CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no 
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 300
-ANY_MIN_PRICE = 0.84
+ANY_THRESHOLD_SECONDS = 180
+ANY_MIN_PRICE = 0.86
 ANY_MIN_MODEL_PROB = 0.82
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = True    # edge for the side must be > ANY_MIN_EDGE_PP
