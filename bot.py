@@ -40,41 +40,41 @@ RISK_PARAMS = RiskParams(
     max_open_positions=10000,
     max_daily_loss_pct=20.0,
 )
-BTC_87_THRESHOLD_SECONDS = 180
-BTC_87_MIN_PRICE = 0.86
+BTC_87_THRESHOLD_SECONDS = 480
+BTC_87_MIN_PRICE = 0.70
 BTC_87_SHARES = 1
-XRP_87_THRESHOLD_SECONDS = 180
-XRP_87_MIN_PRICE = 0.86
+XRP_87_THRESHOLD_SECONDS = 480
+XRP_87_MIN_PRICE = 0.70
 XRP_87_SHARES = 1
-SOL_87_THRESHOLD_SECONDS = 180
-SOL_87_MIN_PRICE = 0.86
+SOL_87_THRESHOLD_SECONDS = 480
+SOL_87_MIN_PRICE = 0.70
 SOL_87_SHARES = 1
-DOGE_87_THRESHOLD_SECONDS = 180
-DOGE_87_MIN_PRICE = 0.86
+DOGE_87_THRESHOLD_SECONDS = 480
+DOGE_87_MIN_PRICE = 0.70
 DOGE_87_SHARES = 1
-BNB_87_THRESHOLD_SECONDS = 180
-BNB_87_MIN_PRICE = 0.86
+BNB_87_THRESHOLD_SECONDS = 480
+BNB_87_MIN_PRICE = 0.70
 BNB_87_SHARES = 1
-BCH_87_THRESHOLD_SECONDS = 180
-BCH_87_MIN_PRICE = 0.86
+BCH_87_THRESHOLD_SECONDS = 480
+BCH_87_MIN_PRICE = 0.70
 BCH_87_SHARES = 1
-ETH_87_THRESHOLD_SECONDS = 180
-ETH_87_MIN_PRICE = 0.86
+ETH_87_THRESHOLD_SECONDS = 480
+ETH_87_MIN_PRICE = 0.70
 ETH_87_SHARES = 1
-HYPE_87_THRESHOLD_SECONDS = 180
-HYPE_87_MIN_PRICE = 0.86
+HYPE_87_THRESHOLD_SECONDS = 480
+HYPE_87_MIN_PRICE = 0.70
 HYPE_87_SHARES = 1
-LATCH2_90_THRESHOLD_SECONDS = 180
+LATCH2_90_THRESHOLD_SECONDS = 480
 LATCH2_90_MIN_PRICE = 0.90
 LATCH2_90_SHARES = 1
-TRIPLE_90_THRESHOLD_SECONDS = 180
+TRIPLE_90_THRESHOLD_SECONDS = 480
 TRIPLE_90_MIN_PRICE = 0.90
 TRIPLE_90_SHARES = 1
 CROSS_CONFIRM_MIN_PRICE = 0.70
 TIGHT_TIME_THRESHOLD_SECONDS = 105
 TIGHT_TIME_MIN_PRICE = 0.75
 MIN_EDGE_FOR_87_TIERS = 1.5
-EDGE_FILTER_ENABLED = True
+EDGE_FILTER_ENABLED = False   # OFF: edge does not matter
 EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
@@ -82,14 +82,14 @@ EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 1
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_RECHECK_MIN_PRICE = 0.86   # live price must still be at/above this right before the order goes out
+ENTRY_RECHECK_MIN_PRICE = 0.70   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 180
-CFX_87_MIN_PRICE = 0.86     # entry when side price is at or above this
+CFX_87_THRESHOLD_SECONDS = 480
+CFX_87_MIN_PRICE = 0.70     # entry when side price is at or above this
 CFX_87_SHARES = 1
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
@@ -98,20 +98,21 @@ CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
+CRYPTO_GATE_ENABLED = False   # OFF: model confidence and edge do not matter -- price/time/floor only
 CRYPTO_GATE_MIN_MODEL = 0.82   # crypto entries need side model prob above this
 CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
-CFX_COMMODITIES_ENABLED = False  # commodities OFF
+CFX_COMMODITIES_ENABLED = True   # commodities ON
 CFX_FX_ENABLED = False           # FX (EUR/USD, GBP/USD, USD/JPY) OFF
 CFX_ENABLED = CFX_COMMODITIES_ENABLED or CFX_FX_ENABLED
 CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no price feed has worked from Railway)
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 180
-ANY_MIN_PRICE = 0.86
+ANY_THRESHOLD_SECONDS = 480
+ANY_MIN_PRICE = 0.70
 ANY_MIN_MODEL_PROB = 0.82
 ANY_MIN_EDGE_PP = 1.5
-ANY_EDGE_FILTER_ENABLED = True    # edge for the side must be > ANY_MIN_EDGE_PP
+ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
 ANY_SHARES = 1
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
@@ -451,7 +452,7 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
-HARD_BACKSTOP_FRACTION = 0.84
+HARD_BACKSTOP_FRACTION = 0.80
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:
@@ -1003,11 +1004,11 @@ def run():
             if decision is None and result.seconds_remaining < ANY_THRESHOLD_SECONDS:
                 up_price = result.market_price
                 down_price = 1 - result.market_price
-                if (up_price >= ANY_MIN_PRICE and result.model_prob > ANY_MIN_MODEL_PROB
+                if (up_price >= ANY_MIN_PRICE and (not CRYPTO_GATE_ENABLED or result.model_prob > ANY_MIN_MODEL_PROB)
                         and (not ANY_EDGE_FILTER_ENABLED or result.edge_pct > ANY_MIN_EDGE_PP)):
                     decision = ("bid", up_price)
                     any_tier_tickers.add(result.ticker)
-                elif (down_price >= ANY_MIN_PRICE and (1 - result.model_prob) > ANY_MIN_MODEL_PROB
+                elif (down_price >= ANY_MIN_PRICE and (not CRYPTO_GATE_ENABLED or (1 - result.model_prob) > ANY_MIN_MODEL_PROB)
                         and (not ANY_EDGE_FILTER_ENABLED or (-result.edge_pct) > ANY_MIN_EDGE_PP)):
                     decision = ("ask", down_price)
                     any_tier_tickers.add(result.ticker)
@@ -1035,7 +1036,7 @@ def run():
             # CRYPTO GATE: every crypto entry (any tier) must have the model AND edge agree for the chosen side.
             _gate_side_model = result.model_prob if decision[0] == "bid" else (1 - result.model_prob)
             _gate_side_edge = result.edge_pct if decision[0] == "bid" else (-result.edge_pct)
-            if not (_gate_side_model > CRYPTO_GATE_MIN_MODEL and _gate_side_edge > CRYPTO_GATE_MIN_EDGE_PP):
+            if CRYPTO_GATE_ENABLED and not (_gate_side_model > CRYPTO_GATE_MIN_MODEL and _gate_side_edge > CRYPTO_GATE_MIN_EDGE_PP):
                 continue
             candidate_side, candidate_price = decision
             liquidity = get_shares_available(client, result.ticker, candidate_side)
