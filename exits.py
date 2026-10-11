@@ -11,7 +11,9 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.85   # initial stop: exit when value falls to <= 85% of what was paid
+UNIVERSAL_STOP_LOSS_FRACTION = 0.92   # initial stop: exit when value falls to <= 92% of what was paid
+TAKE_PROFIT_ENABLED = True
+TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
 MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
@@ -41,6 +43,10 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     # Filled outside the allowed price tolerance / below the floor: get out immediately.
     if position.get("force_exit"):
         return ExitDecision(True, f"fill_outside_tolerance (real entry ${entry_price:.2f} -- exiting immediately)")
+
+    # TAKE PROFIT: the held side is worth TAKE_PROFIT_PRICE or more -> sell and bank it.
+    if TAKE_PROFIT_ENABLED and value_now >= TAKE_PROFIT_PRICE - 1e-9:
+        return ExitDecision(True, f"capture_profit (value ${value_now:.2f} >= ${TAKE_PROFIT_PRICE:.2f}, entry ${entry_price:.2f})")
 
     # ONE rule, for everything, tag-independent -- checked purely on
     # entry_price and current value, regardless of which tier, coin,

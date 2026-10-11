@@ -82,6 +82,7 @@ EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 1
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
+ENTRY_MAX_PRICE = 0.74            # entry band is 0.70-0.74: buy cheap, sell at the 0.85 take-profit (see exits.py)
 ENTRY_RECHECK_MIN_PRICE = 0.70   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
@@ -1038,6 +1039,8 @@ def run():
             _gate_side_edge = result.edge_pct if decision[0] == "bid" else (-result.edge_pct)
             if CRYPTO_GATE_ENABLED and not (_gate_side_model > CRYPTO_GATE_MIN_MODEL and _gate_side_edge > CRYPTO_GATE_MIN_EDGE_PP):
                 continue
+            if decision[1] > ENTRY_MAX_PRICE + 1e-9:
+                continue   # above the entry band
             candidate_side, candidate_price = decision
             liquidity = get_shares_available(client, result.ticker, candidate_side)
             if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1095,6 +1098,8 @@ def run():
                     decision = ("ask", down_price)
                 if decision is None:
                     continue
+                if decision[1] > ENTRY_MAX_PRICE + 1e-9:
+                    continue   # above the entry band
                 candidate_side, candidate_price = decision
                 liquidity = get_shares_available(client, result.ticker, candidate_side)
                 if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1208,7 +1213,7 @@ def run():
             # for a NO buy (ask). The price ceiling and the capital cap
             # must use this number, not the raw YES price.
             entry_cost_per_share = real_fill_price if side == "bid" else (1 - real_fill_price)
-            if entry_cost_per_share > 0.98:
+            if entry_cost_per_share > ENTRY_MAX_PRICE + 0.03:
                 continue
             trade_price = real_fill_price
             if len(state) >= RISK_PARAMS.max_open_positions:
@@ -1287,10 +1292,10 @@ def run():
                             print(f"  SPREAD FILTER: {result.ticker} bid-ask gap is {_live_spread:.2f} (bid {_yb:.2f} / ask {_ya:.2f}), "
                                   f"wider than {ENTRY_MAX_SPREAD:.2f} -- skipping, a stop-loss here would sell far below the quote.")
                             continue
-                        if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > 0.98:
+                        if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > ENTRY_MAX_PRICE + 0.03:
                             print(f"  PRICE RE-CHECK: {result.ticker} {side.upper()} moved to {_live_side_price:.2f} "
                                   f"(cost {_live_cost:.2f}) since the scan -- below the {ENTRY_RECHECK_MIN_PRICE:.2f} floor or above "
-                                  f"the 0.98 ceiling now, skipping.")
+                                  f"the entry-band ceiling now, skipping.")
                             continue
                         trade_price = _ya if side == "bid" else _yb
                 except Exception as _e:
