@@ -40,41 +40,41 @@ RISK_PARAMS = RiskParams(
     max_open_positions=10000,
     max_daily_loss_pct=20.0,
 )
-BTC_87_THRESHOLD_SECONDS = 660
-BTC_87_MIN_PRICE = 0.70
+BTC_87_THRESHOLD_SECONDS = 110
+BTC_87_MIN_PRICE = 0.96
 BTC_87_SHARES = 1
-XRP_87_THRESHOLD_SECONDS = 660
-XRP_87_MIN_PRICE = 0.70
+XRP_87_THRESHOLD_SECONDS = 110
+XRP_87_MIN_PRICE = 0.96
 XRP_87_SHARES = 1
-SOL_87_THRESHOLD_SECONDS = 660
-SOL_87_MIN_PRICE = 0.70
+SOL_87_THRESHOLD_SECONDS = 110
+SOL_87_MIN_PRICE = 0.96
 SOL_87_SHARES = 1
-DOGE_87_THRESHOLD_SECONDS = 660
-DOGE_87_MIN_PRICE = 0.70
+DOGE_87_THRESHOLD_SECONDS = 110
+DOGE_87_MIN_PRICE = 0.96
 DOGE_87_SHARES = 1
-BNB_87_THRESHOLD_SECONDS = 660
-BNB_87_MIN_PRICE = 0.70
+BNB_87_THRESHOLD_SECONDS = 110
+BNB_87_MIN_PRICE = 0.96
 BNB_87_SHARES = 1
-BCH_87_THRESHOLD_SECONDS = 660
-BCH_87_MIN_PRICE = 0.70
+BCH_87_THRESHOLD_SECONDS = 110
+BCH_87_MIN_PRICE = 0.96
 BCH_87_SHARES = 1
-ETH_87_THRESHOLD_SECONDS = 660
-ETH_87_MIN_PRICE = 0.70
+ETH_87_THRESHOLD_SECONDS = 110
+ETH_87_MIN_PRICE = 0.96
 ETH_87_SHARES = 1
-HYPE_87_THRESHOLD_SECONDS = 660
-HYPE_87_MIN_PRICE = 0.70
+HYPE_87_THRESHOLD_SECONDS = 110
+HYPE_87_MIN_PRICE = 0.96
 HYPE_87_SHARES = 1
-LATCH2_90_THRESHOLD_SECONDS = 660
+LATCH2_90_THRESHOLD_SECONDS = 110
 LATCH2_90_MIN_PRICE = 0.90
 LATCH2_90_SHARES = 1
-TRIPLE_90_THRESHOLD_SECONDS = 660
+TRIPLE_90_THRESHOLD_SECONDS = 110
 TRIPLE_90_MIN_PRICE = 0.90
 TRIPLE_90_SHARES = 1
 CROSS_CONFIRM_MIN_PRICE = 0.70
 TIGHT_TIME_THRESHOLD_SECONDS = 105
 TIGHT_TIME_MIN_PRICE = 0.75
 MIN_EDGE_FOR_87_TIERS = 1.5
-EDGE_FILTER_ENABLED = False   # OFF: edge does not matter
+EDGE_FILTER_ENABLED = True
 EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
@@ -82,15 +82,16 @@ EARLY_60_SHARES = 1
 TRIAL_SHARES_PER_TRADE = 1
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_MAX_PRICE = 0.74            # entry band is 0.70-0.74: buy cheap, sell at the 0.85 take-profit (see exits.py)
-ENTRY_RECHECK_MIN_PRICE = 0.70   # live price must still be at/above this right before the order goes out
+ENTRY_MAX_PRICE = 0.98            # no upper band (back to the 96c+ floor version)
+ENTRY_HARD_CEILING = 0.98
+ENTRY_RECHECK_MIN_PRICE = 0.96   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 660
-CFX_87_MIN_PRICE = 0.70     # entry when side price is at or above this
+CFX_87_THRESHOLD_SECONDS = 110
+CFX_87_MIN_PRICE = 0.96     # entry when side price is at or above this
 CFX_87_SHARES = 1
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
@@ -99,7 +100,7 @@ CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
-CRYPTO_GATE_ENABLED = False   # OFF: model confidence and edge do not matter -- price/time/floor only
+CRYPTO_GATE_ENABLED = True    # model > 0.82 and edge > +1.5pp required for crypto
 CRYPTO_GATE_MIN_MODEL = 0.82   # crypto entries need side model prob above this
 CRYPTO_GATE_MIN_EDGE_PP = 1.5  # ...and side edge above this (pp)
 CFX_COMMODITIES_ENABLED = True   # commodities ON
@@ -109,11 +110,11 @@ CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no 
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 660
-ANY_MIN_PRICE = 0.70
+ANY_THRESHOLD_SECONDS = 110
+ANY_MIN_PRICE = 0.96
 ANY_MIN_MODEL_PROB = 0.82
 ANY_MIN_EDGE_PP = 1.5
-ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
+ANY_EDGE_FILTER_ENABLED = True    # edge for the side must be > ANY_MIN_EDGE_PP
 ANY_SHARES = 1
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
@@ -418,48 +419,6 @@ def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
 
-
-# ---- DIRECTIONALITY: only enter when the side is CLIMBING into the entry band, never when it is falling back into it ----
-DIRECTION_FILTER_ENABLED = True
-DIRECTION_LOOKBACK_SECONDS = 30     # compare against the price about this long ago
-DIRECTION_MIN_RISE = 0.01           # side price must be at least this much HIGHER than it was a lookback ago
-DIRECTION_MAX_DRAWDOWN = 0.02       # ...and must not have been more than this above the current price at any time this market
-_price_hist = {}                    # ticker -> [(time, YES price)]
-
-
-def record_price(ticker, yes_price):
-    now = time.time()
-    h = _price_hist.setdefault(ticker, [])
-    h.append((now, yes_price))
-    cutoff = now - 1500
-    while h and h[0][0] < cutoff:
-        h.pop(0)
-    if len(_price_hist) > 400:
-        for k in [k for k, v in _price_hist.items() if not v or v[-1][0] < cutoff]:
-            _price_hist.pop(k, None)
-
-
-def direction_ok(ticker, side, yes_price):
-    """True only if the side we would buy has been rising into this price. Fails closed with no history."""
-    if not DIRECTION_FILTER_ENABLED:
-        return True
-    conv = (lambda y: y) if side == "bid" else (lambda y: 1 - y)
-    hist = _price_hist.get(ticker) or []
-    cur = conv(yes_price)
-    if not hist:
-        return False
-    peak = max(conv(y) for _, y in hist)
-    if peak > cur + DIRECTION_MAX_DRAWDOWN + 1e-9:
-        print(f"  DIRECTION FILTER: {ticker} {side.upper()} was as high as {peak:.2f} and has fallen to {cur:.2f} -- not buying a falling price.")
-        return False
-    target = time.time() - DIRECTION_LOOKBACK_SECONDS
-    past = [y for t, y in hist if t <= target]
-    if not past:
-        return False   # not enough history yet
-    if cur - conv(past[-1]) < DIRECTION_MIN_RISE - 1e-9:
-        return False
-    return True
-
 _market_cache = {}          # ticker -> (market dict, fetched_at)
 _MARKET_CACHE_TTL = 1.0     # seconds: one stop-loss pass reuses a single price lookup per market
 
@@ -495,7 +454,7 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
-HARD_BACKSTOP_FRACTION = 0.80
+HARD_BACKSTOP_FRACTION = 0.84
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:
@@ -664,19 +623,6 @@ STATE_LOCK = threading.Lock()
 EXIT_CHECK_POLL_SECONDS = 0.5
 
 
-def _held_side_ask(position, result):
-    """Quoted price of the side we hold (what the app shows): YES ask for a YES position, 1 - YES bid for a NO position."""
-    try:
-        if position["side"] == "bid":
-            v = float(getattr(result, "yes_ask", 0) or 0)
-        else:
-            yb = float(getattr(result, "yes_bid", 0) or 0)
-            v = (1 - yb) if yb > 0 else 0
-        return v if v > 0 else None
-    except Exception:
-        return None
-
-
 def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> list:
     settlements = load_json(SETTLEMENTS_FILE, [])
     realized_pnl = []
@@ -721,8 +667,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
             decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                    reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
-                                   peak_gain_per_contract=position["peak_gain_per_contract"],
-                                   held_side_ask=_held_side_ask(position, result))
+                                   peak_gain_per_contract=position["peak_gain_per_contract"])
             if not decision.should_exit:
                 continue
             position_is_real = position.get("dry_run") is False
@@ -955,7 +900,6 @@ def run():
                 continue
             evaluated += 1
             reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
-            record_price(result.ticker, result.market_price)
             scan_results.append({
                 "ticker": result.ticker, "title": result.title, "coin": result.coin,
                 "direction": result.direction, "market_price": result.market_price,
@@ -1098,8 +1042,6 @@ def run():
                 continue
             if decision[1] > ENTRY_MAX_PRICE + 1e-9:
                 continue   # above the entry band
-            if not direction_ok(result.ticker, decision[0], result.market_price):
-                continue
             candidate_side, candidate_price = decision
             liquidity = get_shares_available(client, result.ticker, candidate_side)
             if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1123,7 +1065,6 @@ def run():
                     continue
                 evaluated += 1
                 reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
-                record_price(result.ticker, result.market_price)
                 scan_results.append({
                     "ticker": result.ticker, "title": result.title, "coin": result.commodity,
                     "direction": result.direction, "market_price": result.market_price,
@@ -1160,8 +1101,6 @@ def run():
                     continue
                 if decision[1] > ENTRY_MAX_PRICE + 1e-9:
                     continue   # above the entry band
-                if not direction_ok(result.ticker, decision[0], result.market_price):
-                    continue
                 candidate_side, candidate_price = decision
                 liquidity = get_shares_available(client, result.ticker, candidate_side)
                 if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1181,7 +1120,6 @@ def run():
                 continue
             evaluated += 1
             reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
-            record_price(result.ticker, result.market_price)
             scan_results.append({
                 "ticker": result.ticker, "title": result.title, "coin": result.index,
                 "direction": None, "market_price": result.market_price,
@@ -1276,7 +1214,7 @@ def run():
             # for a NO buy (ask). The price ceiling and the capital cap
             # must use this number, not the raw YES price.
             entry_cost_per_share = real_fill_price if side == "bid" else (1 - real_fill_price)
-            if entry_cost_per_share > ENTRY_MAX_PRICE + 0.03:
+            if entry_cost_per_share > ENTRY_HARD_CEILING:
                 continue
             trade_price = real_fill_price
             if len(state) >= RISK_PARAMS.max_open_positions:
@@ -1355,7 +1293,7 @@ def run():
                             print(f"  SPREAD FILTER: {result.ticker} bid-ask gap is {_live_spread:.2f} (bid {_yb:.2f} / ask {_ya:.2f}), "
                                   f"wider than {ENTRY_MAX_SPREAD:.2f} -- skipping, a stop-loss here would sell far below the quote.")
                             continue
-                        if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > ENTRY_MAX_PRICE + 0.03:
+                        if _live_side_price < ENTRY_RECHECK_MIN_PRICE or _live_cost > ENTRY_HARD_CEILING:
                             print(f"  PRICE RE-CHECK: {result.ticker} {side.upper()} moved to {_live_side_price:.2f} "
                                   f"(cost {_live_cost:.2f}) since the scan -- below the {ENTRY_RECHECK_MIN_PRICE:.2f} floor or above "
                                   f"the entry-band ceiling now, skipping.")
