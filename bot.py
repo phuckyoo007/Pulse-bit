@@ -25,7 +25,11 @@ import build_dashboard_data
 import reversion
 import price_feed
 import squeeze_momentum
-import trend_report
+try:
+    import trend_report
+except Exception as _e:   # optional module: the bot must never fail to start because of it
+    trend_report = None
+    print(f"[TREND] trend_report.py not loaded ({_e}); trend logging disabled")
 import shadow_exit_tracking as sht
 
 DRY_RUN = False
@@ -1407,7 +1411,8 @@ def run():
               f"({_filled_count[0]} confirmed filled, {_unfilled_count[0]} still resting/unfilled, "
               f"{_unclear_count[0]} unclear -- all-time this session).")
         try:
-            trend_report.maybe_run()
+            if trend_report is not None:
+                trend_report.maybe_run()
         except Exception as e:
             print(f"[TREND] hook failed (non-fatal): {e}")
         time.sleep(POLL_SECONDS)
