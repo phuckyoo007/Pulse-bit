@@ -25,6 +25,7 @@ import build_dashboard_data
 import reversion
 import price_feed
 import squeeze_momentum
+import trend_report
 import shadow_exit_tracking as sht
 
 DRY_RUN = False
@@ -41,28 +42,28 @@ RISK_PARAMS = RiskParams(
     max_daily_loss_pct=20.0,
 )
 BTC_87_THRESHOLD_SECONDS = 140
-BTC_87_MIN_PRICE = 0.91
+BTC_87_MIN_PRICE = 0.95
 BTC_87_SHARES = 3
 XRP_87_THRESHOLD_SECONDS = 140
-XRP_87_MIN_PRICE = 0.91
+XRP_87_MIN_PRICE = 0.95
 XRP_87_SHARES = 3
 SOL_87_THRESHOLD_SECONDS = 140
-SOL_87_MIN_PRICE = 0.91
+SOL_87_MIN_PRICE = 0.95
 SOL_87_SHARES = 3
 DOGE_87_THRESHOLD_SECONDS = 140
-DOGE_87_MIN_PRICE = 0.91
+DOGE_87_MIN_PRICE = 0.95
 DOGE_87_SHARES = 3
 BNB_87_THRESHOLD_SECONDS = 140
-BNB_87_MIN_PRICE = 0.91
+BNB_87_MIN_PRICE = 0.95
 BNB_87_SHARES = 3
 BCH_87_THRESHOLD_SECONDS = 140
-BCH_87_MIN_PRICE = 0.91
+BCH_87_MIN_PRICE = 0.95
 BCH_87_SHARES = 3
 ETH_87_THRESHOLD_SECONDS = 140
-ETH_87_MIN_PRICE = 0.91
+ETH_87_MIN_PRICE = 0.95
 ETH_87_SHARES = 3
 HYPE_87_THRESHOLD_SECONDS = 140
-HYPE_87_MIN_PRICE = 0.91
+HYPE_87_MIN_PRICE = 0.95
 HYPE_87_SHARES = 3
 LATCH2_90_THRESHOLD_SECONDS = 140
 LATCH2_90_MIN_PRICE = 0.90
@@ -82,16 +83,16 @@ EARLY_60_SHARES = 3
 TRIAL_SHARES_PER_TRADE = 3
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_MAX_PRICE = 0.98            # no upper band (back to the 96c+ floor version)
-ENTRY_HARD_CEILING = 0.98
-ENTRY_RECHECK_MIN_PRICE = 0.91   # live price must still be at/above this right before the order goes out
+ENTRY_MAX_PRICE = 0.99            # entry band 0.95-0.99
+ENTRY_HARD_CEILING = 0.99
+ENTRY_RECHECK_MIN_PRICE = 0.95   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
 CFX_87_THRESHOLD_SECONDS = 140
-CFX_87_MIN_PRICE = 0.91     # entry when side price is at or above this
+CFX_87_MIN_PRICE = 0.95     # entry when side price is at or above this
 CFX_87_SHARES = 3
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
@@ -111,7 +112,7 @@ _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
 ANY_THRESHOLD_SECONDS = 140
-ANY_MIN_PRICE = 0.91
+ANY_MIN_PRICE = 0.95
 ANY_MIN_MODEL_PROB = 0.82
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
@@ -1405,6 +1406,10 @@ def run():
         print(f"Scanned {len(markets)} market(s); {evaluated} evaluated; {len(state)} open position(s) tracked "
               f"({_filled_count[0]} confirmed filled, {_unfilled_count[0]} still resting/unfilled, "
               f"{_unclear_count[0]} unclear -- all-time this session).")
+        try:
+            trend_report.maybe_run()
+        except Exception as e:
+            print(f"[TREND] hook failed (non-fatal): {e}")
         time.sleep(POLL_SECONDS)
 
 
