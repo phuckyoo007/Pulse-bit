@@ -664,6 +664,19 @@ STATE_LOCK = threading.Lock()
 EXIT_CHECK_POLL_SECONDS = 0.5
 
 
+def _held_side_ask(position, result):
+    """Quoted price of the side we hold (what the app shows): YES ask for a YES position, 1 - YES bid for a NO position."""
+    try:
+        if position["side"] == "bid":
+            v = float(getattr(result, "yes_ask", 0) or 0)
+        else:
+            yb = float(getattr(result, "yes_bid", 0) or 0)
+            v = (1 - yb) if yb > 0 else 0
+        return v if v > 0 else None
+    except Exception:
+        return None
+
+
 def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> list:
     settlements = load_json(SETTLEMENTS_FILE, [])
     realized_pnl = []
@@ -708,7 +721,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
             decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                    reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
-                                   peak_gain_per_contract=position["peak_gain_per_contract"])
+                                   peak_gain_per_contract=position["peak_gain_per_contract"],
+                                   held_side_ask=_held_side_ask(position, result))
             if not decision.should_exit:
                 continue
             position_is_real = position.get("dry_run") is False
