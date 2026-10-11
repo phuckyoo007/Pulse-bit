@@ -418,6 +418,48 @@ def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
     return None
 
 
+
+# ---- DIRECTIONALITY: only enter when the side is CLIMBING into the entry band, never when it is falling back into it ----
+DIRECTION_FILTER_ENABLED = True
+DIRECTION_LOOKBACK_SECONDS = 30     # compare against the price about this long ago
+DIRECTION_MIN_RISE = 0.01           # side price must be at least this much HIGHER than it was a lookback ago
+DIRECTION_MAX_DRAWDOWN = 0.02       # ...and must not have been more than this above the current price at any time this market
+_price_hist = {}                    # ticker -> [(time, YES price)]
+
+
+def record_price(ticker, yes_price):
+    now = time.time()
+    h = _price_hist.setdefault(ticker, [])
+    h.append((now, yes_price))
+    cutoff = now - 1500
+    while h and h[0][0] < cutoff:
+        h.pop(0)
+    if len(_price_hist) > 400:
+        for k in [k for k, v in _price_hist.items() if not v or v[-1][0] < cutoff]:
+            _price_hist.pop(k, None)
+
+
+def direction_ok(ticker, side, yes_price):
+    """True only if the side we would buy has been rising into this price. Fails closed with no history."""
+    if not DIRECTION_FILTER_ENABLED:
+        return True
+    conv = (lambda y: y) if side == "bid" else (lambda y: 1 - y)
+    hist = _price_hist.get(ticker) or []
+    cur = conv(yes_price)
+    if not hist:
+        return False
+    peak = max(conv(y) for _, y in hist)
+    if peak > cur + DIRECTION_MAX_DRAWDOWN + 1e-9:
+        print(f"  DIRECTION FILTER: {ticker} {side.upper()} was as high as {peak:.2f} and has fallen to {cur:.2f} -- not buying a falling price.")
+        return False
+    target = time.time() - DIRECTION_LOOKBACK_SECONDS
+    past = [y for t, y in hist if t <= target]
+    if not past:
+        return False   # not enough history yet
+    if cur - conv(past[-1]) < DIRECTION_MIN_RISE - 1e-9:
+        return False
+    return True
+
 _market_cache = {}          # ticker -> (market dict, fetched_at)
 _MARKET_CACHE_TTL = 1.0     # seconds: one stop-loss pass reuses a single price lookup per market
 
@@ -899,6 +941,7 @@ def run():
                 continue
             evaluated += 1
             reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+            record_price(result.ticker, result.market_price)
             scan_results.append({
                 "ticker": result.ticker, "title": result.title, "coin": result.coin,
                 "direction": result.direction, "market_price": result.market_price,
@@ -1041,6 +1084,8 @@ def run():
                 continue
             if decision[1] > ENTRY_MAX_PRICE + 1e-9:
                 continue   # above the entry band
+            if not direction_ok(result.ticker, decision[0], result.market_price):
+                continue
             candidate_side, candidate_price = decision
             liquidity = get_shares_available(client, result.ticker, candidate_side)
             if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1064,6 +1109,7 @@ def run():
                     continue
                 evaluated += 1
                 reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+                record_price(result.ticker, result.market_price)
                 scan_results.append({
                     "ticker": result.ticker, "title": result.title, "coin": result.commodity,
                     "direction": result.direction, "market_price": result.market_price,
@@ -1100,6 +1146,8 @@ def run():
                     continue
                 if decision[1] > ENTRY_MAX_PRICE + 1e-9:
                     continue   # above the entry band
+                if not direction_ok(result.ticker, decision[0], result.market_price):
+                    continue
                 candidate_side, candidate_price = decision
                 liquidity = get_shares_available(client, result.ticker, candidate_side)
                 if liquidity is not None and liquidity < MIN_SHARES_LIQUIDITY_REQUIRED:
@@ -1119,6 +1167,7 @@ def run():
                 continue
             evaluated += 1
             reversion_signal = reversion.record_and_score(result.ticker, result.market_price)
+            record_price(result.ticker, result.market_price)
             scan_results.append({
                 "ticker": result.ticker, "title": result.title, "coin": result.index,
                 "direction": None, "market_price": result.market_price,
