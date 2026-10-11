@@ -45,34 +45,34 @@ RISK_PARAMS = RiskParams(
     max_open_positions=10000,
     max_daily_loss_pct=20.0,
 )
-BTC_87_THRESHOLD_SECONDS = 150
-BTC_87_MIN_PRICE = 0.95
+BTC_87_THRESHOLD_SECONDS = 240
+BTC_87_MIN_PRICE = 0.90
 BTC_87_SHARES = 8
-XRP_87_THRESHOLD_SECONDS = 150
-XRP_87_MIN_PRICE = 0.95
+XRP_87_THRESHOLD_SECONDS = 240
+XRP_87_MIN_PRICE = 0.90
 XRP_87_SHARES = 8
-SOL_87_THRESHOLD_SECONDS = 150
-SOL_87_MIN_PRICE = 0.95
+SOL_87_THRESHOLD_SECONDS = 240
+SOL_87_MIN_PRICE = 0.90
 SOL_87_SHARES = 8
-DOGE_87_THRESHOLD_SECONDS = 150
-DOGE_87_MIN_PRICE = 0.95
+DOGE_87_THRESHOLD_SECONDS = 240
+DOGE_87_MIN_PRICE = 0.90
 DOGE_87_SHARES = 8
-BNB_87_THRESHOLD_SECONDS = 150
-BNB_87_MIN_PRICE = 0.95
+BNB_87_THRESHOLD_SECONDS = 240
+BNB_87_MIN_PRICE = 0.90
 BNB_87_SHARES = 8
-BCH_87_THRESHOLD_SECONDS = 150
-BCH_87_MIN_PRICE = 0.95
+BCH_87_THRESHOLD_SECONDS = 240
+BCH_87_MIN_PRICE = 0.90
 BCH_87_SHARES = 8
-ETH_87_THRESHOLD_SECONDS = 150
-ETH_87_MIN_PRICE = 0.95
+ETH_87_THRESHOLD_SECONDS = 240
+ETH_87_MIN_PRICE = 0.90
 ETH_87_SHARES = 8
-HYPE_87_THRESHOLD_SECONDS = 150
-HYPE_87_MIN_PRICE = 0.95
+HYPE_87_THRESHOLD_SECONDS = 240
+HYPE_87_MIN_PRICE = 0.90
 HYPE_87_SHARES = 8
-LATCH2_90_THRESHOLD_SECONDS = 150
+LATCH2_90_THRESHOLD_SECONDS = 240
 LATCH2_90_MIN_PRICE = 0.90
 LATCH2_90_SHARES = 8
-TRIPLE_90_THRESHOLD_SECONDS = 150
+TRIPLE_90_THRESHOLD_SECONDS = 240
 TRIPLE_90_MIN_PRICE = 0.90
 TRIPLE_90_SHARES = 8
 CROSS_CONFIRM_MIN_PRICE = 0.70
@@ -87,16 +87,16 @@ EARLY_60_SHARES = 8
 TRIAL_SHARES_PER_TRADE = 8
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_MAX_PRICE = 0.99            # entry band 0.95-0.99
+ENTRY_MAX_PRICE = 0.99            # entry band 0.90-0.99
 ENTRY_HARD_CEILING = 0.99
-ENTRY_RECHECK_MIN_PRICE = 0.95   # live price must still be at/above this right before the order goes out
+ENTRY_RECHECK_MIN_PRICE = 0.90   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 150
-CFX_87_MIN_PRICE = 0.95     # entry when side price is at or above this
+CFX_87_THRESHOLD_SECONDS = 240
+CFX_87_MIN_PRICE = 0.90     # entry when side price is at or above this
 CFX_87_SHARES = 8
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
@@ -105,8 +105,8 @@ CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
-CRYPTO_GATE_ENABLED = True    # crypto needs side model prob > 0.82 (edge not required)
-CRYPTO_GATE_MIN_MODEL = 0.82   # crypto entries need side model prob above this
+CRYPTO_GATE_ENABLED = True    # crypto needs side model prob > 0.91 (edge not required)
+CRYPTO_GATE_MIN_MODEL = 0.91   # crypto entries need side model prob above this (0.91)
 CRYPTO_GATE_MIN_EDGE_PP = -1000.0  # edge not required: only the model probability matters
 CFX_COMMODITIES_ENABLED = False   # commodities OFF
 CFX_FX_ENABLED = False           # FX (EUR/USD, GBP/USD, USD/JPY) OFF
@@ -115,9 +115,9 @@ CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no 
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 150
-ANY_MIN_PRICE = 0.95
-ANY_MIN_MODEL_PROB = 0.82
+ANY_THRESHOLD_SECONDS = 240
+ANY_MIN_PRICE = 0.90
+ANY_MIN_MODEL_PROB = 0.91
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
 ANY_SHARES = 8
