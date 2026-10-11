@@ -16,7 +16,7 @@ TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
-MANUAL_STOP_LOSS_FRACTION = 1.00      # manually placed (adopted) positions: exit as soon as value is <= 100% of what was paid
+MANUAL_STOP_LOSS_FRACTION = 0.90      # manually placed (adopted) positions: exit when value is <= 90% of what was paid
 
 
 @dataclass
@@ -66,10 +66,9 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
         threshold_dollars = bet_amount_dollars * UNIVERSAL_STOP_LOSS_FRACTION
         rule = f"{UNIVERSAL_STOP_LOSS_FRACTION*100:.0f}% of original investment"
     if position.get("manually_adopted"):
-        manual_floor = bet_amount_dollars * MANUAL_STOP_LOSS_FRACTION
-        if manual_floor > threshold_dollars:
-            threshold_dollars = manual_floor
-            rule = f"{MANUAL_STOP_LOSS_FRACTION*100:.0f}% of original investment (manual bid)"
+        # Manual bids use their own stop (overrides the universal one, whether higher or lower).
+        threshold_dollars = bet_amount_dollars * MANUAL_STOP_LOSS_FRACTION
+        rule = f"{MANUAL_STOP_LOSS_FRACTION*100:.0f}% of original investment (manual bid)"
     if current_dollars <= threshold_dollars + 1e-9:
         return ExitDecision(True, f"stop_loss (bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
                                    f"threshold ${threshold_dollars:.2f} -- {rule}, entry ${entry_price:.2f})")
