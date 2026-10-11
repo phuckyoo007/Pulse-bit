@@ -277,6 +277,7 @@
         </span>
       </div>
       <div id="tokens-list" class="tokens-list"></div>
+      <button id="tokens-hidden-toggle" class="link hidden" type="button"></button>
       <p id="tokens-empty" class="muted small hidden" data-i18n="main.tokensEmpty">No tokens added yet -- tap "+ Add token" and enter a contract address to track one.</p>
     </div>
 
@@ -503,6 +504,8 @@
         </select>
         <input type="text" id="swap-to-custom" class="hidden" data-i18n-placeholder="common.tokenAddressPlaceholderParen" placeholder="Token address (0x...)" />
       </div>
+      <div id="swap-quick-chips" class="quick-add hidden"></div>
+      <p id="swap-unverified-note" class="warn hidden" data-i18n="swap.unverifiedNote">This token isn't on the verified list. Double-check the contract address before you swap -- anyone can create a token with any name.</p>
       <button id="btn-swap-quote" class="secondary" data-i18n="swap.getQuoteBtn">Get quote</button>
       <div id="swap-quote-display" class="hidden">
         <p id="swap-fee-line" class="muted"></p>

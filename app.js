@@ -723,6 +723,7 @@ async function refreshTokens() {
     }
     const row = document.createElement("div");
     row.className = "token-row";
+    row.dataset.tokId = String(t.address).toLowerCase();
     const formatted = ethers.utils.formatUnits(t.balanceWei, t.decimals);
     const priceEntry = prices[t.address.toLowerCase()];
     const usdValue = priceEntry && typeof priceEntry.price === "number" ? Number(formatted) * priceEntry.price : 0;
@@ -786,6 +787,7 @@ async function refreshTokens() {
     row.appendChild(removeBtn);
     list.appendChild(row);
   });
+  applyTokenListPrefs();
 
   if (myGen === portfolioGen) {
     portfolioTokensUsd = tokensUsdTotal;
@@ -1073,6 +1075,156 @@ function setAddressDisplay(a) {
   el.textContent = shortAddress(a);
   el.title = a || "";
 }
+
+function isKnownVerifiedToken(address) {
+  if (!address || typeof TM_KNOWN_TOKENS === "undefined" || !currentNetwork) return false;
+  const a = String(address).toLowerCase();
+  return TM_KNOWN_TOKENS.forChain(currentNetwork.chainId).some((t) => t.address.toLowerCase() === a);
+}
+function knownTokenSymbol(address) {
+  if (!address || typeof TM_KNOWN_TOKENS === "undefined" || !currentNetwork) return null;
+  const a = String(address).toLowerCase();
+  const t = TM_KNOWN_TOKENS.forChain(currentNetwork.chainId).find((x) => x.address.toLowerCase() === a);
+  return t ? t.symbol : null;
+}
+function verifiedBadgeHtml(address) {
+  return isKnownVerifiedToken(address)
+    ? ` <span class="verified-badge" title="${escapeHtml(TM_I18N.t("swap.verifiedTitle"))}">&#10003; ${escapeHtml(TM_I18N.t("swap.verifiedBadge"))}</span>`
+    : "";
+}
+function unverifiedBadgeHtml() {
+  return ` <span class="unverified-badge">&#9888; ${escapeHtml(TM_I18N.t("swap.unverifiedBadge"))}</span>`;
+}
+
+// One-tap picks for the "To" side: the native coin plus the issuer-verified
+// stablecoins for this network (known-tokens.js). Addresses only ever come from
+// that hand-checked list.
+function renderSwapQuickChips() {
+  const box = $("swap-quick-chips");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!currentNetwork || !currentNetwork.swapRouter) { box.classList.add("hidden"); return; }
+  const nc = currentNetwork.nativeCurrency || {};
+  const picks = [{ key: "native", symbol: nc.symbol || "ETH" }];
+  (typeof TM_KNOWN_TOKENS !== "undefined" ? TM_KNOWN_TOKENS.forChain(currentNetwork.chainId) : [])
+    .forEach((t) => picks.push({ key: t.address, symbol: t.symbol }));
+  const same = (a, b) => String(a || "").toLowerCase() === String(b || "").toLowerCase();
+  const shown = picks.filter((p) => !same(p.key, swapState.fromKey));
+  if (shown.length < 2) { box.classList.add("hidden"); return; }
+  const label = document.createElement("span");
+  label.className = "quick-add-label muted";
+  label.textContent = TM_I18N.t("swap.quickPickLabel");
+  box.appendChild(label);
+  shown.forEach((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "quick-add-chip" + (same(p.key, swapState.toKey) ? " active" : "");
+    b.textContent = p.symbol;
+    b.addEventListener("click", () => {
+      swapState.toKey = p.key;
+      syncSwapAsset("to");
+    });
+    box.appendChild(b);
+  });
+  box.classList.remove("hidden");
+}
+
+function updateSwapUnverifiedNote() {
+  const el = $("swap-unverified-note");
+  if (!el) return;
+  const isAddr = (k) => /^0x[0-9a-fA-F]{40}$/.test(String(k || ""));
+  const unknown = [swapState.fromKey, swapState.toKey].some((k) => isAddr(k) && !findHeldAsset(k) && !isKnownVerifiedToken(k));
+  el.classList.toggle("hidden", !unknown);
+}
+
+// ---- Token list: pin to top / hide (kept per network on this device) ----
+const TM_TOK_PINS_KEY = "tm_tok_pins";
+const TM_TOK_HIDDEN_KEY = "tm_tok_hidden";
+let tokPins = new Set();
+let tokHidden = new Set();
+let tokShowHidden = false;
+const TOK_EYE_OFF = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+const TOK_EYE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
+function loadTokenPrefs() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get([TM_TOK_PINS_KEY, TM_TOK_HIDDEN_KEY], (res) => {
+        const pins = res && res[TM_TOK_PINS_KEY];
+        const hid = res && res[TM_TOK_HIDDEN_KEY];
+        tokPins = new Set(Array.isArray(pins) ? pins.filter((x) => typeof x === "string") : []);
+        tokHidden = new Set(Array.isArray(hid) ? hid.filter((x) => typeof x === "string") : []);
+        resolve();
+      });
+    } catch (e) { resolve(); }
+  });
+}
+function saveTokenPrefs() {
+  try { chrome.storage.local.set({ [TM_TOK_PINS_KEY]: Array.from(tokPins), [TM_TOK_HIDDEN_KEY]: Array.from(tokHidden) }); } catch (e) { /* best-effort */ }
+}
+function tokPrefId(address) {
+  return `${currentNetwork ? currentNetwork.chainId : 0}:${String(address).toLowerCase()}`;
+}
+
+async function applyTokenListPrefs() {
+  const list = $("tokens-list");
+  if (!list) return;
+  await loadTokenPrefs();
+  const rows = Array.from(list.querySelectorAll(".token-row[data-tok-id]"));
+  rows.forEach((row) => {
+    const id = tokPrefId(row.dataset.tokId);
+    const pinned = tokPins.has(id);
+    const hidden = tokHidden.has(id);
+    const old = row.querySelector(".tok-actions");
+    if (old) old.remove();
+    const actions = document.createElement("span");
+    actions.className = "tok-actions";
+    const pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "tok-act" + (pinned ? " on" : "");
+    pin.innerHTML = pinned ? "&#9733;" : "&#9734;";
+    pin.title = TM_I18N.t(pinned ? "tokens.unpinTitle" : "tokens.pinTitle");
+    pin.setAttribute("aria-label", pin.title);
+    pin.setAttribute("aria-pressed", pinned ? "true" : "false");
+    pin.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (tokPins.has(id)) tokPins.delete(id); else tokPins.add(id);
+      saveTokenPrefs();
+      applyTokenListPrefs();
+    });
+    const hide = document.createElement("button");
+    hide.type = "button";
+    hide.className = "tok-act" + (hidden ? " on" : "");
+    hide.innerHTML = hidden ? TOK_EYE : TOK_EYE_OFF;
+    hide.title = TM_I18N.t(hidden ? "tokens.unhideTitle" : "tokens.hideTitle");
+    hide.setAttribute("aria-label", hide.title);
+    hide.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (tokHidden.has(id)) tokHidden.delete(id); else tokHidden.add(id);
+      saveTokenPrefs();
+      applyTokenListPrefs();
+    });
+    actions.appendChild(pin);
+    actions.appendChild(hide);
+    const removeBtn = row.querySelector(".token-remove-btn");
+    if (removeBtn) row.insertBefore(actions, removeBtn); else row.appendChild(actions);
+    row.classList.toggle("pref-hidden", hidden && !tokShowHidden);
+    row.classList.toggle("pref-dimmed", hidden && tokShowHidden);
+  });
+  // Pinned first; otherwise keep the order the list already had.
+  const isPinned = (r) => tokPins.has(tokPrefId(r.dataset.tokId));
+  rows.filter(isPinned).concat(rows.filter((r) => !isPinned(r))).forEach((r) => list.appendChild(r));
+  const hiddenCount = rows.filter((r) => tokHidden.has(tokPrefId(r.dataset.tokId))).length;
+  const toggle = $("tokens-hidden-toggle");
+  if (toggle) {
+    toggle.classList.toggle("hidden", hiddenCount === 0);
+    toggle.textContent = tokShowHidden ? TM_I18N.t("tokens.hideHidden") : TM_I18N.t("tokens.showHidden", { count: hiddenCount });
+  }
+}
+if ($("tokens-hidden-toggle")) {
+  $("tokens-hidden-toggle").addEventListener("click", () => { tokShowHidden = !tokShowHidden; applyTokenListPrefs(); });
+}
+
 let addTokenSearchGen = 0;
 let addTokenSearchTimer = null;
 
@@ -1278,11 +1430,12 @@ function renderPriceRow(c) {
     changeHtml = `<span class="price-change ${cls}">${sign}${c.change24h.toFixed(2)}%</span>`;
   }
   const starred = isWatchlisted(c.symbol);
+  const sparkHtml = TM_PRICES.sparklineSvg ? TM_PRICES.sparklineSvg(c.spark, TM_I18N.t("prices.sparkTitle")) : "";
   // The whole row (logo, name, price) opens the in-app coin screen; the
   // star is a separate button so pinning a coin doesn't navigate away.
   const linkLabel = TM_I18N.t("prices.viewCoin", { name: c.name });
   row.innerHTML = `
-    <button type="button" class="price-link" aria-label="${linkLabel}" title="${linkLabel}"><span class="price-left">${tokenIconHtml(c.symbol, c.image)}<span class="price-id"><span class="price-name">${c.name}</span><span class="price-symbol">${c.symbol}</span></span></span><span class="price-quote"><span class="price-usd">${priceText}</span>${changeHtml}</span></button>
+    <button type="button" class="price-link" aria-label="${linkLabel}" title="${linkLabel}"><span class="price-left">${tokenIconHtml(c.symbol, c.image)}<span class="price-id"><span class="price-name">${c.name}</span><span class="price-symbol">${c.symbol}</span></span></span>${sparkHtml}<span class="price-quote"><span class="price-usd">${priceText}</span>${changeHtml}</span></button>
     <button type="button" class="star-btn ${starred ? "starred" : ""}" aria-label="${TM_I18N.t("prices.watchlistToggle")}">${starred ? "★" : "☆"}</button>
   `;
   row.querySelector(".price-link").addEventListener("click", () => {
@@ -1454,8 +1607,9 @@ function renderSwapAssetBtn(side, asset, customAddress) {
     iconSlot.innerHTML = tokenIconHtml(asset.symbol, img);
     symbolEl.textContent = asset.symbol;
   } else if (customAddress) {
-    iconSlot.innerHTML = tokenIconHtml("?", null);
-    symbolEl.textContent = `${customAddress.slice(0, 6)}…${customAddress.slice(-4)}`;
+    const known = knownTokenSymbol(customAddress);
+    iconSlot.innerHTML = tokenIconHtml(known || "?", known ? trustWalletLogoUrl(currentNetwork && currentNetwork.key, customAddress) : null);
+    symbolEl.textContent = known || `${customAddress.slice(0, 6)}…${customAddress.slice(-4)}`;
   } else {
     iconSlot.innerHTML = "";
     symbolEl.textContent = TM_I18N.t("swap.selectBtn");
@@ -1495,6 +1649,8 @@ function syncSwapAsset(side) {
   clearSwapQuote();
   scheduleSwapAutoQuote();
   updateSwapEmptyHint();
+  renderSwapQuickChips();
+  updateSwapUnverifiedNote();
 }
 
 function updateSwapEmptyHint() {
@@ -1656,7 +1812,7 @@ async function appendCatalogRows(side, query, list, items, sugg) {
     row.className = "asset-picker-row";
     row.innerHTML = tokenIconHtml(t.symbol, t.image || trustWalletLogoUrl(currentNetwork && currentNetwork.key, t.address)) +
       `<span class="asset-picker-row-main"><span class="asset-picker-row-symbol">${escapeHtml(t.symbol)}</span>` +
-      `<span class="asset-picker-row-sub">${escapeHtml(t.name)}${t.rank ? ` · #${escapeHtml(String(t.rank))}` : ""}</span></span>`;
+      `<span class="asset-picker-row-sub">${escapeHtml(t.name)}${t.rank ? ` · #${escapeHtml(String(t.rank))}` : ""}${verifiedBadgeHtml(t.address)}</span></span>`;
     row.addEventListener("click", () => {
       swapState.toKey = t.address;
       syncSwapAsset("to");
@@ -1710,7 +1866,7 @@ function renderAssetPicker(side) {
     row.className = "asset-picker-row";
     row.innerHTML = tokenIconHtml("?", null) +
       `<span class="asset-picker-row-main"><span class="asset-picker-row-symbol">${escapeHtml(TM_I18N.t("swap.pickerUseAddress"))}</span>` +
-      `<span class="asset-picker-row-sub">${escapeHtml(query.slice(0, 8))}…${escapeHtml(query.slice(-6))}</span></span>`;
+      `<span class="asset-picker-row-sub">${escapeHtml(query.slice(0, 8))}…${escapeHtml(query.slice(-6))}${isKnownVerifiedToken(query) ? verifiedBadgeHtml(query) : unverifiedBadgeHtml()}</span></span>`;
     row.addEventListener("click", () => {
       if (side === "from") swapState.fromKey = query; else swapState.toKey = query;
       syncSwapAsset(side);
@@ -1742,7 +1898,7 @@ function renderAssetPicker(side) {
     row.innerHTML =
       `<span class="token-icon-wrap">${tokenIconHtml(a.symbol, img)}<span class="token-net-badge" style="background:${networkDotColor(currentNetwork.key)}"></span></span>` +
       `<span class="asset-picker-row-main"><span class="asset-picker-row-symbol">${escapeHtml(a.symbol)}</span>` +
-      `<span class="asset-picker-row-sub">${escapeHtml(currentNetwork.name)}</span></span>` +
+      `<span class="asset-picker-row-sub">${escapeHtml(currentNetwork.name)}${verifiedBadgeHtml(a.address)}</span></span>` +
       `<span class="asset-picker-row-right"><span class="asset-picker-row-balance">${escapeHtml(Number(a.balance).toLocaleString(undefined, { maximumFractionDigits: 6 }))}</span>` +
       `<span class="asset-picker-row-usd"></span></span>` +
       `<button type="button" class="asset-picker-star${isFav ? " on" : ""}" aria-label="${escapeHtml(TM_I18N.t("swap.pickerStarTitle"))}" aria-pressed="${isFav}">${isFav ? "&#9733;" : "&#9734;"}</button>` +
@@ -1778,7 +1934,7 @@ function renderAssetPicker(side) {
       row.className = "asset-picker-row";
       row.innerHTML = tokenIconHtml(t.symbol, trustWalletLogoUrl(currentNetwork && currentNetwork.key, t.address)) +
         `<span class="asset-picker-row-main"><span class="asset-picker-row-symbol">${escapeHtml(t.symbol)}</span>` +
-        `<span class="asset-picker-row-sub">${escapeHtml(t.name)}</span></span>`;
+        `<span class="asset-picker-row-sub">${escapeHtml(t.name)}${verifiedBadgeHtml(t.address)}</span></span>`;
       row.addEventListener("click", () => {
         swapState.toKey = t.address;
         syncSwapAsset("to");

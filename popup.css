@@ -1225,3 +1225,37 @@ html[data-theme="light"] { --form-veil: rgba(255, 250, 238, 0.78); }
 .tok-act:hover, .tok-act:focus-visible, .tok-act.on { color: var(--gold-deep, #ddac4d); }
 .chg-up { color: #3fb97a; }
 .chg-down { color: #e5585a; }
+
+/* Swap quick-pick chips + verified labels */
+.quick-add-chip.active { border-color: var(--gold-deep, #ddac4d); color: var(--gold-deep, #ddac4d); }
+.verified-badge { color: var(--success, #3fb97a); font-weight: 600; }
+.unverified-badge { color: var(--danger, #e5585a); font-weight: 600; }
+
+.token-row.pref-hidden { display: none; }
+.token-row.pref-dimmed { opacity: 0.55; }
+.tok-actions { display: inline-flex; align-items: center; flex-shrink: 0; }
+#tokens-hidden-toggle { display: block; margin: 6px auto 0; font-size: 12px; }
+#tokens-hidden-toggle.hidden { display: none; }
+
+/* One grouped account control: picture | account menu | settings */
+html .account-row {
+  align-items: center; gap: 6px; padding: 4px 6px 4px 8px;
+  border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--bg-raised);
+}
+html .account-row .account-picker { gap: 8px; min-width: 0; }
+html .account-row select, html .account-row #account-select {
+  border: 0; background: transparent; box-shadow: none; padding-left: 4px; min-width: 0; text-overflow: ellipsis;
+}
+html .account-row .icon-btn {
+  background: transparent; border: 0; border-left: 1px solid var(--line); border-radius: 0 999px 999px 0;
+  box-shadow: none; min-width: 36px; min-height: 32px; padding: 4px 10px;
+}
+html .account-row .icon-btn:hover { color: var(--gold-bright); }
+
+/* 7-day trend line on price rows (prices.js sparklineSvg) */
+.price-spark { flex: 0 0 auto; display: inline-flex; align-items: center; margin: 0 10px; opacity: 0.9; }
+.price-spark.up { color: #3fb97a; }
+.price-spark.down { color: #e5585a; }
+.price-spark svg { display: block; }
+@media (max-width: 340px) { .price-spark { display: none; } }

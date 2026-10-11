@@ -216,6 +216,7 @@
         </span>
       </div>
       <div id="tokens-list" class="tokens-list"></div>
+      <button id="tokens-hidden-toggle" class="link hidden" type="button"></button>
       <div id="tokens-empty" class="empty-state hidden">
         <span class="empty-state-icon" aria-hidden="true">🪙</span>
         <p class="muted small" data-i18n="main.tokensEmpty">No tokens added yet -- tap "+ Add token" and enter a contract address to track one.</p>
@@ -576,6 +577,8 @@
         <input type="text" id="swap-to-custom" class="hidden" data-i18n-placeholder="common.tokenAddressPlaceholderParen" placeholder="Token address (0x...)" />
       </div>
 
+      <div id="swap-quick-chips" class="quick-add hidden"></div>
+      <p id="swap-unverified-note" class="warn hidden" data-i18n="swap.unverifiedNote">This token isn't on the verified list. Double-check the contract address before you swap -- anyone can create a token with any name.</p>
       <p id="swap-empty-hint" class="hint hidden" data-i18n="swap.emptyHint">Pick the token you want to swap from, then the one you want to receive.</p>
       <p id="swap-quoting-hint" class="hint hidden" data-i18n="swap.quotingHint">Getting quote&hellip;</p>
 
