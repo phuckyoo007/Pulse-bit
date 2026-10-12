@@ -459,7 +459,7 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
-HARD_BACKSTOP_FRACTION = 0.84
+HARD_BACKSTOP_FRACTION = 0.78
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:
