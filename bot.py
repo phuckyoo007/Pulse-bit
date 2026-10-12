@@ -97,11 +97,11 @@ COIN_SIZE_MULTIPLIER = {}
 # (there is no vol model for these).
 CFX_87_THRESHOLD_SECONDS = 140
 CFX_87_MIN_PRICE = 0.90     # entry when side price is at or above this
-CFX_87_SHARES = 7
+CFX_87_SHARES = 8
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
-CFX_MIN_MODEL_PROB = 0.91
+CFX_MIN_MODEL_PROB = 0.82
 CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
@@ -120,10 +120,10 @@ ANY_MIN_PRICE = 0.90
 ANY_MIN_MODEL_PROB = 0.91
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
-ANY_SHARES = 7
-GENERIC_ENTRY_MIN_PRICE = 0.90
+ANY_SHARES = 8
+GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
-GENERIC_SHARES = 7
+GENERIC_SHARES = 8
 MIN_SHARES_LIQUIDITY_REQUIRED = 5
 
 STATE_FILE = Path("state.json")
