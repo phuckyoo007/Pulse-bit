@@ -16,7 +16,7 @@ TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
-MANUAL_STOP_LOSS_FRACTION = 0.90      # manually placed (adopted) positions: exit when value is <= 90% of what was paid
+MANUAL_STOP_LOSS_FRACTION = 0.80      # manually placed (adopted) positions: exit when value is <= 90% of what was paid
 
 
 @dataclass
