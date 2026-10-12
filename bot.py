@@ -97,7 +97,7 @@ COIN_SIZE_MULTIPLIER = {}
 # (there is no vol model for these).
 CFX_87_THRESHOLD_SECONDS = 140
 CFX_87_MIN_PRICE = 0.90     # entry when side price is at or above this
-CFX_87_SHARES = 8
+CFX_87_SHARES = 7
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
