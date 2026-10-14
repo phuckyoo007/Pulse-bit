@@ -11,7 +11,7 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.80   # initial stop: exit when value falls to <= 80% of what was paid
+UNIVERSAL_STOP_LOSS_FRACTION = 0.88   # initial stop: exit when value falls to <= 88% of what was paid
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid

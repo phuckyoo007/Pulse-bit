@@ -45,36 +45,36 @@ RISK_PARAMS = RiskParams(
     max_open_positions=10000,
     max_daily_loss_pct=20.0,
 )
-BTC_87_THRESHOLD_SECONDS = 140
-BTC_87_MIN_PRICE = 0.99
-BTC_87_SHARES = 8
-XRP_87_THRESHOLD_SECONDS = 140
-XRP_87_MIN_PRICE = 0.99
-XRP_87_SHARES = 8
-SOL_87_THRESHOLD_SECONDS = 140
-SOL_87_MIN_PRICE = 0.99
-SOL_87_SHARES = 8
-DOGE_87_THRESHOLD_SECONDS = 140
-DOGE_87_MIN_PRICE = 0.99
-DOGE_87_SHARES = 8
-BNB_87_THRESHOLD_SECONDS = 140
-BNB_87_MIN_PRICE = 0.99
-BNB_87_SHARES = 8
-BCH_87_THRESHOLD_SECONDS = 140
-BCH_87_MIN_PRICE = 0.99
-BCH_87_SHARES = 8
-ETH_87_THRESHOLD_SECONDS = 140
-ETH_87_MIN_PRICE = 0.99
-ETH_87_SHARES = 8
-HYPE_87_THRESHOLD_SECONDS = 140
-HYPE_87_MIN_PRICE = 0.99
-HYPE_87_SHARES = 8
-LATCH2_90_THRESHOLD_SECONDS = 140
-LATCH2_90_MIN_PRICE = 0.90
-LATCH2_90_SHARES = 8
-TRIPLE_90_THRESHOLD_SECONDS = 140
-TRIPLE_90_MIN_PRICE = 0.90
-TRIPLE_90_SHARES = 8
+BTC_87_THRESHOLD_SECONDS = 105
+BTC_87_MIN_PRICE = 0.98
+BTC_87_SHARES = 5
+XRP_87_THRESHOLD_SECONDS = 105
+XRP_87_MIN_PRICE = 0.98
+XRP_87_SHARES = 5
+SOL_87_THRESHOLD_SECONDS = 105
+SOL_87_MIN_PRICE = 0.98
+SOL_87_SHARES = 5
+DOGE_87_THRESHOLD_SECONDS = 105
+DOGE_87_MIN_PRICE = 0.98
+DOGE_87_SHARES = 5
+BNB_87_THRESHOLD_SECONDS = 105
+BNB_87_MIN_PRICE = 0.98
+BNB_87_SHARES = 5
+BCH_87_THRESHOLD_SECONDS = 105
+BCH_87_MIN_PRICE = 0.98
+BCH_87_SHARES = 5
+ETH_87_THRESHOLD_SECONDS = 105
+ETH_87_MIN_PRICE = 0.98
+ETH_87_SHARES = 5
+HYPE_87_THRESHOLD_SECONDS = 105
+HYPE_87_MIN_PRICE = 0.98
+HYPE_87_SHARES = 5
+LATCH2_90_THRESHOLD_SECONDS = 105
+LATCH2_90_MIN_PRICE = 0.98
+LATCH2_90_SHARES = 5
+TRIPLE_90_THRESHOLD_SECONDS = 105
+TRIPLE_90_MIN_PRICE = 0.98
+TRIPLE_90_SHARES = 5
 CROSS_CONFIRM_MIN_PRICE = 0.70
 TIGHT_TIME_THRESHOLD_SECONDS = 105
 TIGHT_TIME_MIN_PRICE = 0.75
@@ -83,21 +83,21 @@ EDGE_FILTER_ENABLED = False   # OFF: only the model confidence (0.82) matters
 EARLY_60_THRESHOLD_SECONDS = 800
 EARLY_60_MIN_PRICE = 0.58
 EARLY_60_MAX_PRICE = 0.62
-EARLY_60_SHARES = 8
-TRIAL_SHARES_PER_TRADE = 8
+EARLY_60_SHARES = 5
+TRIAL_SHARES_PER_TRADE = 5
 ASK_MAX_PRICE = 0.99
 ENTRY_MAX_SPREAD = 0.05          # skip entries when the live bid-ask gap is wider than this (thin, jumpy books)
-ENTRY_MAX_PRICE = 0.99            # entry band 0.99-0.99
+ENTRY_MAX_PRICE = 0.99            # entry band 0.98-0.99
 ENTRY_HARD_CEILING = 0.99
-ENTRY_RECHECK_MIN_PRICE = 0.99   # live price must still be at/above this right before the order goes out
+ENTRY_RECHECK_MIN_PRICE = 0.98   # live price must still be at/above this right before the order goes out
 FILL_PRICE_TOLERANCE = 0.05      # the real fill must land within this of the intended price (and at/above the floor), else exit at once
 COIN_SIZE_MULTIPLIER = {}
 # Commodities (gold, silver, oil, ...) and FX (EUR/USD, GBP/USD, USD/JPY)
 # 15-min markets: same rule as the crypto 87-tiers, but price-only
 # (there is no vol model for these).
-CFX_87_THRESHOLD_SECONDS = 140
-CFX_87_MIN_PRICE = 0.99     # entry when side price is at or above this
-CFX_87_SHARES = 8
+CFX_87_THRESHOLD_SECONDS = 105
+CFX_87_MIN_PRICE = 0.98     # entry when side price is at or above this
+CFX_87_SHARES = 5
 # Commodities/FX now ALSO need the volatility model (Pyth price feed) to agree: model probability for the side
 # above CFX_MIN_MODEL_PROB and edge for the side above CFX_MIN_EDGE_PP. If the model can't be computed
 # (feed down, market closed/stale, wrong feed), the trade is SKIPPED.
@@ -106,8 +106,8 @@ CFX_MIN_EDGE_PP = 1.5
 # Commodity/FX model + edge checks are OFF for now (see below).
 # Set True to require a model number before bidding (needs a working price feed).
 CRYPTO_GATE_ENABLED = True    # crypto needs side model prob > 0.99 AND side edge > +4.5pp
-CRYPTO_GATE_MIN_MODEL = 0.99   # crypto entries need side model prob above this
-CRYPTO_GATE_MIN_EDGE_PP = 4.5  # crypto entries need side edge above this (percentage points)
+CRYPTO_GATE_MIN_MODEL = 0.80   # crypto entries need side model prob above this
+CRYPTO_GATE_MIN_EDGE_PP = 0.0  # crypto entries need side edge above this (percentage points)
 CFX_COMMODITIES_ENABLED = False   # commodities OFF
 CFX_FX_ENABLED = False           # FX (EUR/USD, GBP/USD, USD/JPY) OFF
 CFX_ENABLED = CFX_COMMODITIES_ENABLED or CFX_FX_ENABLED
@@ -115,15 +115,15 @@ CFX_MODEL_REQUIRED = False   # OFF: commodities/FX bid on price alone again (no 
 _cfx_nomodel_logged = set()
 # "Bid on anything" tier for crypto: t < 300s, side price > 0.83,
 # model probability for that side > 0.83, and edge for that side > 1.5pp.
-ANY_THRESHOLD_SECONDS = 140
-ANY_MIN_PRICE = 0.99
-ANY_MIN_MODEL_PROB = 0.99
+ANY_THRESHOLD_SECONDS = 105
+ANY_MIN_PRICE = 0.98
+ANY_MIN_MODEL_PROB = 0.80
 ANY_MIN_EDGE_PP = 1.5
 ANY_EDGE_FILTER_ENABLED = False   # edge for the side must be > ANY_MIN_EDGE_PP
-ANY_SHARES = 8
+ANY_SHARES = 5
 GENERIC_ENTRY_MIN_PRICE = 0.97
 GENERIC_ENTRY_MAX_PRICE = 0.99
-GENERIC_SHARES = 8
+GENERIC_SHARES = 5
 MIN_SHARES_LIQUIDITY_REQUIRED = 5
 
 STATE_FILE = Path("state.json")
