@@ -26,7 +26,7 @@ FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone
 FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
-FLIP_NONSTAR_MAX_PRICE = 0.92      # green / Yellow 1 entries (no red star): only at 92c or less; red star can go up to FLIP_MAX_PRICE
+FLIP_NONSTAR_MIN_PRICE = 0.93      # green / Yellow 1 entries (no red star): only when the price is ABOVE 93c; red star buys at any price up to FLIP_MAX_PRICE
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -135,10 +135,11 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if ya - yb > FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb                       # what one share of our side costs now
-            cap = FLIP_MAX_PRICE if n["lock"] else FLIP_NONSTAR_MAX_PRICE
-            if cost <= 0 or cost > cap + 1e-9:
+            if cost <= 0 or cost > FLIP_MAX_PRICE + 1e-9:
                 continue
-            limit_side_price = min(cap, round(cost + FLIP_SLIPPAGE, 2))
+            if not n["lock"] and cost <= FLIP_NONSTAR_MIN_PRICE + 1e-9:
+                continue   # no red star: only buy when the price is above 93c
+            limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
             held, _ = _held_count(client, ticker)
             if held != 0:
                 continue   # already holding this market (main strategy or a manual bet) -- don't double up
