@@ -5,8 +5,8 @@ Uses the exact same numbers the Crypto Edge Board dashboard shows (it reads the 
 bot does matches what you see on the top coin boxes:
 
   ENTRY (2 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
-      the coin has the RED STAR, or its "To flip" line is GREEN (price 2+ sigma on the right side of the target).
-  HOLD while "To flip" is yellow (1-2 sigma).
+      the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.67-2 sigma).
+  HOLD through Yellow 1/2/3 (1-2 sigma); Yellow 3 (1-1.33) is the dashboard's "get ready to sell" warning.
   EXIT as soon as "To flip" turns RED (under 1 sigma).
 
 If the board can't be reached (or its data is stale) the bot opens nothing new, and any flip-star position it holds
@@ -22,7 +22,7 @@ FLIP_ENABLED = True
 FLIP_SHARES = 2
 FLIP_MAX_SECONDS_LEFT = 480        # only the last 8 minutes of the window
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
-FLIP_ENTRY_SIGMA = 2.0             # "To flip" green on the dashboard
+FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
 FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
@@ -145,7 +145,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
 
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
-        why = "RED STAR" if n["lock"] else f"To flip GREEN {n['zs']:.1f} sigma"
+        why = "RED STAR" if n["lock"] else (f"To flip GREEN {n['zs']:.1f} sigma" if n["zs"] >= 2 else f"To flip YELLOW 1 (bid zone) {n['zs']:.1f} sigma")
         print(f"[FLIP] ENTRY {ticker} ({n['coin']}): {why}, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "
               f"{'DRY-RUN ' if dry_run else ''}buying {FLIP_SHARES} {n['side'].upper()} up to ${limit_side_price:.2f}")
         if dry_run:
@@ -188,6 +188,6 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             from types import SimpleNamespace
             log_trade(SimpleNamespace(ticker=ticker, title=n["title"], coin=n["coin"], seconds_remaining=n["tl"],
                                       model_prob=n["p"], edge_pct=None),
-                      side, entry_price, count, False, entry_reason="flip_star_red" if n["lock"] else "flip_star_green")
+                      side, entry_price, count, False, entry_reason="flip_star_red" if n["lock"] else ("flip_star_green" if n["zs"] >= 2 else "flip_star_y1"))
         except Exception as e:
             print(f"[FLIP] trade log failed (non-fatal): {e}")
