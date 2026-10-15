@@ -27,6 +27,7 @@ FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
 FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confidence (win % under 90%) before selling
 FLIP_EXIT_PANIC_WIN = 0.75         # if win % falls under 75% the coin is really turning -- sell at once, no waiting
+FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.93      # green / Yellow 1 entries (no red star): only when the price is ABOVE 93c; red star buys at any price up to FLIP_MAX_PRICE
@@ -93,6 +94,12 @@ def entry_signal(n: dict) -> bool:
     return (n["zs"] is not None and n["tl"] is not None
             and FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT
             and (n["lock"] or n["zs"] >= FLIP_ENTRY_SIGMA))
+
+
+def win_now(ticker: str):
+    """Model win chance for the favored side right now, or None if the board has no fresh numbers."""
+    n = board().get(ticker)
+    return None if not n else n["p"]
 
 
 def exit_decision(ticker: str):

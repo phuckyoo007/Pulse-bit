@@ -680,8 +680,22 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     _std = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                       reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
                                       peak_gain_per_contract=position["peak_gain_per_contract"])
-                    if _std.should_exit and _std.reason.startswith(("stop_loss", "fill_outside")):
+                    if _std.should_exit and _std.reason.startswith("fill_outside"):
                         decision = _std
+                    elif _std.should_exit and _std.reason.startswith("stop_loss"):
+                        # Lesson from XRP 15 Oct 22:43: with ~70s left the book thinned out, the mid price blipped to 78c for a
+                        # moment and the 84% stop sold a position the model still gave 95% (the price was back at 98c seconds
+                        # later). For flip-star trades the price stop now has to HOLD and the model has to agree.
+                        _since = position.setdefault("stop_since", time.time())
+                        _win = flip_star.win_now(ticker)
+                        _held = time.time() - _since
+                        if _held >= flip_star.FLIP_STOP_CONFIRM_SECONDS and (_win is None or _win < flip_star.FLIP_EXIT_MAX_WIN):
+                            decision = ExitDecision(True, _std.reason + f" [held {_held:.0f}s, win {'?' if _win is None else f'{_win*100:.0f}%'}]")
+                        elif _held < 1.0:
+                            print(f"[FLIP] {ticker}: price under the 84% stop (win {'?' if _win is None else f'{_win*100:.0f}%'}) -- "
+                                  f"waiting {flip_star.FLIP_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
+                    else:
+                        position.pop("stop_since", None)
             else:
                 # Everything else -- and flip-star positions while the board's numbers are unavailable -- uses the normal stop.
                 decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
