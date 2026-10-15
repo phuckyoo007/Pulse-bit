@@ -22,6 +22,7 @@ FLIP_ENABLED = True
 FLIP_SHARES = 4
 FLIP_MAX_SECONDS_LEFT = 480        # only the last 8 minutes of the window
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
+FLIP_NONSTAR_MIN_SECONDS_LEFT = 150  # green / Yellow 1 (no red star): skip the last 2.5 min -- thin books, jumpy prices (XRP/ZEC 15 Oct)
 FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
 FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
@@ -91,9 +92,11 @@ def board(force: bool = False) -> dict:
 
 
 def entry_signal(n: dict) -> bool:
-    return (n["zs"] is not None and n["tl"] is not None
-            and FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT
-            and (n["lock"] or n["zs"] >= FLIP_ENTRY_SIGMA))
+    if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
+        return False
+    if n["lock"]:
+        return True
+    return n["zs"] >= FLIP_ENTRY_SIGMA and n["tl"] >= FLIP_NONSTAR_MIN_SECONDS_LEFT
 
 
 def win_now(ticker: str):
