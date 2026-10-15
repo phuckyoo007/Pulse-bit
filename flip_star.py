@@ -24,6 +24,9 @@ FLIP_MAX_SECONDS_LEFT = 480        # only the last 8 minutes of the window
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
 FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
+FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
+FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confidence (win % under 90%) before selling
+FLIP_EXIT_PANIC_WIN = 0.75         # if win % falls under 75% the coin is really turning -- sell at once, no waiting
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.93      # green / Yellow 1 entries (no red star): only when the price is ABOVE 93c; red star buys at any price up to FLIP_MAX_PRICE
@@ -34,6 +37,7 @@ EDGE_BOARD_URL = os.getenv("EDGE_BOARD_URL", "https://edge-board-production.up.r
 
 _board = {"data": {}, "fetched": 0.0, "ok_at": 0.0}
 _attempts = {}
+_red_since = {}
 
 
 def _side_numbers(m: dict, age: float):
@@ -97,8 +101,28 @@ def exit_decision(ticker: str):
     n = board().get(ticker)
     if not n or n["zs"] is None:
         return None
+    # Lesson from ZEC 15 Oct 22:26: To-flip dropped 1.7 -> 0.9 sigma in one minute on a small wiggle while the model
+    # (and the market, at 98c) still gave our side 98%. One red reading sold a winning position for -$0.46.
+    # Now a red reading only counts if it lasts and the win % has actually dropped; a real collapse still exits at once.
+    now = time.time()
+    if n["p"] < FLIP_EXIT_PANIC_WIN:
+        _red_since.pop(ticker, None)
+        return True, f"flip_collapse (win % fell to {n['p']*100:.0f}%, To flip {n['zs']:.1f} sigma)"
     if n["zs"] < FLIP_EXIT_SIGMA:
-        return True, f"flip_red (To flip fell to {n['zs']:.1f} sigma, under {FLIP_EXIT_SIGMA:.0f}; win {n['p']*100:.0f}%)"
+        since = _red_since.setdefault(ticker, now)
+        held = now - since
+        if held >= FLIP_EXIT_CONFIRM_SECONDS and n["p"] < FLIP_EXIT_MAX_WIN:
+            _red_since.pop(ticker, None)
+            return True, (f"flip_red (To flip under {FLIP_EXIT_SIGMA:.0f} sigma for {held:.0f}s, now {n['zs']:.1f}; "
+                          f"win {n['p']*100:.0f}%)")
+        if held < 1.0:
+            print(f"[FLIP] {ticker}: To flip red ({n['zs']:.1f} sigma, win {n['p']*100:.0f}%) -- watching; sells if it stays red "
+                  f"{FLIP_EXIT_CONFIRM_SECONDS}s with win under {FLIP_EXIT_MAX_WIN*100:.0f}%, or at once if win drops under "
+                  f"{FLIP_EXIT_PANIC_WIN*100:.0f}%.")
+        return False, ""
+    if ticker in _red_since:
+        print(f"[FLIP] {ticker}: back out of red ({n['zs']:.1f} sigma) -- holding.")
+        _red_since.pop(ticker, None)
     return False, ""
 
 
