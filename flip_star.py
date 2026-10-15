@@ -42,7 +42,7 @@ _attempts = {}
 _red_since = {}
 
 
-def _side_numbers(m: dict, age: float):
+def _side_numbers(m: dict, age: float, coins: dict = None):
     side = m.get("best_side")
     p_yes = m.get("model_p")
     if side not in ("yes", "no") or p_yes is None:
@@ -61,7 +61,9 @@ def _side_numbers(m: dict, age: float):
             and tl is not None and tl >= 30 and (spread is None or spread <= 0.03))
     return {"ticker": m.get("ticker"), "coin": m.get("coin"), "side": side, "p": p, "worst": worst, "zs": zs,
             "tl": tl, "spread": spread, "lock": lock, "yes_ask": m.get("yes_ask"), "no_ask": m.get("no_ask"),
-            "title": m.get("title", m.get("ticker"))}
+            "title": m.get("title", m.get("ticker")),
+            "chg_1m": ((coins or {}).get(m.get("coin")) or {}).get("chg_1m"),
+            "chg_5m": ((coins or {}).get(m.get("coin")) or {}).get("chg_5m")}
 
 
 def board(force: bool = False) -> dict:
@@ -82,7 +84,7 @@ def board(force: bool = False) -> dict:
         for m in st.get("markets", []):
             if m.get("kind") != "15m":
                 continue
-            n = _side_numbers(m, age)
+            n = _side_numbers(m, age, st.get("coins"))
             if n and n["ticker"]:
                 out[n["ticker"]] = n
         _board["data"], _board["ok_at"] = out, now

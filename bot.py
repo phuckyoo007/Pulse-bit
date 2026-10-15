@@ -22,6 +22,7 @@ from priority import RankedCandidate, potential_points, rank_candidates, size_sc
 from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision
 import flip_star
+import ride
 import build_dashboard_data
 import reversion
 import price_feed
@@ -672,7 +673,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             current_gain = current_value - position["entry_price"]
             position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
             flip_dec = flip_star.exit_decision(ticker) if position.get("flip_star") else None
-            if flip_dec is not None:
+            if position.get("ride"):
+                # 1-share ride: trailing take-profit / turned / stop, all in ride.py (hard backstop still applies).
+                decision = ExitDecision(*ride.exit_decision(ticker, position, market, result.seconds_remaining))
+            elif flip_dec is not None:
                 # Flip-star positions: hold through yellow, pull out as soon as "To flip" turns red on the board.
                 decision = ExitDecision(*flip_dec)
                 if not decision.should_exit:
@@ -849,7 +853,7 @@ def run():
     breaker = CircuitBreaker(bankroll, RISK_PARAMS)
     breaker.prime_from_settlements(settlements)
     print("=" * 60)
-    print("BOT VERSION MARKER: 2026-10-15-FLIP-STAR-v1 (2-share red-star/green entries, exit on red)")
+    print("BOT VERSION MARKER: 2026-10-15-FLIP-STAR-v2 + RIDE-v1 (1-share trailing rides)")
     print("=" * 60)
     print(f"Bot started. DRY_RUN={DRY_RUN}. EXIT_DRY_RUN={EXIT_DRY_RUN}. Bankroll: ${bankroll:.2f}. "
           f"Today's PnL so far: ${breaker.day_pnl:.2f}. Exit protection running every "
@@ -877,6 +881,10 @@ def run():
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            ride.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
+        except Exception as e:
+            print(f"[RIDE] entry pass failed (non-fatal, other strategies continue): {e}")
 
         if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
             try:
