@@ -675,6 +675,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             if flip_dec is not None:
                 # Flip-star positions: hold through yellow, pull out as soon as "To flip" turns red on the board.
                 decision = ExitDecision(*flip_dec)
+                if not decision.should_exit:
+                    # ...and they also get the universal stop-loss (84% of what was paid), whichever comes first.
+                    _std = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
+                                      reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
+                                      peak_gain_per_contract=position["peak_gain_per_contract"])
+                    if _std.should_exit and _std.reason.startswith(("stop_loss", "fill_outside")):
+                        decision = _std
             else:
                 # Everything else -- and flip-star positions while the board's numbers are unavailable -- uses the normal stop.
                 decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
