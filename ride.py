@@ -26,6 +26,8 @@ import uuid
 import flip_star
 
 RIDE_ENABLED = True
+RIDE_PAPER = True            # TRIAL MODE: no real orders. Rides are simulated on live Kalshi quotes and logged as [RIDE-PAPER]
+                             # (paper positions are tracked here, NOT in Pulse's state, so they never block real flip-star trades)
 RIDE_SHARES = 1
 RIDE_MIN_SECONDS_LEFT = 240
 RIDE_MAX_SECONDS_LEFT = 600
@@ -45,6 +47,8 @@ RIDE_NO_SELL_LAST_SECONDS = 20
 RIDE_MAX_ATTEMPTS_PER_TICKER = 2
 
 _attempts = {}
+_paper = {}                  # ticker -> simulated position
+_paper_tally = {"n": 0, "wins": 0, "pnl": 0.0}
 
 
 def _moving_our_way(n: dict) -> bool:
@@ -61,11 +65,13 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
     b = flip_star.board()
     if not b:
         return
-    open_rides = sum(1 for p in state.values() if p.get("ride"))
+    if RIDE_PAPER:
+        _paper_manage(client, b)
+    open_rides = (len(_paper) if RIDE_PAPER else 0) + sum(1 for p in state.values() if p.get("ride"))
     for ticker, n in b.items():
         if open_rides >= RIDE_MAX_OPEN:
             return
-        if ticker in state or ticker in excluded_tickers:
+        if ticker in state or ticker in excluded_tickers or ticker in _paper:
             continue
         if _attempts.get(ticker, 0) >= RIDE_MAX_ATTEMPTS_PER_TICKER:
             continue
@@ -95,6 +101,13 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
 
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
+        if RIDE_PAPER:
+            _paper[ticker] = {"count": RIDE_SHARES, "entry_price": cost, "side": side, "ride_peak": cost,
+                              "coin": n["coin"], "entry_time": time.time()}
+            open_rides += 1
+            print(f"[RIDE-PAPER] ENTRY {ticker} ({n['coin']}): {n['side'].upper()} @ ${cost:.2f} (simulated), win {n['p']*100:.0f}%, "
+                  f"To flip {n['zs']:.1f} sigma, coin 1m {n['chg_1m']:+.3f}% / 5m {n['chg_5m']:+.3f}% our way, {int(n['tl'])}s left")
+            continue
         limit = min(RIDE_MAX_PRICE + 0.01, round(cost + 0.01, 2))
         print(f"[RIDE] ENTRY {ticker} ({n['coin']}): {n['side'].upper()} @ ~${cost:.2f}, win {n['p']*100:.0f}%, "
               f"To flip {n['zs']:.1f} sigma, coin 1m {n['chg_1m']:+.3f}% / 5m {n['chg_5m']:+.3f}% our way, "
@@ -175,3 +188,46 @@ def exit_decision(ticker: str, position: dict, market: dict, seconds_remaining: 
     else:
         position.pop("ride_stop_since", None)
     return False, ""
+
+
+def _fee(p: float) -> float:
+    import math
+    return math.ceil(0.07 * p * (1 - p) * 100 - 1e-9) / 100
+
+
+def _paper_close(ticker, pos, value, why):
+    pnl = (value - pos["entry_price"]) * pos["count"] - _fee(pos["entry_price"]) - (_fee(value) if 0 < value < 1 else 0)
+    t = _paper_tally
+    t["n"] += 1
+    t["wins"] += 1 if pnl > 0 else 0
+    t["pnl"] += pnl
+    print(f"[RIDE-PAPER] EXIT {ticker} ({pos['coin']}): {why} -- entry ${pos['entry_price']:.2f}, out ${value:.2f}, "
+          f"pnl after fees ${pnl:+.2f} | trial so far: {t['n']} rides, {t['wins']} wins, ${t['pnl']:+.2f}")
+    _paper.pop(ticker, None)
+    _attempts[ticker] = RIDE_MAX_ATTEMPTS_PER_TICKER   # one ride per window, same as live
+
+
+def _paper_manage(client, b: dict):
+    """Run the real exit rules on every simulated ride, using live Kalshi quotes."""
+    for ticker, pos in list(_paper.items()):
+        try:
+            mk = client.get_market(ticker).get("market", {})
+        except Exception:
+            continue
+        status, result = mk.get("status"), mk.get("result")
+        if result in ("yes", "no"):
+            won = (pos["side"] == "bid") == (result == "yes")
+            _paper_close(ticker, pos, 1.0 if won else 0.0, f"settled {result.upper()} ({'won' if won else 'lost'})")
+            continue
+        if status not in ("active", "open"):
+            if time.time() - pos["entry_time"] > 1500:
+                _paper.pop(ticker, None)   # closed long ago and still no result -- drop it
+            continue                       # window closed: wait for Kalshi's result
+        n = b.get(ticker)
+        tl = n["tl"] if n else None
+        sell, why = exit_decision(ticker, pos, mk, tl)
+        if sell:
+            yb, ya = float(mk.get("yes_bid_dollars") or 0), float(mk.get("yes_ask_dollars") or 1)
+            value = yb if pos["side"] == "bid" else 1 - ya
+            _paper_close(ticker, pos, value, why)
+
