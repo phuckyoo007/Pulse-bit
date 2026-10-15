@@ -8,7 +8,7 @@ locking in what it gained.
   ENTRY (1 share) when ALL of these are true (numbers come from the Crypto Edge Board):
     - 4 to 10 minutes left in the window
     - favored side costs 60c-85c (room to climb)
-    - model gives that side 75%+ to win and "To flip" is not red (1+ sigma)
+    - model gives that side 75%+ to win and "To flip" is Yellow 2 or better (1.33+ sigma)
     - the coin is moving our way right now: its 1-minute AND 5-minute price changes both point in our direction
     - tight book (spread 3c or less); at most RIDE_MAX_OPEN ride positions at once
 
@@ -32,7 +32,7 @@ RIDE_MAX_SECONDS_LEFT = 600
 RIDE_MIN_PRICE = 0.60
 RIDE_MAX_PRICE = 0.85
 RIDE_MIN_WIN = 0.75
-RIDE_MIN_SIGMA = 1.0
+RIDE_MIN_SIGMA = 4 / 3         # Yellow 2 or better -- 1.0-1.3 (Yellow 3) is too close to red: first live ride stopped out at 1.1
 RIDE_MAX_SPREAD = 0.03
 RIDE_MAX_OPEN = 2
 RIDE_ARM = 0.10              # gain needed before the trailing take-profit is active
