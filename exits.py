@@ -6,6 +6,7 @@ a position has lost 8% of what was paid for it (value has fallen to
 92% of entry or below), exit. No per-tier variation, no trailing/peak
 logic, no exceptions. A $10 bet exits no later than $9.20.
 """
+import time
 from dataclasses import dataclass
 from typing import Optional
 from apply_real_fees import fee_per_contract
@@ -16,7 +17,11 @@ TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
-MANUAL_STOP_LOSS_FRACTION = 0.90      # manually placed (adopted) positions: exit when value is <= 90% of what was paid
+MANUAL_STOP_LOSS_FRACTION = 0.82      # manually placed (adopted) positions: exit when value is <= 82% of what was paid
+MODEL_FLIP_ENABLED = True             # manual bets: sell if the model clearly favors the other side
+MODEL_FLIP_MIN_WIN = 0.35             # sell when the model's win chance for OUR side drops below this
+MODEL_FLIP_GRACE_SECONDS = 90         # don't act in the first 90s after the bet is adopted (stale/noisy numbers)
+MODEL_FLIP_MIN_SECONDS_LEFT = 10      # no point selling in the last seconds (market closing)
 
 
 @dataclass
@@ -72,5 +77,16 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     if current_dollars <= threshold_dollars + 1e-9:
         return ExitDecision(True, f"stop_loss (bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
                                    f"threshold ${threshold_dollars:.2f} -- {rule}, entry ${entry_price:.2f})")
+
+    # MODEL FLIP (manual / adopted positions only): if the model now says the OTHER side is clearly more
+    # likely to win, sell. Skipped for the first MODEL_FLIP_GRACE_SECONDS after adoption and when there is
+    # no model number or the market is about to close.
+    if (MODEL_FLIP_ENABLED and position.get("manually_adopted") and current_model_prob is not None
+            and seconds_remaining >= MODEL_FLIP_MIN_SECONDS_LEFT
+            and (time.time() - position.get("entry_time", time.time())) >= MODEL_FLIP_GRACE_SECONDS):
+        my_win = current_model_prob if position["side"] == "bid" else (1 - current_model_prob)
+        if my_win < MODEL_FLIP_MIN_WIN - 1e-9:
+            return ExitDecision(True, f"model_flip (model gives our side only {my_win*100:.0f}% to win, "
+                                       f"below {MODEL_FLIP_MIN_WIN*100:.0f}% -- manual bet, entry ${entry_price:.2f}, now ${value_now:.2f})")
 
     return ExitDecision(False)
