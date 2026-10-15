@@ -20,7 +20,8 @@ from strategy import discover_crypto_markets, evaluate_crypto_market, \
     discover_index_markets, evaluate_index_market, GENERIC_MAX_SECONDS_REMAINING
 from priority import RankedCandidate, potential_points, rank_candidates, size_scale_factor_91_95
 from risk import RiskParams, CircuitBreaker, kelly_size
-from exits import check_exit, current_position_value
+from exits import check_exit, current_position_value, ExitDecision
+import flip_star
 import build_dashboard_data
 import reversion
 import price_feed
@@ -670,9 +671,15 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             current_value = current_position_value(position, result.market_price)
             current_gain = current_value - position["entry_price"]
             position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
-            decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
-                                   reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
-                                   peak_gain_per_contract=position["peak_gain_per_contract"])
+            flip_dec = flip_star.exit_decision(ticker) if position.get("flip_star") else None
+            if flip_dec is not None:
+                # Flip-star positions: hold through yellow, pull out as soon as "To flip" turns red on the board.
+                decision = ExitDecision(*flip_dec)
+            else:
+                # Everything else -- and flip-star positions while the board's numbers are unavailable -- uses the normal stop.
+                decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
+                                       reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
+                                       peak_gain_per_contract=position["peak_gain_per_contract"])
             if not decision.should_exit:
                 continue
             position_is_real = position.get("dry_run") is False
@@ -821,7 +828,7 @@ def run():
     breaker = CircuitBreaker(bankroll, RISK_PARAMS)
     breaker.prime_from_settlements(settlements)
     print("=" * 60)
-    print("BOT VERSION MARKER: 2026-08-31-TOTAL-CAPITAL-CAP-v1")
+    print("BOT VERSION MARKER: 2026-10-15-FLIP-STAR-v1 (2-share red-star/green entries, exit on red)")
     print("=" * 60)
     print(f"Bot started. DRY_RUN={DRY_RUN}. EXIT_DRY_RUN={EXIT_DRY_RUN}. Bankroll: ${bankroll:.2f}. "
           f"Today's PnL so far: ${breaker.day_pnl:.2f}. Exit protection running every "
@@ -844,6 +851,11 @@ def run():
         breaker = bankroll_and_breaker["breaker"]
         with STATE_LOCK:
             adopt_manual_positions(client, state)
+
+        try:
+            flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
+        except Exception as e:
+            print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")
 
         if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
             try:
