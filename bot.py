@@ -462,6 +462,9 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
 
 
 HARD_BACKSTOP_FRACTION = 0.78
+HARD_BACKSTOP_CRASH_FRACTION = 0.50   # flip/ride positions: below this, sell instantly no matter what
+HARD_BACKSTOP_CONFIRM_SECONDS = 8     # flip/ride positions: otherwise the drop must hold this long (and win < 90%)
+_backstop_since = {}
 
 
 def check_hard_backstop(client: KalshiClient, state: dict) -> list:
@@ -505,7 +508,27 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             real_current_dollars = current_value * count
             threshold_dollars = real_bet_dollars * HARD_BACKSTOP_FRACTION
             if real_current_dollars > threshold_dollars + 1e-9:
+                _backstop_since.pop(ticker, None)
                 continue
+            # Lesson from NEAR 15 Oct 20:09 CT: a 4-share flip-star NO bought at 94c; 20s later one thin-book spike
+            # (YES 7c -> 29c) dragged the mid-price under 78% while the model still gave us 93%. The backstop sold
+            # instantly at ~71c for about -$1, and NO was back to 92c a minute later.
+            # For flip-star / ride positions the backstop now waits for the drop to hold and the win % to agree,
+            # exactly like the primary stop. A real crash (value under half the bet, or win under 75%) still sells at once.
+            pos = state.get(ticker) or {}
+            if pos.get("flip_star") or pos.get("ride"):
+                win = flip_star.win_now(ticker)
+                crash = real_current_dollars <= real_bet_dollars * HARD_BACKSTOP_CRASH_FRACTION
+                collapse = win is not None and win < flip_star.FLIP_EXIT_PANIC_WIN
+                if not (crash or collapse):
+                    since = _backstop_since.setdefault(ticker, time.time())
+                    held = time.time() - since
+                    if held < HARD_BACKSTOP_CONFIRM_SECONDS or (win is not None and win >= flip_star.FLIP_EXIT_MAX_WIN):
+                        print(f"HARD BACKSTOP: {ticker} value ${real_current_dollars:.2f} under 78% of ${real_bet_dollars:.2f} "
+                              f"for {held:.0f}s, win {('?' if win is None else f'{win*100:.0f}%')} -- waiting "
+                              f"(sells if it holds {HARD_BACKSTOP_CONFIRM_SECONDS}s with win under 90%, or at once on a crash).")
+                        continue
+            _backstop_since.pop(ticker, None)
             print(f"HARD BACKSTOP TRIGGERED: {ticker} real value ${real_current_dollars:.2f} fell to/below "
                   f"{HARD_BACKSTOP_FRACTION*100:.0f}% of real bet ${real_bet_dollars:.2f} "
                   f"(threshold ${threshold_dollars:.2f}) -- forcing an emergency exit, independent of "
