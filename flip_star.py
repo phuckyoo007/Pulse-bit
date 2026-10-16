@@ -33,6 +33,7 @@ FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
 FLIP_STAR_MIN_PRICE = 0.85         # red star entries: only at 85c or higher (was 94c)
+FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 entries switched off 16 Oct)
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -99,6 +100,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if n["lock"]:
         return True
+    if FLIP_RED_STAR_ONLY:
+        return False   # red stars only -- no green / yellow entries
     return n["zs"] >= FLIP_ENTRY_SIGMA and n["tl"] >= FLIP_NONSTAR_MIN_SECONDS_LEFT
 
 
