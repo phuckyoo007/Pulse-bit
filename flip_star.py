@@ -163,6 +163,9 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
         side = "bid" if n["side"] == "yes" else "ask"
         try:
+            held, _ = _held_count(client, ticker)
+            if held != 0:
+                continue   # already holding this market (main strategy or a manual bet) -- don't double up
             # Live quote straight from Kalshi (the board can lag a second or two).
             mk = client.get_market(ticker).get("market", {})
             ya, yb = mk.get("yes_ask_dollars"), mk.get("yes_bid_dollars")
@@ -179,9 +182,6 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at 94c or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
-            held, _ = _held_count(client, ticker)
-            if held != 0:
-                continue   # already holding this market (main strategy or a manual bet) -- don't double up
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
@@ -221,11 +221,20 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             print(f"[FLIP] {ticker}: nothing filled at ${limit_side_price:.2f} (price moved) -- will retry if the signal holds.")
             continue
         entry_price = exposure / count if exposure > 0 else cost
+        # Lesson from BNB 15 Oct 20:12 CT: the quote passed the 96c floor, but by the time the order hit the book the
+        # price had dropped and the order filled at 91c (a buy limit is only a MAXIMUM -- it happily fills cheaper).
+        # A cheaper fill means the market just lost confidence, so anything under the floor is sold straight away.
+        floor = FLIP_STAR_MIN_PRICE if n["lock"] else FLIP_NONSTAR_MIN_PRICE
+        below_floor = entry_price < floor - 0.005
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                             "flip_star": True}
-        print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- holding until To flip turns red.")
+                             "flip_star": True, "force_exit": below_floor}
+        if below_floor:
+            print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- UNDER the {floor*100:.0f}c floor "
+                  f"(price dropped between the check and the fill) -- selling right away.")
+        else:
+            print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- holding until To flip turns red.")
         try:
             from types import SimpleNamespace
             log_trade(SimpleNamespace(ticker=ticker, title=n["title"], coin=n["coin"], seconds_remaining=n["tl"],
