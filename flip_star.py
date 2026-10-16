@@ -20,7 +20,7 @@ import requests
 
 FLIP_ENABLED = True
 FLIP_SHARES = 4
-FLIP_MAX_SECONDS_LEFT = 480        # only the last 8 minutes of the window
+FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 150  # green / Yellow 1 (no red star): skip the last 2.5 min -- thin books, jumpy prices (XRP/ZEC 15 Oct)
 FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
@@ -31,7 +31,7 @@ FLIP_EXIT_PANIC_WIN = 0.75         # if win % falls under 75% the coin is really
 FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
-FLIP_NONSTAR_MIN_PRICE = 0.93      # green / Yellow 1 entries (no red star): only when the price is ABOVE 93c; red star buys at any price up to FLIP_MAX_PRICE
+FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -173,8 +173,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             cost = ya if side == "bid" else 1 - yb                       # what one share of our side costs now
             if cost <= 0 or cost > FLIP_MAX_PRICE + 1e-9:
                 continue
-            if not n["lock"] and cost <= FLIP_NONSTAR_MIN_PRICE + 1e-9:
-                continue   # no red star: only buy when the price is above 93c
+            if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
+                continue   # no red star: only buy at 96c or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
             held, _ = _held_count(client, ticker)
             if held != 0:
