@@ -32,6 +32,7 @@ FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
+FLIP_STAR_MIN_PRICE = 0.94         # red star entries: only at 94c or higher (a red star with the market at 92c means the market disagrees)
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -175,6 +176,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                 continue
             if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
                 continue   # no red star: only buy at 96c or higher
+            if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
+                continue   # red star: only buy at 94c or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
             held, _ = _held_count(client, ticker)
             if held != 0:
