@@ -22,7 +22,7 @@ FLIP_ENABLED = True
 FLIP_SHARES = 2                    # shares per flip-star entry (was 4)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
-FLIP_NONSTAR_MIN_SECONDS_LEFT = 150  # green / Yellow 1 (no red star): skip the last 2.5 min -- thin books, jumpy prices (XRP/ZEC 15 Oct)
+FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
 FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
@@ -32,7 +32,7 @@ FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
-FLIP_STAR_MIN_PRICE = 0.94         # red star entries: only at 94c or higher (a red star with the market at 92c means the market disagrees)
+FLIP_STAR_MIN_PRICE = 0.85         # red star entries: only at 85c or higher (was 94c)
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -180,7 +180,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
                 continue   # no red star: only buy at 96c or higher
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
-                continue   # red star: only buy at 94c or higher
+                continue   # red star: only buy at 85c or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
