@@ -19,7 +19,7 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 4
+FLIP_SHARES = 2                    # shares per flip-star entry (was 4)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 150  # green / Yellow 1 (no red star): skip the last 2.5 min -- thin books, jumpy prices (XRP/ZEC 15 Oct)
