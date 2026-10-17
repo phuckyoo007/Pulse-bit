@@ -4,7 +4,7 @@ FLIP-STAR strategy -- runs ALONGSIDE Pulse's other entry rules.
 Uses the exact same numbers the Crypto Edge Board dashboard shows (it reads the board's /api/state), so what the
 bot does matches what you see on the top coin boxes:
 
-  ENTRY (15 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
+  ENTRY (10 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
       the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.67-2 sigma).
   HOLD through Yellow 1/2/3 (1-2 sigma); Yellow 3 (1-1.33) is the dashboard's "get ready to sell" warning.
   EXIT as soon as "To flip" turns RED (under 1 sigma).
@@ -19,7 +19,7 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 15                    # shares per flip-star entry (was 4)
+FLIP_SHARES = 10                    # shares per flip-star entry (was 4)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
@@ -32,7 +32,7 @@ FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
-FLIP_STAR_MIN_PRICE = 0.85         # red star entries: only at 85c or higher (was 94c)
+FLIP_STAR_MIN_PRICE = 0.93         # red star entries: only at 85c or higher (was 94c)
 FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 entries switched off 16 Oct)
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
