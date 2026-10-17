@@ -4,7 +4,7 @@ FLIP-STAR strategy -- runs ALONGSIDE Pulse's other entry rules.
 Uses the exact same numbers the Crypto Edge Board dashboard shows (it reads the board's /api/state), so what the
 bot does matches what you see on the top coin boxes:
 
-  ENTRY (5 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
+  ENTRY (10 dshares of the favored side) when, with 8 minutes or less left in the 15-minute window:
       the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.67-2 sigma).
   HOLD through Yellow 1/2/3 (1-2 sigma); Yellow 3 (1-1.33) is the dashboard's "get ready to sell" warning.
   EXIT as soon as "To flip" turns RED (under 1 sigma).
@@ -19,7 +19,7 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 5                    # shares per flip-star entry (was 4)
+FLIP_SHARES = 10                    # shares per flip-star entry (was 4)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
