@@ -2,9 +2,8 @@
 Early-exit logic for open positions, separate from entry logic on purpose.
 
 SIMPLIFIED, per explicit request -- ONE uniform rule for everything: if
-a position has lost 8% of what was paid for it (value has fallen to
-92% of entry or below), exit. No per-tier variation, no trailing/peak
-logic, no exceptions. A $10 bet exits no later than $9.20.
+a position has lost 14% of what was paid for it (value has fallen to 86%% of entry or below), exit. No per-tier variation, no trailing/peak
+logic, no exceptions. A $10 bet exits no later than $8.60.
 """
 import time
 from dataclasses import dataclass
@@ -12,12 +11,12 @@ from typing import Optional
 from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
-UNIVERSAL_STOP_LOSS_FRACTION = 0.84   # initial stop: exit when value falls to <= 84% of what was paid
+UNIVERSAL_STOP_LOSS_FRACTION = 0.86   # initial stop: exit when value falls to <= 84% of what was paid
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
 PROFIT_TRAIL_FRACTION = 0.97          # once a position has gone into profit: exit if value falls to <= 97% of its peak
-MANUAL_STOP_LOSS_FRACTION = 0.82      # manually placed (adopted) positions: exit when value is <= 82% of what was paid
+MANUAL_STOP_LOSS_FRACTION = 0.86      # manually placed (adopted) positions: exit when value is <= 82% of what was paid
 MODEL_FLIP_ENABLED = True             # manual bets: sell if the model clearly favors the other side
 MODEL_FLIP_MIN_WIN = 0.35             # sell when the model's win chance for OUR side drops below this
 MODEL_FLIP_GRACE_SECONDS = 90         # don't act in the first 90s after the bet is adopted (stale/noisy numbers)
