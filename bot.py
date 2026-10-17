@@ -274,6 +274,10 @@ def place_entry_no(client: KalshiClient, ticker: str, price: float, count: float
     return resp
 
 
+_exit_sent_at = {}            # ticker -> when Kalshi last accepted an exit order for it
+EXIT_IN_FLIGHT_SECONDS = 30   # a second exit for the same ticker inside this window is a duplicate -- skip it
+
+
 def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool):
     price = 0.01 if close_side == "ask" else 0.99
     if close_side == "bid":
@@ -283,6 +287,14 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
     print(f"{'EXIT DRY-RUN' if dry_run else 'EXITING'} {close_side.upper()} {ticker} x{count} -- {real_side_desc}")
     if dry_run:
         return {"dry_run": True}
+    # EXIT GUARD (17 Oct, BTC 06:00 ET): the hard backstop and the normal stop-loss both fired on the same crash a few
+    # seconds apart, and Kalshi's position list lagged, so the EXIT SAFETY check below still saw the old position and the
+    # second sell opened a brand-new opposite position (held=-15). One exit per ticker per 30s.
+    _last = _exit_sent_at.get(ticker)
+    if _last is not None and time.time() - _last < EXIT_IN_FLIGHT_SECONDS:
+        print(f"EXIT GUARD: {ticker} -- an exit order was already sent {time.time() - _last:.0f}s ago -- "
+              f"skipping this duplicate so it can't open a new opposite position.")
+        return {"skipped": True, "reason": "exit_in_flight"}
     # EXIT SAFETY CHECK: an exit order that finds nothing to close does not do nothing -- it OPENS a new opposite
     # position (a bid up to 0.99 simply buys YES). That happened when two copies of the bot (overlapping deploys)
     # both exited the same trade. So before exiting, ask Kalshi what is really held, sell only that, and skip the
@@ -307,10 +319,12 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
             count = closable
     except Exception as e:
         print(f"EXIT SAFETY: couldn't verify the real position for {ticker} ({e}) -- exiting anyway.")
-    return client.create_order(
+    resp = client.create_order(
         ticker=ticker, client_order_id=f"pulse-x-{uuid.uuid4()}",
         side=close_side, count=str(count), price=f"{price:.2f}",
     )
+    _exit_sent_at[ticker] = time.time()   # only after Kalshi accepted it, so a failed order can still be retried
+    return resp
 
 
 def get_shares_available(client: KalshiClient, ticker: str, side: str):
