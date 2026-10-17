@@ -12,6 +12,7 @@ from apply_real_fees import fee_per_contract
 
 STOP_LOSS_ENABLED = True
 UNIVERSAL_STOP_LOSS_FRACTION = 0.86   # initial stop: exit when value falls to <= 84% of what was paid
+STOP_LOSS_LEVEL_HELD_SIDE = 0.86   # absolute stop on the HELD side's price: exit when value <= 86c (YES price for YES; 1 - YES price for NO, i.e. YES quote >= 14c)
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85              # capture profit: sell as soon as the position's value (price of the side we hold) reaches this
 PROFIT_TRAIL_ENABLED = False          # OFF: no trailing stop -- the stop stays fixed at UNIVERSAL_STOP_LOSS_FRACTION of what was paid
@@ -73,6 +74,13 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
         # Manual bids use their own stop (overrides the universal one, whether higher or lower).
         threshold_dollars = bet_amount_dollars * MANUAL_STOP_LOSS_FRACTION
         rule = f"{MANUAL_STOP_LOSS_FRACTION*100:.0f}% of original investment (manual bid)"
+    # Absolute stop on the held side. Only applies to positions entered ABOVE the level: a position whose entry is already
+    # at or below 86c (e.g. a 1-share ride bought at 60-85c, or an adopted position with a low cost) keeps the existing
+    # entry-relative stop, so it is not sold instantly.
+    if (not position.get("manually_adopted") and not (PROFIT_TRAIL_ENABLED and peak_gain > 1e-9)
+            and entry_price > STOP_LOSS_LEVEL_HELD_SIDE + 1e-9):
+        threshold_dollars = STOP_LOSS_LEVEL_HELD_SIDE * count
+        rule = f"absolute {STOP_LOSS_LEVEL_HELD_SIDE*100:.0f}c on held side"
     if current_dollars <= threshold_dollars + 1e-9:
         return ExitDecision(True, f"stop_loss (bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
                                    f"threshold ${threshold_dollars:.2f} -- {rule}, entry ${entry_price:.2f})")
