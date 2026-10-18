@@ -70,8 +70,12 @@ class KalshiClient:
             )
         return resp.json()
 
-    def get_markets(self, status="open", series_ticker=None, event_ticker=None, limit=100, cursor=None):
-        params = {"status": status, "limit": limit}
+    def get_markets(self, status="open", series_ticker=None, event_ticker=None, limit=100, cursor=None, min_close_ts=None):
+        params = {"limit": limit}
+        if status:
+            params["status"] = status
+        if min_close_ts:
+            params["min_close_ts"] = int(min_close_ts)
         if series_ticker:
             params["series_ticker"] = series_ticker
         if event_ticker:

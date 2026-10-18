@@ -78,6 +78,41 @@ def get_cached_spot_and_vol(coin: str, max_age_seconds: int = 30):
     spot, vol = get_spot_and_vol(coin)
     _vol_cache[coin] = (spot, vol, time.time())
     return spot, vol
+_fallback_logged = {}
+
+
+def _discover_fallback(client, prefix, coin):
+    """18 Oct: Kalshi's status=open filter started returning nothing while the markets were plainly live in the app.
+    Ask without the status filter (only markets closing from now on) and keep any whose window is running now,
+    whatever status word Kalshi uses for it. Logs what Kalshi actually returned, once a minute per coin."""
+    import time as _t
+    now = _t.time()
+    try:
+        resp = client.get_markets(status=None, series_ticker=prefix, limit=20, min_close_ts=now)
+    except Exception as e:
+        print(f"  [discovery] {coin} ({prefix}): fallback query failed -- {e}")
+        return []
+    ms = resp.get("markets", []) or []
+    live = []
+    for m in ms:
+        st = str(m.get("status", "")).lower()
+        if st in ("settled", "finalized", "closed", "determined", "deactivated"):
+            continue
+        try:
+            o = datetime.fromisoformat(m["open_time"].replace("Z", "+00:00")).timestamp()
+            c = datetime.fromisoformat(m["close_time"].replace("Z", "+00:00")).timestamp()
+        except Exception:
+            continue
+        if o <= now < c:
+            live.append(m)
+    if now - _fallback_logged.get(prefix, 0) > 60:
+        _fallback_logged[prefix] = now
+        seen = [(m.get("ticker"), m.get("status")) for m in ms[:3]]
+        print(f"  [discovery] {coin} ({prefix}): status=open gave 0; without the filter Kalshi returned {len(ms)} "
+              f"(first: {seen}); using {len(live)} running now.")
+    return live
+
+
 def discover_crypto_markets(client) -> list:
     markets = []
     all_prefixes = {**CRYPTO_SERIES_PREFIXES, **HOURLY_CRYPTO_SERIES_PREFIXES}
@@ -91,6 +126,8 @@ def discover_crypto_markets(client) -> list:
             # ticker prefix) or just a real, temporary empty result
             # (e.g. between windows) -- those are very different
             # problems and this couldn't tell them apart before.
+            if not found:
+                found = _discover_fallback(client, prefix, coin)
             if not found:
                 print(f"  [discovery] {coin} ({prefix}): 0 open markets returned this cycle.")
             markets.extend(found)
