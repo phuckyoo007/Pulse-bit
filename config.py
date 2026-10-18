@@ -15,7 +15,7 @@ class Config:
     @classmethod
     def base_url(cls) -> str:
         if cls.ENV == "prod":
-            return "https://external-api.kalshi.com/trade-api/v2"
+            return os.getenv("KALSHI_BASE_URL", "https://api.elections.kalshi.com/trade-api/v2").strip()
         return "https://external-api.demo.kalshi.co/trade-api/v2"
 
     @classmethod
