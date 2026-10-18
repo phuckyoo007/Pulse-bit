@@ -1408,6 +1408,9 @@ def run():
                         continue
                 except Exception as _e:
                     print(f"ENTRY SAFETY: couldn't verify existing positions for {result.ticker} ({_e}) -- continuing.")
+                if flip_star.FLIP_HALTED:
+                    print(f"  KILL SWITCH: {result.ticker} -- Pulse is halted after 3 losses, not entering (restart to resume).")
+                    continue
                 ensure_shard_funds(client, result.ticker, this_trade_cost)
             for attempt in range(1, ORDER_RETRY_ATTEMPTS + 1):
                 try:

@@ -48,13 +48,29 @@ except Exception:
     pass
 
 
+# LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
+# (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
+FLIP_MAX_LOSSES_BEFORE_HALT = 3
+_loss_count = 0
+FLIP_HALTED = False
+_halt_note_at = 0.0
+
+
 def record_result(position, pnl, how=""):
-    """Called by bot.py whenever a position closes. Trips the floor breaker on a losing flip-star bet bought under 93c."""
-    global FLIP_STAR_MIN_PRICE
+    """Called by bot.py whenever a position closes. Counts losses for the kill switch and trips the floor breaker
+    on a losing flip-star bet bought under 93c."""
+    global FLIP_STAR_MIN_PRICE, _loss_count, FLIP_HALTED
     try:
         if not position or not position.get("flip_star"):
             return
         entry = float(position.get("entry_price") or 0)
+        if pnl < -1e-9:
+            _loss_count += 1
+            print(f"[FLIP] loss {_loss_count}/{FLIP_MAX_LOSSES_BEFORE_HALT} since restart: ${-pnl:.2f} ({how}).")
+            if _loss_count >= FLIP_MAX_LOSSES_BEFORE_HALT and not FLIP_HALTED:
+                FLIP_HALTED = True
+                print(f"[FLIP] KILL SWITCH: {_loss_count} losing bets since the last restart -- NO NEW BETS until Pulse "
+                      f"is restarted in Railway. Open bets are still protected by their stops.")
         if pnl < -1e-9 and entry < FLIP_STAR_SAFE_MIN_PRICE - 0.005 and FLIP_STAR_MIN_PRICE < FLIP_STAR_SAFE_MIN_PRICE:
             FLIP_STAR_MIN_PRICE = FLIP_STAR_SAFE_MIN_PRICE
             print(f"[FLIP] FLOOR CIRCUIT BREAKER TRIPPED: a bet bought at ${entry:.2f} lost ${-pnl:.2f} ({how}) -- "
@@ -185,7 +201,13 @@ def _held_count(client, ticker):
 
 def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, log_trade, ensure_shard_funds):
     """Open 4-share flip-star positions where the dashboard says so. Called once per scan loop."""
+    global _halt_note_at
     if not FLIP_ENABLED:
+        return
+    if FLIP_HALTED:
+        if time.time() - _halt_note_at > 300:
+            _halt_note_at = time.time()
+            print(f"[FLIP] halted after {_loss_count} losses -- restart Pulse in Railway to resume betting.")
         return
     b = board()
     if not b:
