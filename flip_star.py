@@ -32,7 +32,7 @@ FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also 
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
-FLIP_STAR_MIN_PRICE = 0.93         # red star entries: only at 85c or higher (was 94c)
+FLIP_STAR_MIN_PRICE = 0.92         # red star entries: only at 92c or higher (red-star criteria unchanged)
 FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 entries switched off 16 Oct)
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
@@ -183,7 +183,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
                 continue   # no red star: only buy at 96c or higher
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
-                continue   # red star: only buy at 85c or higher
+                continue   # red star: only buy at 92c or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
