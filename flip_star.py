@@ -35,6 +35,7 @@ FLIP_NONSTAR_MAX_PRICE = 0.99      # green (no star): 92-99c (18 Oct)
 FLIP_NONSTAR_MIN_PRICE = 0.92      # green (no star): 92c or higher (18 Oct)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
 FLIP_STAR_MIN_PRICE = 0.88         # red star floor 88c (18 Oct, red star 88-99c); breaker below resets to 93c on a loss bought under 93c
+FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
@@ -210,23 +211,99 @@ def _held_count(client, ticker):
     return 0.0, 0.0
 
 
+_resting = {}   # ticker -> resting red-star bid waiting at FLIP_STAR_REST_PRICE
+
+
+def pending_tickers() -> set:
+    """Tickers with a resting flip-star bid -- the manual-position adopter must leave these alone."""
+    return set(_resting)
+
+
+def _find_order_id(client, ticker, client_order_id, resp):
+    for src in (resp or {}, (resp or {}).get("order") or {}):
+        if isinstance(src, dict) and src.get("order_id"):
+            return src["order_id"]
+    try:
+        orders = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "status": "resting"}).get("orders", [])
+        for o in orders:
+            if o.get("client_order_id") == client_order_id:
+                return o.get("order_id")
+    except Exception as e:
+        print(f"[FLIP] {ticker}: couldn't look up the resting order id ({e}).")
+    return None
+
+
+def _record_fill(client, state, state_lock, log_trade, ticker, n, side, count, entry_price, how):
+    with state_lock:
+        state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
+                         "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
+                         "flip_star": True, "force_exit": False}
+    print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} ({how}) -- holding until To flip turns red.")
+    try:
+        from types import SimpleNamespace
+        log_trade(SimpleNamespace(ticker=ticker, title=n["title"], coin=n["coin"], seconds_remaining=n["tl"],
+                                  model_prob=n["p"], edge_pct=None),
+                  side, entry_price, count, False, entry_reason="flip_star_red")
+    except Exception as e:
+        print(f"[FLIP] trade log failed (non-fatal): {e}")
+
+
+def _check_resting(client, state, state_lock, log_trade, b):
+    """Each pass: a resting red-star bid that filled becomes a normal flip-star position; one whose red star is
+    gone (or the window is nearly over) is cancelled."""
+    for ticker, r in list(_resting.items()):
+        n = b.get(ticker) or r["n"]
+        still_good = bool(b.get(ticker)) and n["lock"] and entry_signal(n)
+        try:
+            held, exposure = _held_count(client, ticker)
+        except Exception as e:
+            print(f"[FLIP] {ticker}: couldn't check the resting bid ({e}).")
+            continue
+        if held == 0 and still_good:
+            continue   # still waiting at the resting price
+        # Filled (some or all), or the red star is gone: cancel whatever is left, then take what we got.
+        if r.get("order_id"):
+            try:
+                client.cancel_order(r["order_id"])
+            except Exception as e:
+                if "not_found" not in str(e) and "404" not in str(e):
+                    print(f"[FLIP] {ticker}: cancel of resting bid failed ({e}) -- will try again next pass.")
+                    continue
+        try:
+            held, exposure = _held_count(client, ticker)
+        except Exception:
+            pass
+        _resting.pop(ticker, None)
+        count = abs(held)
+        if count >= 1e-9:
+            entry_price = exposure / count if exposure > 0 else FLIP_STAR_REST_PRICE
+            _record_fill(client, state, state_lock, log_trade, ticker, r["n"], r["side"], count, entry_price,
+                         f"resting {FLIP_STAR_REST_PRICE*100:.0f}c bid filled")
+        else:
+            print(f"[FLIP] {ticker}: red star gone or window ending -- resting {FLIP_STAR_REST_PRICE*100:.0f}c bid cancelled, nothing filled.")
+
+
 def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, log_trade, ensure_shard_funds):
     """Open 4-share flip-star positions where the dashboard says so. Called once per scan loop."""
     global _halt_note_at
     if not FLIP_ENABLED:
         return
     if FLIP_HALTED:
+        if _resting:
+            _check_resting(client, state, state_lock, log_trade, {})   # halted: cancel any resting bids
         if time.time() - _halt_note_at > 300:
             _halt_note_at = time.time()
             print(f"[FLIP] halted after {_loss_count} losses -- restart Pulse in Railway to resume betting.")
         return
     b = board()
+    if _resting:
+        _check_resting(client, state, state_lock, log_trade, b)
     if not b:
         return
     for ticker, n in b.items():
         if not entry_signal(n):
             continue
-        if ticker in state or ticker in excluded_tickers:
+        if ticker in state or ticker in excluded_tickers or ticker in _resting:
             continue
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue
@@ -252,8 +329,30 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at the current floor or higher
             limit_side_price = min(max_px, round(cost + FLIP_SLIPPAGE, 2))
+            rest = bool(n["lock"]) and cost > FLIP_STAR_REST_PRICE + 1e-9
+            if rest:
+                limit_side_price = FLIP_STAR_REST_PRICE
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
+            continue
+
+        if rest and not dry_run:
+            coid = f"pulse-flip-{uuid.uuid4()}"
+            print(f"[FLIP] REST {ticker} ({n['coin']}): RED STAR at {cost*100:.0f}c, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "
+                  f"posting a {FLIP_SHARES}-share {n['side'].upper()} bid at ${FLIP_STAR_REST_PRICE:.2f} and waiting")
+            try:
+                ensure_shard_funds(client, ticker, FLIP_STAR_REST_PRICE * FLIP_SHARES)
+                yes_price = FLIP_STAR_REST_PRICE if side == "bid" else round(1 - FLIP_STAR_REST_PRICE, 2)
+                resp = client.create_order(ticker=ticker, client_order_id=coid, side=side, count=str(FLIP_SHARES),
+                                           price=f"{yes_price:.2f}", time_in_force="good_till_canceled")
+            except Exception as e:
+                print(f"[FLIP] {ticker}: resting bid failed ({e}).")
+                if "market_closed" in str(e) or "market_not_found" in str(e):
+                    excluded_tickers.add(ticker)
+                continue
+            _attempts[ticker] = _attempts.get(ticker, 0) + 1
+            _resting[ticker] = {"order_id": _find_order_id(client, ticker, coid, resp), "side": side, "n": n,
+                                "placed": time.time()}
             continue
 
         _attempts[ticker] = _attempts.get(ticker, 0) + 1

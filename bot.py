@@ -632,8 +632,8 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
-        if not ticker or ticker in state:
-            continue
+        if not ticker or ticker in state or ticker in flip_star.pending_tickers():
+            continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
         if position_fp == 0:
             continue
