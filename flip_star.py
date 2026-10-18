@@ -31,8 +31,8 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # red star: never pay more than this per share (18 Oct: red star 83-99c)
-FLIP_NONSTAR_MAX_PRICE = 0.93      # green (no star): 93c or less
-FLIP_NONSTAR_MIN_PRICE = 0.88      # 18 Oct: green (no star) buys 88c to FLIP_MAX_PRICE, same range as red star
+FLIP_NONSTAR_MAX_PRICE = 0.99      # green (no star): 92-99c (18 Oct)
+FLIP_NONSTAR_MIN_PRICE = 0.92      # green (no star): 92c or higher (18 Oct)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
 FLIP_STAR_MIN_PRICE = 0.83         # red star floor 83c (18 Oct); breaker below resets to 93c on a loss bought under 93c
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
