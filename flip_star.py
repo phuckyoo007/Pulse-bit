@@ -38,7 +38,6 @@ FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 ent
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
 # ends in a loss (early exit, emergency backstop or settlement), the floor goes straight back to 93c and stays
 # there. The trip is saved to a small file so a restart keeps it (a fresh deploy starts at 92c again).
-FLIP_MIN_PROFIT = 0.50             # a winning bet must pay at least this much after fees, or don't bet
 
 
 def _order_fee(count, price):
@@ -249,11 +248,6 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at the current floor or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
-            # MIN PROFIT (18 Oct): only bet if a win would clear at least $0.50 after Kalshi's fee, priced at the
-            # most we might pay (the limit). At 20 shares that means about 97c or less.
-            _win_profit = FLIP_SHARES * (1 - limit_side_price) - _order_fee(FLIP_SHARES, limit_side_price)
-            if _win_profit < FLIP_MIN_PROFIT - 1e-9:
-                continue
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
