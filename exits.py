@@ -29,6 +29,13 @@ YES_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION       # YES / bid positions
 NO_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION        # NO positions
 MANUAL_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION    # manually adopted positions (override)
 
+# PRICE STOP (both sides): also exit when the side we hold is priced at 86c or lower -- i.e. the OTHER side has
+# climbed to 14c or higher. For a NO bet bought at 96c (= selling YES at 4c) that is YES reaching 14c.
+# Whichever of the two stops (86% of what was paid, or held side <= 86c) comes first wins.
+# Only applies when we paid more than 86c, so a cheaper entry isn't sold the moment it fills.
+PRICE_STOP_HELD = 0.86                            # held side's price at/below this -> exit
+PRICE_STOP_OTHER = 1.0 - PRICE_STOP_HELD          # = other side at/above 14c
+
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
 MODEL_FLIP_ENABLED = True     # manual bets: sell if the model clearly favors the other side
@@ -82,6 +89,11 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     bet_amount_dollars = entry_price * count
     current_dollars = value_now * count
     threshold_dollars = bet_amount_dollars * frac
+    if entry_price > PRICE_STOP_HELD + 1e-9 and value_now <= PRICE_STOP_HELD + 1e-9:
+        side = "YES" if is_yes_side(position) else "NO"
+        other = "NO" if side == "YES" else "YES"
+        return ExitDecision(True, f"stop_loss_price ({side} now ${value_now:.2f} <= ${PRICE_STOP_HELD:.2f}, i.e. {other} at "
+                                  f"${1 - value_now:.2f} >= ${PRICE_STOP_OTHER:.2f}; entry ${entry_price:.2f})")
     if current_dollars <= threshold_dollars + 1e-9:
         side = "YES" if is_yes_side(position) else "NO"
         return ExitDecision(True, f"stop_loss ({side}: bet ${bet_amount_dollars:.2f} -> now ${current_dollars:.2f}, "
