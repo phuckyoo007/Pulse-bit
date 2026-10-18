@@ -10,7 +10,7 @@ bot does matches what you see on the top coin boxes:
   EXIT as soon as "To flip" turns RED (under 1 sigma).
 
 If the board can't be reached (or its data is stale) the bot opens nothing new, and any flip-star position it holds
-falls back to Pulse's normal stop-loss until fresh numbers come back. Pulse's hard backstop (78%) still applies.
+falls back to Pulse's normal stop-loss until fresh numbers come back. Pulse's hard backstop (72%) still applies.
 """
 import os
 import time
@@ -28,7 +28,7 @@ FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
 FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confidence (win % under 90%) before selling
 FLIP_EXIT_PANIC_WIN = 0.75         # if win % falls under 75% the coin is really turning -- sell at once, no waiting
-FLIP_STOP_CONFIRM_SECONDS = 8      # the 84% price stop must also hold this long (and win % be under 90%) -- thin books blip
+FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE

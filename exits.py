@@ -2,14 +2,14 @@
 Early-exit logic for open positions, separate from entry logic on purpose.
 
 ONE stop-loss rule for every position, both sides:
-    exit when the position's value falls to 86% of what was paid or lower
-    (a 14% loss). A $10 bet exits no later than $8.60.
+    exit when the position's value falls to 80% of what was paid or lower
+    (a 20% loss). A $10 bet exits no later than $8.00.
 
 "Value" is always the price of the side we HOLD:
     bid (YES) position -> value = market_price (the YES price)
     NO position        -> value = 1 - market_price
 
-So the same 86% / 14% rule protects YES and NO. In YES-price terms, a NO
+So the same 80% / 20% rule protects YES and NO. In YES-price terms, a NO
 position exits when the YES price rises; the math below handles that.
 """
 import time
@@ -21,22 +21,22 @@ STOP_LOSS_ENABLED = True
 
 # Stop levels. LOSS_PCT is the max loss; EXIT_FRACTION is the same thing
 # expressed as "exit when value <= this share of what was paid".
-STOP_LOSS_PCT = 0.14
-STOP_EXIT_FRACTION = 1.0 - STOP_LOSS_PCT          # 0.86
+STOP_LOSS_PCT = 0.20                               # was 0.14 (86%) until 18 Oct
+STOP_EXIT_FRACTION = 1.0 - STOP_LOSS_PCT          # 0.80
 
-# Separate knobs per side, both default to the same 86% exit.
+# Separate knobs per side, both default to the same 80% exit.
 YES_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION       # YES / bid positions
 NO_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION        # NO positions
 MANUAL_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION    # manually adopted positions (override)
 
-# PRICE STOP (both sides): also exit when the side we hold is priced at 86c or lower -- i.e. the OTHER side has
-# climbed to 14c or higher. For a NO bet bought at 96c (= selling YES at 4c) that is YES reaching 14c.
-# Whichever of the two stops (86% of what was paid, or held side <= 86c) comes first wins.
-# Only applies when we paid more than 86c, so a cheaper entry isn't sold the moment it fills.
-PRICE_STOP_HELD = 0.86                            # held side's price at/below this -> exit
-PRICE_STOP_OTHER = 1.0 - PRICE_STOP_HELD          # = other side at/above 14c
+# PRICE STOP (both sides): also exit when the side we hold is priced at 80c or lower -- i.e. the OTHER side has
+# climbed to 20c or higher. For a NO bet bought at 96c (= selling YES at 4c) that is YES reaching 20c.
+# Whichever of the two stops (80% of what was paid, or held side <= 80c) comes first wins.
+# Only applies when we paid more than 80c, so a cheaper entry isn't sold the moment it fills.
+PRICE_STOP_HELD = 0.80                            # held side's price at/below this -> exit
+PRICE_STOP_OTHER = 1.0 - PRICE_STOP_HELD          # = other side at/above 20c
 
-# CRASH STOP: if a position has lost 50% or more, sell IMMEDIATELY -- no 8-second wait, no win-% check.
+# CRASH STOP: if a position has lost 50% or more, sell IMMEDIATELY -- no 10-second wait, no win-% check.
 # For something that falls through the floor too fast for the normal stops to confirm.
 CRASH_STOP_FRACTION = 0.50
 

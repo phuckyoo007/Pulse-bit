@@ -475,9 +475,9 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
-HARD_BACKSTOP_FRACTION = 0.78
+HARD_BACKSTOP_FRACTION = 0.72                # was 0.78 -- kept below the 80% stop so it doesn't fire first
 HARD_BACKSTOP_CRASH_FRACTION = 0.50   # flip/ride positions: below this, sell instantly no matter what
-HARD_BACKSTOP_CONFIRM_SECONDS = 8     # flip/ride positions: otherwise the drop must hold this long (and win < 90%)
+HARD_BACKSTOP_CONFIRM_SECONDS = 10    # flip/ride positions: otherwise the drop must hold this long (and win < 90%)
 _backstop_since = {}
 
 
@@ -538,7 +538,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                     since = _backstop_since.setdefault(ticker, time.time())
                     held = time.time() - since
                     if held < HARD_BACKSTOP_CONFIRM_SECONDS or (win is not None and win >= flip_star.FLIP_EXIT_MAX_WIN):
-                        print(f"HARD BACKSTOP: {ticker} value ${real_current_dollars:.2f} under 78% of ${real_bet_dollars:.2f} "
+                        print(f"HARD BACKSTOP: {ticker} value ${real_current_dollars:.2f} under {HARD_BACKSTOP_FRACTION*100:.0f}% of ${real_bet_dollars:.2f} "
                               f"for {held:.0f}s, win {('?' if win is None else f'{win*100:.0f}%')} -- waiting "
                               f"(sells if it holds {HARD_BACKSTOP_CONFIRM_SECONDS}s with win under 90%, or at once on a crash).")
                         continue
@@ -717,7 +717,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 # Flip-star positions: hold through yellow, pull out as soon as "To flip" turns red on the board.
                 decision = ExitDecision(*flip_dec)
                 if not decision.should_exit:
-                    # ...and they also get the universal stop-loss (84% of what was paid), whichever comes first.
+                    # ...and they also get the universal stop-loss (80% of what was paid / held side 80c), whichever comes first.
                     _std = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                       reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
                                       peak_gain_per_contract=position["peak_gain_per_contract"])
@@ -733,7 +733,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         if _held >= flip_star.FLIP_STOP_CONFIRM_SECONDS and (_win is None or _win < flip_star.FLIP_EXIT_MAX_WIN):
                             decision = ExitDecision(True, _std.reason + f" [held {_held:.0f}s, win {'?' if _win is None else f'{_win*100:.0f}%'}]")
                         elif _held < 1.0:
-                            print(f"[FLIP] {ticker}: price under the 84% stop (win {'?' if _win is None else f'{_win*100:.0f}%'}) -- "
+                            print(f"[FLIP] {ticker}: price under the 80% stop (win {'?' if _win is None else f'{_win*100:.0f}%'}) -- "
                                   f"waiting {flip_star.FLIP_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
                     else:
                         position.pop("stop_since", None)
