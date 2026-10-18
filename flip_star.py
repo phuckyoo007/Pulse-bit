@@ -34,7 +34,7 @@ FLIP_MAX_PRICE = 0.99              # red star: never pay more than this per shar
 FLIP_NONSTAR_MAX_PRICE = 0.99      # green (no star): 92-99c (18 Oct)
 FLIP_NONSTAR_MIN_PRICE = 0.92      # green (no star): 92c or higher (18 Oct)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
-FLIP_STAR_MIN_PRICE = 0.83         # red star floor 83c (18 Oct); breaker below resets to 93c on a loss bought under 93c
+FLIP_STAR_MIN_PRICE = 0.88         # red star floor 88c (18 Oct, red star 88-99c); breaker below resets to 93c on a loss bought under 93c
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
