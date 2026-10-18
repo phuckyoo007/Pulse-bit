@@ -88,7 +88,7 @@ def _discover_fallback(client, prefix, coin):
     import time as _t
     now = _t.time()
     try:
-        resp = client.get_markets(status=None, series_ticker=prefix, limit=20, min_close_ts=now)
+        resp = client.get_markets(status=None, series_ticker=prefix, limit=20, min_close_ts=now, max_close_ts=now + 16 * 60)
     except Exception as e:
         print(f"  [discovery] {coin} ({prefix}): fallback query failed -- {e}")
         return []
