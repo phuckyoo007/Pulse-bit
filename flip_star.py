@@ -23,7 +23,7 @@ FLIP_SHARES = 20                    # shares per flip-star entry
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 1.5            # "To flip" green (2+) or Yellow 1 / bid zone (1.5-2) on the dashboard (was 1.67)
+FLIP_ENTRY_SIGMA = 2.0            # 18 Oct: green only (2+ sigma) -- one tier below red star; Yellow 1 not bought
 FLIP_EXIT_SIGMA = 0.5              # "To flip" red on the dashboard (under 0.5) -> pull out (was 1.0)
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
 FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confidence (win % under 90%) before selling
@@ -31,9 +31,10 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.93              # never pay more than this per share (was 99c; 18 Oct: 93c or less)
-FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
+FLIP_NONSTAR_MIN_PRICE = 0.88      # 18 Oct: green (no star) buys 88c to FLIP_MAX_PRICE, same range as red star
+FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
 FLIP_STAR_MIN_PRICE = 0.88         # red star entries: trial floor 88c (red-star criteria unchanged); breaker below resets to 93c on a loss
-FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 entries switched off 16 Oct)
+FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
 # ends in a loss (early exit, emergency backstop or settlement), the floor goes straight back to 93c and stays
@@ -159,7 +160,8 @@ def entry_signal(n: dict) -> bool:
         return True
     if FLIP_RED_STAR_ONLY:
         return False   # red stars only -- no green / yellow entries
-    return n["zs"] >= FLIP_ENTRY_SIGMA and n["tl"] >= FLIP_NONSTAR_MIN_SECONDS_LEFT
+    return (n["zs"] >= FLIP_ENTRY_SIGMA and n["p"] >= FLIP_NONSTAR_MIN_WIN - 1e-9
+            and n["tl"] >= FLIP_NONSTAR_MIN_SECONDS_LEFT)
 
 
 def win_now(ticker: str):
