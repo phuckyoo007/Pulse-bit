@@ -30,10 +30,11 @@ FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confi
 FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
 FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.93              # never pay more than this per share (was 99c; 18 Oct: 93c or less)
+FLIP_MAX_PRICE = 0.99              # red star: never pay more than this per share (18 Oct: red star 83-99c)
+FLIP_NONSTAR_MAX_PRICE = 0.93      # green (no star): 93c or less
 FLIP_NONSTAR_MIN_PRICE = 0.88      # 18 Oct: green (no star) buys 88c to FLIP_MAX_PRICE, same range as red star
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
-FLIP_STAR_MIN_PRICE = 0.88         # red star entries: trial floor 88c (red-star criteria unchanged); breaker below resets to 93c on a loss
+FLIP_STAR_MIN_PRICE = 0.83         # red star floor 83c (18 Oct); breaker below resets to 93c on a loss bought under 93c
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
@@ -243,13 +244,14 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if ya - yb > FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb                       # what one share of our side costs now
-            if cost <= 0 or cost > FLIP_MAX_PRICE + 1e-9:
+            max_px = FLIP_MAX_PRICE if n["lock"] else FLIP_NONSTAR_MAX_PRICE
+            if cost <= 0 or cost > max_px + 1e-9:
                 continue
             if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
                 continue   # no red star: only buy at 96c or higher
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at the current floor or higher
-            limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
+            limit_side_price = min(max_px, round(cost + FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
