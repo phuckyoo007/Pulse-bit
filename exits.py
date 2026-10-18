@@ -36,6 +36,10 @@ MANUAL_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION    # manually adopted positions (
 PRICE_STOP_HELD = 0.86                            # held side's price at/below this -> exit
 PRICE_STOP_OTHER = 1.0 - PRICE_STOP_HELD          # = other side at/above 14c
 
+# CRASH STOP: if a position has lost 50% or more, sell IMMEDIATELY -- no 8-second wait, no win-% check.
+# For something that falls through the floor too fast for the normal stops to confirm.
+CRASH_STOP_FRACTION = 0.50
+
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
 MODEL_FLIP_ENABLED = True     # manual bets: sell if the model clearly favors the other side
@@ -79,6 +83,11 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     # Filled outside the allowed price tolerance / below the floor: get out immediately.
     if position.get("force_exit"):
         return ExitDecision(True, f"fill_outside_tolerance (real entry ${entry_price:.2f} -- exiting immediately)")
+
+    # CRASH STOP (instant): value at/below 50% of what was paid.
+    if value_now <= entry_price * CRASH_STOP_FRACTION + 1e-9:
+        return ExitDecision(True, f"crash_stop (value ${value_now:.2f} <= {CRASH_STOP_FRACTION*100:.0f}% of entry ${entry_price:.2f} -- "
+                                  f"selling immediately, no wait)")
 
     # TAKE PROFIT (off by default)
     if TAKE_PROFIT_ENABLED and value_now >= TAKE_PROFIT_PRICE - 1e-9:

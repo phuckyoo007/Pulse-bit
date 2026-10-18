@@ -721,7 +721,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     _std = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                       reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
                                       peak_gain_per_contract=position["peak_gain_per_contract"])
-                    if _std.should_exit and _std.reason.startswith("fill_outside"):
+                    if _std.should_exit and (_std.reason.startswith("fill_outside") or _std.reason.startswith("crash_stop")):
                         decision = _std
                     elif _std.should_exit and _std.reason.startswith("stop_loss"):
                         # Lesson from XRP 15 Oct 22:43: with ~70s left the book thinned out, the mid price blipped to 78c for a
