@@ -891,6 +891,12 @@ def run():
     breaker.prime_from_settlements(settlements)
     print("=" * 60)
     print("BOT VERSION MARKER: 2026-10-15-FLIP-STAR-v2 + RIDE-v1 (1-share trailing rides)")
+    try:
+        from config import Config as _C
+        _k = _C.API_KEY_ID
+        print(f"KALSHI LOGIN CHECK: env={_C.ENV} url={_C.base_url()} key_id_len={len(_k)} key_id_ends=...{_k[-4:]}")
+    except Exception as _e:
+        print(f"KALSHI LOGIN CHECK: couldn't read config ({_e})")
     print("=" * 60)
     print(f"Bot started. DRY_RUN={DRY_RUN}. EXIT_DRY_RUN={EXIT_DRY_RUN}. Bankroll: ${bankroll:.2f}. "
           f"Today's PnL so far: ${breaker.day_pnl:.2f}. Exit protection running every "

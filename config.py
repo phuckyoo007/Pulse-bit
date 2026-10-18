@@ -6,9 +6,11 @@ load_dotenv()
 
 
 class Config:
-    API_KEY_ID = os.getenv("KALSHI_API_KEY_ID", "")
+    API_KEY_ID = os.getenv("KALSHI_API_KEY_ID", "").strip().strip('"').strip("'").strip()   # tolerate pasted spaces/quotes
     PRIVATE_KEY_PATH = os.getenv("KALSHI_PRIVATE_KEY_PATH", "./kalshi_private_key.pem")
-    ENV = os.getenv("KALSHI_ENV", "demo").lower()
+    ENV = os.getenv("KALSHI_ENV", "demo").strip().strip('"').strip("'").lower()
+    if ENV in ("production", "live", "real"):
+        ENV = "prod"
 
     @classmethod
     def base_url(cls) -> str:
