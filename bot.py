@@ -565,6 +565,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop")
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -775,6 +776,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             })
             realized_pnl.append(pnl)
             print(f"Early exit {ticker}: {decision.reason}, pnl=${pnl:.2f}")
+            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40])
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
             del state[ticker]
@@ -829,6 +831,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
         })
         newly_settled_pnl.append(pnl)
         print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
+        flip_star.record_result(position, pnl, "settled " + str(market.get("result")))
     if newly_settled_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
     return newly_settled_pnl

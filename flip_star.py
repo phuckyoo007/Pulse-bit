@@ -32,8 +32,41 @@ FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also 
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
 FLIP_NONSTAR_MIN_PRICE = 0.96      # green / Yellow 1 entries (no red star): only at 96c or higher (was above 93c); red star buys at any price up to FLIP_MAX_PRICE
-FLIP_STAR_MIN_PRICE = 0.92         # red star entries: only at 92c or higher (red-star criteria unchanged)
+FLIP_STAR_MIN_PRICE = 0.88         # red star entries: trial floor 88c (red-star criteria unchanged); breaker below resets to 93c on a loss
 FLIP_RED_STAR_ONLY = True          # only red-star entries (green / Yellow 1 entries switched off 16 Oct)
+
+# FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
+# ends in a loss (early exit, emergency backstop or settlement), the floor goes straight back to 93c and stays
+# there. The trip is saved to a small file so a restart keeps it (a fresh deploy starts at 92c again).
+FLIP_STAR_SAFE_MIN_PRICE = 0.93
+_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_floor_breaker.json")
+try:
+    if os.path.exists(_BREAKER_FILE):
+        FLIP_STAR_MIN_PRICE = max(FLIP_STAR_MIN_PRICE, FLIP_STAR_SAFE_MIN_PRICE)
+        print(f"[FLIP] floor circuit breaker already tripped earlier -- red-star floor stays at {FLIP_STAR_MIN_PRICE*100:.0f}c.")
+except Exception:
+    pass
+
+
+def record_result(position, pnl, how=""):
+    """Called by bot.py whenever a position closes. Trips the floor breaker on a losing flip-star bet bought under 93c."""
+    global FLIP_STAR_MIN_PRICE
+    try:
+        if not position or not position.get("flip_star"):
+            return
+        entry = float(position.get("entry_price") or 0)
+        if pnl < -1e-9 and entry < FLIP_STAR_SAFE_MIN_PRICE - 0.005 and FLIP_STAR_MIN_PRICE < FLIP_STAR_SAFE_MIN_PRICE:
+            FLIP_STAR_MIN_PRICE = FLIP_STAR_SAFE_MIN_PRICE
+            print(f"[FLIP] FLOOR CIRCUIT BREAKER TRIPPED: a bet bought at ${entry:.2f} lost ${-pnl:.2f} ({how}) -- "
+                  f"red-star floor back to {FLIP_STAR_SAFE_MIN_PRICE*100:.0f}c.")
+            try:
+                import json as _json
+                with open(_BREAKER_FILE, "w") as f:
+                    _json.dump({"tripped_at": time.time(), "entry": entry, "pnl": pnl, "how": how}, f)
+            except Exception as e:
+                print(f"[FLIP] couldn't save the breaker state ({e}) -- floor is 93c until the next restart.")
+    except Exception as e:
+        print(f"[FLIP] record_result error (non-fatal): {e}")
 FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
@@ -183,7 +216,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
                 continue   # no red star: only buy at 96c or higher
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
-                continue   # red star: only buy at 92c or higher
+                continue   # red star: only buy at the current floor or higher
             limit_side_price = min(FLIP_MAX_PRICE, round(cost + FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[FLIP] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
