@@ -5,9 +5,9 @@ Uses the exact same numbers the Crypto Edge Board dashboard shows (it reads the 
 bot does matches what you see on the top coin boxes:
 
   ENTRY (13 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
-      the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.67-2 sigma).
-  HOLD through Yellow 1/2/3 (1-2 sigma); Yellow 3 (1-1.33) is the dashboard's "get ready to sell" warning.
-  EXIT as soon as "To flip" turns RED (under 1 sigma).
+      the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.5-2 sigma).
+  HOLD through Yellow 1/2/3 (0.5-2 sigma); Yellow 3 (0.5-1) is the dashboard's "get ready to sell" warning.
+  EXIT as soon as "To flip" turns RED (under 0.5 sigma).  [zones moved down 18 Oct: red was under 1]
 
 If the board can't be reached (or its data is stale) the bot opens nothing new, and any flip-star position it holds
 falls back to Pulse's normal stop-loss until fresh numbers come back. Pulse's hard backstop (72%) still applies.
@@ -23,11 +23,11 @@ FLIP_SHARES = 13                    # shares per flip-star entry (was 15)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 5 / 3           # "To flip" green (2+) or Yellow 1 / bid zone (1.67-2) on the dashboard
-FLIP_EXIT_SIGMA = 1.0              # "To flip" red on the dashboard -> pull out
+FLIP_ENTRY_SIGMA = 1.5            # "To flip" green (2+) or Yellow 1 / bid zone (1.5-2) on the dashboard (was 1.67)
+FLIP_EXIT_SIGMA = 0.5              # "To flip" red on the dashboard (under 0.5) -> pull out (was 1.0)
 FLIP_EXIT_CONFIRM_SECONDS = 10     # red must HOLD this long (one noisy reading is not enough) ...
 FLIP_EXIT_MAX_WIN = 0.90           # ... and the model must also have lost confidence (win % under 90%) before selling
-FLIP_EXIT_PANIC_WIN = 0.75         # if win % falls under 75% the coin is really turning -- sell at once, no waiting
+FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
 FLIP_STOP_CONFIRM_SECONDS = 10     # (was 8) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # never pay more than this per share
@@ -129,7 +129,7 @@ def exit_decision(ticker: str):
         held = now - since
         if held >= FLIP_EXIT_CONFIRM_SECONDS and n["p"] < FLIP_EXIT_MAX_WIN:
             _red_since.pop(ticker, None)
-            return True, (f"flip_red (To flip under {FLIP_EXIT_SIGMA:.0f} sigma for {held:.0f}s, now {n['zs']:.1f}; "
+            return True, (f"flip_red (To flip under {FLIP_EXIT_SIGMA:g} sigma for {held:.0f}s, now {n['zs']:.1f}; "
                           f"win {n['p']*100:.0f}%)")
         if held < 1.0:
             print(f"[FLIP] {ticker}: To flip red ({n['zs']:.1f} sigma, win {n['p']*100:.0f}%) -- watching; sells if it stays red "
