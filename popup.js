@@ -183,6 +183,7 @@ async function refreshMain() {
   $("balance-usd").classList.remove("hidden");
   $("balance-amount").textContent = "";
   $("balance-symbol").textContent = "";
+  window.TM_NATIVE_USD = null;
   document.querySelector(".balance-native-row").classList.remove("balance-lead-fallback");
   refreshBalance();
   refreshTokens(); // not awaited -- same reasoning as the balance above
@@ -272,6 +273,7 @@ async function refreshTokens() {
   list.innerHTML = "";
   if (!res.tokens.length) {
     $("tokens-empty").classList.remove("hidden");
+    if (window.TM_EXPLORE) TM_EXPLORE.afterTokens();
     return;
   }
   $("tokens-empty").classList.add("hidden");
@@ -300,9 +302,13 @@ async function refreshTokens() {
     const row = document.createElement("div");
     row.className = "token-row";
     row.dataset.tokId = String(t.address).toLowerCase();
+    row.dataset.symbol = t.symbol;
+    row.dataset.decimals = String(t.decimals);
     const formatted = ethers.utils.formatUnits(t.balanceWei, t.decimals);
+    row.dataset.zero = Number(formatted) === 0 ? "1" : "0";
     const priceEntry = prices[t.address.toLowerCase()];
     const priceNum = priceEntry && typeof priceEntry.price === "number" ? priceEntry.price : null;
+    if (priceNum != null && Number(formatted) * priceNum > 0) row.dataset.usd = String(Number(formatted) * priceNum);
     const usdText = priceNum != null ? formatCurrency(Number(formatted) * priceNum) : "";
     const nameEl = document.createElement("span");
     nameEl.className = "token-name muted small";
@@ -363,6 +369,7 @@ async function refreshTokens() {
     list.appendChild(row);
   });
   applyTokenListPrefs();
+  if (window.TM_EXPLORE) TM_EXPLORE.afterTokens();
 }
 
 function resetAddTokenScreen() {
@@ -688,6 +695,8 @@ async function refreshBalanceUsd() {
     document.querySelector(".balance-native-row").classList.remove("balance-lead-fallback");
     $("balance-usd").textContent = formatCurrency(amount * price);
     $("balance-usd").classList.remove("hidden");
+    window.TM_NATIVE_USD = amount * price;
+    if (window.TM_EXPLORE) TM_EXPLORE.refreshAllocation();
   } catch (e) {
     // Price lookups are best-effort -- a rate-limited or unreachable
     // CoinGecko shouldn't disrupt the rest of the wallet UI.
@@ -1299,6 +1308,7 @@ async function openCoinDetail(c, fromScreen) {
   $("coin-swap-note").classList.add("hidden");
   document.querySelectorAll(".coin-range").forEach((b) => b.classList.toggle("active", b.dataset.days === String(coinDetail.days)));
   showScreen("screen-coin");
+  if (window.TM_EXPLORE && TM_EXPLORE.onCoinOpen) { try { TM_EXPLORE.onCoinOpen(c); } catch (e) { /* extras never block the coin page */ } }
   loadCoinChart(gen);
   loadCoinInfo(gen);
   loadCoinSwapState(gen);
@@ -1329,6 +1339,7 @@ async function loadCoinInfo(gen) {
       const pct = d.athChange != null ? ` (${d.athChange.toFixed(1)}%)` : "";
       stats.appendChild(coinStat(TM_I18N.t("coin.ath"), fm(d.ath) + pct));
     }
+    if (window.TM_EXPLORE && TM_EXPLORE.onCoinInfo) { try { TM_EXPLORE.onCoinInfo(d, c); } catch (e) { /* optional extras */ } }
     $("coin-about").textContent = d.description || TM_I18N.t("coin.aboutUnavailable");
   } catch (e) {
     if (gen !== coinDetail.gen) return;
@@ -1523,6 +1534,7 @@ async function refreshMainPricesCard() {
 function renderStablecoinRow(c) {
   const row = document.createElement("div");
   row.className = "price-row";
+  if (c.cgId || c.id) { row.dataset.cg = String(c.cgId || c.id); row.dataset.symbol = String(c.symbol || ""); }
   const priceText =
     c.price == null
       ? TM_I18N.t("prices.naText")
@@ -1545,8 +1557,8 @@ function renderStablecoinRow(c) {
 // Which tab of the Currencies & Stablecoins screen is showing: the stablecoins, or the top coins.
 let predictionsTab = "stable";
 function setPredictionsTab(tab) {
-  predictionsTab = tab === "top" ? "top" : "stable";
-  [["pred-tab-stable", "stable"], ["pred-tab-top", "top"]].forEach(([id, t]) => {
+  predictionsTab = tab === "top" || tab === "trending" ? tab : "stable";
+  [["pred-tab-stable", "stable"], ["pred-tab-top", "top"], ["pred-tab-trending", "trending"]].forEach(([id, t]) => {
     const b = $(id); if (!b) return;
     b.classList.toggle("active", predictionsTab === t);
     b.setAttribute("aria-selected", predictionsTab === t ? "true" : "false");
@@ -1555,13 +1567,15 @@ function setPredictionsTab(tab) {
 }
 $("pred-tab-stable").addEventListener("click", () => setPredictionsTab("stable"));
 $("pred-tab-top").addEventListener("click", () => setPredictionsTab("top"));
+$("pred-tab-trending").addEventListener("click", () => setPredictionsTab("trending"));
 
 async function refreshPredictions() {
   hideError("predictions-error");
   $("predictions-status").innerHTML = coinSpinnerHtml(TM_I18N.t("predictions.loading"));
   $("predictions-status").classList.remove("hidden");
   try {
-    const markets = predictionsTab === "top" ? await TM_PRICES.getTopCoins(currentCurrency) : await TM_PRICES.getCurrencyStablecoins(currentCurrency);
+    const rawMarkets = predictionsTab === "top" ? await (window.TM_EXPLORE && TM_EXPLORE.topSource ? TM_EXPLORE.topSource(currentCurrency) : TM_PRICES.getTopCoins(currentCurrency)) : predictionsTab === "trending" ? await TM_PRICES.getTrendingCoins(currentCurrency) : await TM_PRICES.getCurrencyStablecoins(currentCurrency);
+    const markets = window.TM_EXPLORE ? TM_EXPLORE.sortMarkets(rawMarkets) : rawMarkets;
     const list = $("predictions-list");
     list.innerHTML = "";
     if (!markets.length) {
@@ -2513,6 +2527,7 @@ function renderActivity() {
       card.appendChild(icon);
       card.appendChild(body);
       root.appendChild(card);
+      if (window.TM_EXPLORE) TM_EXPLORE.addReceiptRow(root, item, null);
     });
   });
 }
