@@ -31,11 +31,11 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 5      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False            # 19 Oct: 80% stop off for flip bets (3 of 4 stop-outs today were winners); 70% hard stop, 50% crash stop and To-flip-red exit stay on
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.97              # red star: never pay more than 97c (19 Oct: raise profit per win to >= ~$0.27 at 10 shares)
-FLIP_NONSTAR_MAX_PRICE = 0.97      # green (no star): 92-97c (19 Oct)
-FLIP_NONSTAR_MIN_PRICE = 0.92      # green (no star): 92c or higher (18 Oct)
+FLIP_MAX_PRICE = 0.99              # 19 Oct 17:06: bid 96-99c (red star)
+FLIP_NONSTAR_MAX_PRICE = 0.99      # 19 Oct 17:06: bid 96-99c (green)
+FLIP_NONSTAR_MIN_PRICE = 0.96      # 19 Oct 17:06: green 96c or higher (was 92c)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
-FLIP_STAR_MIN_PRICE = 0.88         # red star floor 88c (18 Oct, red star 88-99c); breaker below resets to 93c on a loss bought under 93c
+FLIP_STAR_MIN_PRICE = 0.96         # 19 Oct 17:06: red star 96c or higher (was 88c); breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
