@@ -41,7 +41,7 @@ FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
 # FALLING-KNIFE GUARD (18 Oct): never buy while the coin or our side's price is moving against us.
 FLIP_MAX_SIDE_DROP_1M = 0.02       # skip if our side's Kalshi price fell 2c+ in the last minute
-FLIP_MAX_SPOT_AGAINST_1M = 0.02    # skip if the coin's spot price moved 0.02%+ against our side in the last minute
+FLIP_MAX_SPOT_AGAINST_1M = 0.05    # 19 Oct 18:07: loosened from 0.02% -- tiny wiggles were blocking most entries; still blocks real moves (0.1%+)
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
