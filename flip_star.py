@@ -36,6 +36,11 @@ FLIP_NONSTAR_MIN_PRICE = 0.92      # green (no star): 92c or higher (18 Oct)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
 FLIP_STAR_MIN_PRICE = 0.88         # red star floor 88c (18 Oct, red star 88-99c); breaker below resets to 93c on a loss bought under 93c
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
+FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
+                                   # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
+# FALLING-KNIFE GUARD (18 Oct): never buy while the coin or our side's price is moving against us.
+FLIP_MAX_SIDE_DROP_1M = 0.02       # skip if our side's Kalshi price fell 2c+ in the last minute
+FLIP_MAX_SPOT_AGAINST_1M = 0.02    # skip if the coin's spot price moved 0.02%+ against our side in the last minute
 FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
@@ -125,7 +130,8 @@ def _side_numbers(m: dict, age: float, coins: dict = None):
             "tl": tl, "spread": spread, "lock": lock, "yes_ask": m.get("yes_ask"), "no_ask": m.get("no_ask"),
             "title": m.get("title", m.get("ticker")),
             "chg_1m": ((coins or {}).get(m.get("coin")) or {}).get("chg_1m"),
-            "chg_5m": ((coins or {}).get(m.get("coin")) or {}).get("chg_5m")}
+            "chg_5m": ((coins or {}).get(m.get("coin")) or {}).get("chg_5m"),
+            "mid_chg_1m": m.get("mid_chg_1m")}
 
 
 def board(force: bool = False) -> dict:
@@ -153,6 +159,25 @@ def board(force: bool = False) -> dict:
     except Exception as e:
         print(f"[FLIP] couldn't read the dashboard ({e}) -- no new flip-star entries until it's back.")
     return _board["data"] if now - _board["ok_at"] <= FLIP_STALE_SECONDS else {}
+
+
+_knife_note = {}
+
+
+def _falling_against(n: dict) -> bool:
+    """True when the coin or our side's price is moving against us right now -- don't buy into a drop."""
+    sgn = 1 if n["side"] == "yes" else -1
+    why = None
+    mc = n.get("mid_chg_1m")
+    if mc is not None and mc * sgn <= -FLIP_MAX_SIDE_DROP_1M + 1e-9:
+        why = f"our side's price fell {abs(mc)*100:.0f}c in the last minute"
+    c1 = n.get("chg_1m")
+    if why is None and c1 is not None and c1 * sgn <= -FLIP_MAX_SPOT_AGAINST_1M + 1e-9:
+        why = f"{n.get('coin')} moved {abs(c1):.3f}% against us in the last minute"
+    if why and time.time() - _knife_note.get(n.get("ticker"), 0) > 30:
+        _knife_note[n.get("ticker")] = time.time()
+        print(f"[FLIP] {n.get('ticker')}: skipping -- {why} (falling-knife guard).")
+    return why is not None
 
 
 def entry_signal(n: dict) -> bool:
@@ -307,6 +332,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue
+        if _falling_against(n):
+            continue
         side = "bid" if n["side"] == "yes" else "ask"
         try:
             held, _ = _held_count(client, ticker)
@@ -329,7 +356,9 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at the current floor or higher
             limit_side_price = min(max_px, round(cost + FLIP_SLIPPAGE, 2))
-            rest = bool(n["lock"]) and cost > FLIP_STAR_REST_PRICE + 1e-9
+            rest = FLIP_RESTING_BIDS and bool(n["lock"]) and cost > FLIP_STAR_REST_PRICE + 1e-9
+            if not rest and cost > FLIP_STAR_REST_PRICE + 1e-9 and not FLIP_RESTING_BIDS:
+                pass   # resting bids off: buy at the live price (up to the cap) like before
             if rest:
                 limit_side_price = FLIP_STAR_REST_PRICE
         except Exception as e:
