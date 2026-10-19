@@ -23,7 +23,7 @@ FLIP_SHARES = 10                    # shares per flip-star entry
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 2.0            # 19 Oct: back to 2.0 (1.9 trial -> XRP loss 6:44 CT); red star also 2.0
+FLIP_ENTRY_SIGMA = 0.5            # 19 Oct 18:08: buy from Yellow 3 up (0.5+ sigma); sells the moment it turns red (<0.5)
 FLIP_EXIT_SIGMA = 0.5              # "To flip" red on the dashboard (under 0.5) -> pull out (was 1.0)
 FLIP_EXIT_CONFIRM_SECONDS = 0      # 19 Oct: sell the moment To flip turns red (was 10s wait)
 FLIP_EXIT_MAX_WIN = 1.01           # 19 Oct: no win-% check on red -- red alone sells (was 0.90)
@@ -31,11 +31,11 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 5      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False            # 19 Oct: 80% stop off for flip bets (3 of 4 stop-outs today were winners); 70% hard stop, 50% crash stop and To-flip-red exit stay on
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.98              # 19 Oct 17:06: bid 96-98c (red star)
-FLIP_NONSTAR_MAX_PRICE = 0.98      # 19 Oct 17:06: bid 96-98c (green)
-FLIP_NONSTAR_MIN_PRICE = 0.96      # 19 Oct 17:06: green 96c or higher (was 92c)
-FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
-FLIP_STAR_MIN_PRICE = 0.96         # 19 Oct 17:06: red star 96c or higher (was 88c); breaker can only raise it
+FLIP_MAX_PRICE = 0.98              # 19 Oct 18:08: bid 93-98c (red star)
+FLIP_NONSTAR_MAX_PRICE = 0.98      # 19 Oct 18:08: bid 93-98c (Y3 and up)
+FLIP_NONSTAR_MIN_PRICE = 0.93      # 19 Oct 18:08: 93c or higher
+FLIP_NONSTAR_MIN_WIN = 0.0         # 19 Oct 18:08: no win-% requirement for non-star entries (price range 93-98c is the filter)
+FLIP_STAR_MIN_PRICE = 0.93         # 19 Oct 18:08: red star 93c or higher; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -109,6 +109,7 @@ EDGE_BOARD_URL = os.getenv("EDGE_BOARD_URL", "https://edge-board-production.up.r
 _board = {"data": {}, "fetched": 0.0, "ok_at": 0.0}
 _attempts = {}
 _red_since = {}
+_sold_red = set()   # tickers already sold on red this session -- never re-buy the same round (no buy/sell churn)
 
 
 def _side_numbers(m: dict, age: float, coins: dict = None):
@@ -211,12 +212,14 @@ def exit_decision(ticker: str):
     now = time.time()
     if n["p"] < FLIP_EXIT_PANIC_WIN:
         _red_since.pop(ticker, None)
+        _sold_red.add(ticker)
         return True, f"flip_collapse (win % fell to {n['p']*100:.0f}%, To flip {n['zs']:.1f} sigma)"
     if n["zs"] < FLIP_EXIT_SIGMA:
         since = _red_since.setdefault(ticker, now)
         held = now - since
         if held >= FLIP_EXIT_CONFIRM_SECONDS and n["p"] < FLIP_EXIT_MAX_WIN:
             _red_since.pop(ticker, None)
+            _sold_red.add(ticker)
             return True, (f"flip_red (To flip under {FLIP_EXIT_SIGMA:g} sigma for {held:.0f}s, now {n['zs']:.1f}; "
                           f"win {n['p']*100:.0f}%)")
         if held < 1.0:
@@ -331,7 +334,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
     for ticker, n in b.items():
         if not entry_signal(n):
             continue
-        if ticker in state or ticker in excluded_tickers or ticker in _resting:
+        if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red:
             continue
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue
