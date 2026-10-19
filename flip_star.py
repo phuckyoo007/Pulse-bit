@@ -68,7 +68,8 @@ except Exception:
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 3
 _loss_count = 0
-FLIP_HALTED = False
+FLIP_PAUSED = True                 # 18 Oct 19:19 CT: paused for the night by request -- set to False to resume betting
+FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
 
 
@@ -318,7 +319,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             _check_resting(client, state, state_lock, log_trade, {})   # halted: cancel any resting bids
         if time.time() - _halt_note_at > 300:
             _halt_note_at = time.time()
-            print(f"[FLIP] halted after {_loss_count} losses -- restart Pulse in Railway to resume betting.")
+            print("[FLIP] PAUSED by request -- no new bets (FLIP_PAUSED=True in flip_star.py)." if FLIP_PAUSED and _loss_count < FLIP_MAX_LOSSES_BEFORE_HALT
+                  else f"[FLIP] halted after {_loss_count} losses -- restart Pulse in Railway to resume betting.")
         return
     b = board()
     if _resting:
