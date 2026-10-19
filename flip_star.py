@@ -31,8 +31,8 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 5      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False            # 19 Oct: 80% stop off for flip bets (3 of 4 stop-outs today were winners); 70% hard stop, 50% crash stop and To-flip-red exit stay on
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.99              # 19 Oct 17:06: bid 96-99c (red star)
-FLIP_NONSTAR_MAX_PRICE = 0.99      # 19 Oct 17:06: bid 96-99c (green)
+FLIP_MAX_PRICE = 0.98              # 19 Oct 17:06: bid 96-98c (red star)
+FLIP_NONSTAR_MAX_PRICE = 0.98      # 19 Oct 17:06: bid 96-98c (green)
 FLIP_NONSTAR_MIN_PRICE = 0.96      # 19 Oct 17:06: green 96c or higher (was 92c)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 18 Oct: green (no star) needs model win >= 95%
 FLIP_STAR_MIN_PRICE = 0.96         # 19 Oct 17:06: red star 96c or higher (was 88c); breaker can only raise it
