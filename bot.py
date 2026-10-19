@@ -537,7 +537,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 if not (crash or collapse):
                     since = _backstop_since.setdefault(ticker, time.time())
                     held = time.time() - since
-                    if held < HARD_BACKSTOP_CONFIRM_SECONDS or (win is not None and win >= flip_star.FLIP_EXIT_MAX_WIN):
+                    if held < HARD_BACKSTOP_CONFIRM_SECONDS or (win is not None and win >= 0.90):
                         print(f"HARD BACKSTOP: {ticker} value ${real_current_dollars:.2f} under {HARD_BACKSTOP_FRACTION*100:.0f}% of ${real_bet_dollars:.2f} "
                               f"for {held:.0f}s, win {('?' if win is None else f'{win*100:.0f}%')} -- waiting "
                               f"(sells if it holds {HARD_BACKSTOP_CONFIRM_SECONDS}s with win under 90%, or at once on a crash).")
