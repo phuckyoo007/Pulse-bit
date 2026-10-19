@@ -68,7 +68,7 @@ except Exception:
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 3
 _loss_count = 0
-FLIP_PAUSED = True                 # 18 Oct 19:19 CT: paused for the night by request -- set to False to resume betting
+FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
 
