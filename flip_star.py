@@ -24,7 +24,7 @@ FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA = 1.5            # 19 Oct 18:10: buy from Yellow 1 up (1.5+ sigma); sells the moment it turns red (<0.5)
-FLIP_EXIT_SIGMA = 0.5              # "To flip" red on the dashboard (under 0.5) -> pull out (was 1.0)
+FLIP_EXIT_SIGMA = 0.2              # 19 Oct 18:52: sell the moment To flip falls under 0.2 sigma (was 0.5 = start of red)
 FLIP_EXIT_CONFIRM_SECONDS = 0      # 19 Oct: sell the moment To flip turns red (was 10s wait)
 FLIP_EXIT_MAX_WIN = 1.01           # 19 Oct: no win-% check on red -- red alone sells (was 0.90)
 FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
