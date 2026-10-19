@@ -40,6 +40,11 @@ PRICE_STOP_OTHER = 1.0 - PRICE_STOP_HELD          # = other side at/above 20c
 # For something that falls through the floor too fast for the normal stops to confirm.
 CRASH_STOP_FRACTION = 0.50
 
+# HARD STOP (18 Oct 19:21 CT): sell IMMEDIATELY -- no wait, no win-% check -- once the position is worth 70% or less
+# of what was paid, or the side we hold is priced at 70c or less (the other side at 30c or more).
+HARD_STOP_FRACTION = 0.70
+HARD_STOP_HELD = 0.70
+
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
 MODEL_FLIP_ENABLED = True     # manual bets: sell if the model clearly favors the other side
@@ -87,6 +92,12 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
     # CRASH STOP (instant): value at/below 50% of what was paid.
     if value_now <= entry_price * CRASH_STOP_FRACTION + 1e-9:
         return ExitDecision(True, f"crash_stop (value ${value_now:.2f} <= {CRASH_STOP_FRACTION*100:.0f}% of entry ${entry_price:.2f} -- "
+                                  f"selling immediately, no wait)")
+
+    # HARD STOP (instant): 70% of what was paid, or held side at 70c (other side at 30c).
+    if value_now <= entry_price * HARD_STOP_FRACTION + 1e-9 or (entry_price > HARD_STOP_HELD + 1e-9 and value_now <= HARD_STOP_HELD + 1e-9):
+        side = "YES" if is_yes_side(position) else "NO"
+        return ExitDecision(True, f"hard_stop ({side} now ${value_now:.2f}, entry ${entry_price:.2f}; 70% / 70c line -- "
                                   f"selling immediately, no wait)")
 
     # TAKE PROFIT (off by default)
