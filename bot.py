@@ -724,7 +724,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                       peak_gain_per_contract=position["peak_gain_per_contract"])
                     if _std.should_exit and (_std.reason.startswith("fill_outside") or _std.reason.startswith("crash_stop") or _std.reason.startswith("hard_stop")):
                         decision = _std
-                    elif _std.should_exit and _std.reason.startswith("stop_loss"):
+                    elif _std.should_exit and _std.reason.startswith("stop_loss") and flip_star.FLIP_USE_80_STOP:
                         # Lesson from XRP 15 Oct 22:43: with ~70s left the book thinned out, the mid price blipped to 78c for a
                         # moment and the 84% stop sold a position the model still gave 95% (the price was back at 98c seconds
                         # later). For flip-star trades the price stop now has to HOLD and the model has to agree.
