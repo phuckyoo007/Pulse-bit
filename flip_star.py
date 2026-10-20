@@ -31,11 +31,12 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 5      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips that came back). Stops now: To-flip red <0.2 sigma, 70/30 hard stop, 60/40 last 45s
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.99              # 20 Oct 11:06: bid 93-99c (red star)
-FLIP_NONSTAR_MAX_PRICE = 0.98      # 20 Oct 11:07: green 93-98c (only red stars may pay 99c)
-FLIP_NONSTAR_MIN_PRICE = 0.93      # 19 Oct 18:08: 93c or higher
-FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 13:47 CT: green needs 95%+ win
-FLIP_STAR_MIN_PRICE = 0.93         # 19 Oct 18:08: red star 93c or higher; breaker can only raise it
+FLIP_MAX_PRICE = 0.99              # 20 Oct 15:45 CT: 97-99c only (94-96c bets lost money over 5 days)
+FLIP_NONSTAR_MAX_PRICE = 0.99      # 20 Oct 15:45 CT: 97-99c
+FLIP_NONSTAR_MIN_PRICE = 0.97      # 20 Oct 15:45 CT: 97c floor
+FLIP_NONSTAR_MIN_WIN = 0.98        # 20 Oct 15:45 CT: 98%+ win only
+FLIP_MIN_WIN_ALL = 0.98            # 20 Oct 15:45 CT: red stars too -- 98%+ bets: 2 big losses in 368; 96-97%: 11 in 198
+FLIP_STAR_MIN_PRICE = 0.97         # 20 Oct 15:45 CT: 97c floor (breaker can only raise it)
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -74,8 +75,8 @@ _loss_count = 0
 #   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
 #   50% crash: sell when the position is worth half (or less) of what was paid
 # The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
-FLIP_STOPS_ONLY_6040_AND_CRASH = False   # 20 Oct 15:32 CT: red exit back on (plus 70/30 hard stop, 50% crash, last-45s 60/40)
-FLIP_6040_HELD = 0.70             # 20 Oct 13:46 CT: 70/30 immediate pull-out back on (held side <= 70c) before the last 45s; last 45s stays 60/40
+FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price stops only -- 70/30 (60/40 last 45s) + 50% crash; red/win-collapse exits OFF
+FLIP_6040_HELD = 0.70             # 70/30 immediate pull-out before the last 45s (last 45s: 60/40 in bot.py)
 FLIP_CRASH_FRACTION = 0.50
 FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
 FLIP_HALTED = FLIP_PAUSED
@@ -195,6 +196,8 @@ def _falling_against(n: dict) -> bool:
 
 def entry_signal(n: dict) -> bool:
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
+        return False
+    if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
         return False
     if n["lock"]:
         return True
