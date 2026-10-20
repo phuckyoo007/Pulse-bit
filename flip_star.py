@@ -69,6 +69,13 @@ except Exception:
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 3
 _loss_count = 0
+# 20 Oct 11:29 CT (Matthew): every stop OFF for Pulse bets except two --
+#   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
+#   50% crash: sell when the position is worth half (or less) of what was paid
+# The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
+FLIP_STOPS_ONLY_6040_AND_CRASH = True
+FLIP_6040_HELD = 0.60
+FLIP_CRASH_FRACTION = 0.50
 FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0

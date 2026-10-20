@@ -592,6 +592,13 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
+            _pos0 = state.get(ticker) or {}
+            if _pos0.get("flip_star") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+                # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
+                if not (current_value <= flip_star.FLIP_6040_HELD + 1e-9
+                        or current_value * count <= real_entry_price * count * flip_star.FLIP_CRASH_FRACTION + 1e-9):
+                    _backstop_since.pop(ticker, None)
+                    continue
             _sl = _secs_left_from_market(market)
             if _sl is not None and _sl <= LAST_WINDOW_SECONDS:
                 if current_value > LAST_WINDOW_STOP_HELD + 1e-9:
@@ -793,7 +800,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             current_value = current_position_value(position, result.market_price)
             current_gain = current_value - position["entry_price"]
             position["peak_gain_per_contract"] = max(position.get("peak_gain_per_contract", 0.0), current_gain)
-            flip_dec = flip_star.exit_decision(ticker) if position.get("flip_star") else None
+            flip_dec = (flip_star.exit_decision(ticker) if position.get("flip_star") and not flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH else None)
             if position.get("ride"):
                 # 1-share ride: trailing take-profit / turned / stop, all in ride.py (hard backstop still applies).
                 decision = ExitDecision(*ride.exit_decision(ticker, position, market, result.seconds_remaining))
@@ -829,6 +836,17 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                        peak_gain_per_contract=position["peak_gain_per_contract"])
                 if (position.get("flip_star") and decision.should_exit and not flip_star.FLIP_USE_80_STOP
                         and decision.reason.startswith("stop_loss")):
+                    decision = ExitDecision(False, "")
+            if position.get("flip_star") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+                # Only two stops for Pulse bets: 60/40 (held side <= 60c) and the 50% crash stop. Everything else is ignored.
+                _hv = current_position_value(position, result.market_price)
+                if position.get("force_exit"):
+                    pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
+                    decision = ExitDecision(True, f"stop_6040 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- selling immediately)")
+                elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
+                    decision = ExitDecision(True, f"crash_stop (held side {_hv*100:.0f}c <= 50% of entry ${position['entry_price']:.2f})")
+                else:
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
             if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
