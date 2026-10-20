@@ -717,7 +717,11 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         is_manual = (by_bot is False)
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side,
                           "dry_run": False, "peak_gain_per_contract": 0.0,
-                          "entry_time": time.time(), "manually_adopted": is_manual, "adopted": True}
+                          "entry_time": time.time(), "manually_adopted": is_manual, "adopted": True,
+                          # 20 Oct 00:20 CT: a Pulse bet re-adopted after a restart/redeploy keeps the flip-star rules
+                          # (red <0.2 sigma, 70/30 hard stop, 60/40 last window) instead of falling back to the 80c stop.
+                          # SOL & ETH NO were sold at 79c/76c at 00:10 this way right after a redeploy, then came back.
+                          "flip_star": not is_manual}
         origin = ("MANUAL (no Pulse order in its history) -- 100% stop" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
         print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
@@ -800,9 +804,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         position.pop("stop_since", None)
             else:
                 # Everything else -- and flip-star positions while the board's numbers are unavailable -- uses the normal stop.
+                # (Flip-star positions without board numbers only take the hard 70/30, crash and bad-fill stops, not the 80c one.)
                 decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                        reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
                                        peak_gain_per_contract=position["peak_gain_per_contract"])
+                if (position.get("flip_star") and decision.should_exit and not flip_star.FLIP_USE_80_STOP
+                        and decision.reason.startswith("stop_loss")):
+                    decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
             if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
                 _held_val = current_position_value(position, result.market_price)
