@@ -593,7 +593,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
             _pos0 = state.get(ticker) or {}
-            if _pos0.get("flip_star") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+            if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
                 # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
                 if not (current_value <= flip_star.FLIP_6040_HELD + 1e-9
                         or current_value * count <= real_entry_price * count * flip_star.FLIP_CRASH_FRACTION + 1e-9):
@@ -837,7 +837,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 if (position.get("flip_star") and decision.should_exit and not flip_star.FLIP_USE_80_STOP
                         and decision.reason.startswith("stop_loss")):
                     decision = ExitDecision(False, "")
-            if position.get("flip_star") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+            if not position.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+                # 20 Oct 11:31: applies to manual bets too (BTC manual NO @92c was sold by the 70c stop at 11:27)
                 # Only two stops for Pulse bets: 60/40 (held side <= 60c) and the 50% crash stop. Everything else is ignored.
                 _hv = current_position_value(position, result.market_price)
                 if position.get("force_exit"):
