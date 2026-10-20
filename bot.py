@@ -316,6 +316,7 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
     # both exited the same trade. So before exiting, ask Kalshi what is really held, sell only that, and skip the
     # exit if the position is already gone or points the other way. If the lookup itself fails, exit anyway --
     # protecting against a loss matters more than the (rare) risk of a duplicate.
+    closable = float(count)
     try:
         positions_resp = client.get_positions()
         real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
@@ -340,6 +341,28 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         side=close_side, count=str(count), price=f"{price:.2f}", time_in_force="immediate_or_cancel",
     )
     _exit_sent_at[ticker] = time.time()   # only after Kalshi accepted it, so a failed order can still be retried
+    # Lesson from DOGE 19 Oct 21:14 CT: the immediate-or-cancel exit at 50c didn't fill (the price was falling fast),
+    # and the 30s duplicate guard then blocked every retry -- NO slid from 62c to 36c before the next try went out.
+    # Now: check what actually filled. Nothing filled -> allow a fresh try (at the new price) in 2s. Something filled
+    # -> wait 8s so a lagging position list can't make us sell twice and open the opposite side.
+    try:
+        before = closable
+        time.sleep(0.6)
+        positions_resp = client.get_positions()
+        held_after = 0.0
+        for p in positions_resp.get("market_positions", positions_resp.get("positions", [])):
+            if p.get("ticker") == ticker:
+                held_after = float(p.get("position_fp", p.get("position", 0)) or 0)
+                break
+        left = held_after if close_side == "ask" else -held_after
+        if left >= before - 1e-9:
+            print(f"EXIT: {ticker} -- nothing filled at ${price:.2f}; retrying at the live price in 2s.")
+            _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 2)
+        else:
+            print(f"EXIT: {ticker} -- sold {before - max(left, 0):g} of {before:g}; {max(left, 0):g} left.")
+            _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 8)
+    except Exception as e:
+        print(f"EXIT: couldn't re-check {ticker} after the order ({e}) -- keeping the normal guard.")
     return resp
 
 
