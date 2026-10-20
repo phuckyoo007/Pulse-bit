@@ -283,7 +283,7 @@ EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past
 # 19 Oct 21:33 CT: in the last LAST_WINDOW_SECONDS of a round every other stop is switched off -- 6 of 7 stop-outs on
 # 19 Oct were end-of-round swings on bets that went on to win. The only exit left is an immediate pull-out when the
 # side we hold is at/under LAST_WINDOW_STOP_HELD (60c), i.e. the other side at/over 40c.
-LAST_WINDOW_SECONDS = 30
+LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 LAST_WINDOW_STOP_HELD = 0.60
 
 
