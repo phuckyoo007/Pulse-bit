@@ -278,12 +278,28 @@ _exit_sent_at = {}            # ticker -> when Kalshi last accepted an exit orde
 EXIT_IN_FLIGHT_SECONDS = 30   # a second exit for the same ticker inside this window is a duplicate -- skip it
 
 
+EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
+
+
 def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool):
+    # Lesson from SOL 19 Oct 19:25 CT: the exit was a resting (good-till-canceled) order at 99c. On a thin book during
+    # a spike it walked the book, and whatever didn't fill sat at 99c and filled there later -- the bot logged -$1.63
+    # but Kalshi showed about -54%. Exits are now immediate-or-cancel, limited to 10c past the live quote. Anything
+    # left unfilled is cancelled, re-adopted from Kalshi's position list next loop, and its stops fire again.
     price = 0.01 if close_side == "ask" else 0.99
+    try:
+        mk = client.get_market(ticker).get("market", {})
+        ya, yb = mk.get("yes_ask_dollars"), mk.get("yes_bid_dollars")
+        if close_side == "bid" and ya is not None and float(ya) > 0:
+            price = min(0.99, round(float(ya) + EXIT_MAX_SLIPPAGE, 2))
+        elif close_side == "ask" and yb is not None and float(yb) > 0:
+            price = max(0.01, round(float(yb) - EXIT_MAX_SLIPPAGE, 2))
+    except Exception as e:
+        print(f"EXIT PRICE: couldn't read the live quote for {ticker} ({e}) -- using the wide limit this once.")
     if close_side == "bid":
-        real_side_desc = f"closing to YES @ up to ${price:.2f} (guaranteed-fill price, not the real fill)"
+        real_side_desc = f"closing to YES @ up to ${price:.2f} (immediate-or-cancel, max 10c past the quote)"
     else:
-        real_side_desc = f"closing to NO @ down to ${1 - price:.2f} (raw order: sell YES @ ${price:.2f}, guaranteed-fill price, not the real fill)"
+        real_side_desc = f"closing to NO @ down to ${1 - price:.2f} (raw order: sell YES @ ${price:.2f}, immediate-or-cancel, max 10c past the quote)"
     print(f"{'EXIT DRY-RUN' if dry_run else 'EXITING'} {close_side.upper()} {ticker} x{count} -- {real_side_desc}")
     if dry_run:
         return {"dry_run": True}
@@ -321,7 +337,7 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         print(f"EXIT SAFETY: couldn't verify the real position for {ticker} ({e}) -- exiting anyway.")
     resp = client.create_order(
         ticker=ticker, client_order_id=f"pulse-x-{uuid.uuid4()}",
-        side=close_side, count=str(count), price=f"{price:.2f}",
+        side=close_side, count=str(count), price=f"{price:.2f}", time_in_force="immediate_or_cancel",
     )
     _exit_sent_at[ticker] = time.time()   # only after Kalshi accepted it, so a failed order can still be retried
     return resp
