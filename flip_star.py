@@ -26,7 +26,7 @@ FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the
 FLIP_ENTRY_SIGMA = 1.5            # 19 Oct 18:10: buy from Yellow 1 up (1.5+ sigma); sells the moment it turns red (<0.5)
 FLIP_EXIT_SIGMA = 0.2              # 19 Oct 18:52: sell the moment To flip falls under 0.2 sigma (was 0.5 = start of red)
 FLIP_EXIT_CONFIRM_SECONDS = 0      # 19 Oct: sell the moment To flip turns red (was 10s wait)
-FLIP_EXIT_MAX_WIN = 1.01           # 19 Oct: no win-% check on red -- red alone sells (was 0.90)
+FLIP_EXIT_MAX_WIN = 0.70           # 19 Oct 19:35: at <0.2 sigma sell only if win % is also under 70% (SOL 19:25 was sold at 73% and won)
 FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
 FLIP_STOP_CONFIRM_SECONDS = 5      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False            # 19 Oct: 80% stop off for flip bets (3 of 4 stop-outs today were winners); 70% hard stop, 50% crash stop and To-flip-red exit stay on
