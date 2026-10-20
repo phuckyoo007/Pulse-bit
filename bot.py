@@ -352,6 +352,11 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
             count = closable
     except Exception as e:
         print(f"EXIT SAFETY: couldn't verify the real position for {ticker} ({e}) -- exiting anyway.")
+    _bal_before = None
+    try:
+        _bal_before = float(client.get_balance().get("balance")) / 100
+    except Exception:
+        pass
     resp = client.create_order(
         ticker=ticker, client_order_id=f"pulse-x-{uuid.uuid4()}",
         side=close_side, count=str(count), price=f"{price:.2f}", time_in_force="immediate_or_cancel",
@@ -375,8 +380,22 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
             print(f"EXIT: {ticker} -- nothing filled at ${price:.2f}; retrying at the live price in 2s.")
             _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 2)
         else:
-            print(f"EXIT: {ticker} -- sold {before - max(left, 0):g} of {before:g}; {max(left, 0):g} left.")
+            sold = before - max(left, 0)
+            print(f"EXIT: {ticker} -- sold {sold:g} of {before:g}; {max(left, 0):g} left.")
             _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 8)
+            # 20 Oct: record what the sale REALLY paid (cash in / shares sold), not the screen price when the stop fired.
+            # The old logs used the quote at the moment of the decision, which hid how badly fast exits really filled.
+            try:
+                if _bal_before is not None and sold > 0:
+                    _bal_after = float(client.get_balance().get("balance")) / 100
+                    real_px = (_bal_after - _bal_before) / sold
+                    if 0.0 <= real_px <= 1.0:
+                        print(f"EXIT REAL FILL: {ticker} -- {sold:g} sold for ${_bal_after - _bal_before:.2f} total "
+                              f"(${real_px:.2f}/share after fees).")
+                        if isinstance(resp, dict):
+                            resp["_real_exit_px"] = real_px
+            except Exception as e:
+                print(f"EXIT REAL FILL: couldn't read the balance after selling {ticker} ({e}).")
     except Exception as e:
         print(f"EXIT: couldn't re-check {ticker} after the order ({e}) -- keeping the normal guard.")
     return resp
@@ -846,6 +865,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 print(f"  (real position -- EXIT_DRY_RUN means no real close order was sent)")
                 continue
             exit_value = current_position_value_for_log(position, result.market_price)
+            if isinstance(exit_resp, dict) and exit_resp.get("_real_exit_px") is not None:
+                exit_value = exit_resp["_real_exit_px"]   # what Kalshi really paid, not the screen price
             pnl = (exit_value - position["entry_price"]) * position["count"]
             settlements.append({
                 "ticker": ticker, "title": result.title, "result": "early_exit",
