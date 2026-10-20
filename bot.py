@@ -280,6 +280,22 @@ EXIT_IN_FLIGHT_SECONDS = 30   # a second exit for the same ticker inside this wi
 
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
 
+# 19 Oct 21:33 CT: in the last LAST_WINDOW_SECONDS of a round every other stop is switched off -- 6 of 7 stop-outs on
+# 19 Oct were end-of-round swings on bets that went on to win. The only exit left is an immediate pull-out when the
+# side we hold is at/under LAST_WINDOW_STOP_HELD (60c), i.e. the other side at/over 40c.
+LAST_WINDOW_SECONDS = 30
+LAST_WINDOW_STOP_HELD = 0.60
+
+
+def _secs_left_from_market(market: dict):
+    ct = market.get("close_time") or market.get("expiration_time")
+    if not ct:
+        return None
+    try:
+        return (datetime.fromisoformat(str(ct).replace("Z", "+00:00")) - datetime.now(timezone.utc)).total_seconds()
+    except Exception:
+        return None
+
 
 def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool):
     # Lesson from SOL 19 Oct 19:25 CT: the exit was a resting (good-till-canceled) order at 99c. On a thin book during
@@ -557,6 +573,11 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
+            _sl = _secs_left_from_market(market)
+            if _sl is not None and _sl <= LAST_WINDOW_SECONDS:
+                if current_value > LAST_WINDOW_STOP_HELD + 1e-9:
+                    _backstop_since.pop(ticker, None)
+                    continue   # last 30s: only the 60/40 pull-out applies (handled in the main exit loop)
             real_bet_dollars = real_entry_price * count
             real_current_dollars = current_value * count
             threshold_dollars = real_bet_dollars * HARD_BACKSTOP_FRACTION
@@ -782,6 +803,17 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 decision = check_exit(position, result.market_price, getattr(result, "model_prob", 0.5), result.seconds_remaining,
                                        reversion_z=reversion_signal.z_score, partial_profit_fraction=None,
                                        peak_gain_per_contract=position["peak_gain_per_contract"])
+            _secs = getattr(result, "seconds_remaining", None)
+            if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
+                _held_val = current_position_value(position, result.market_price)
+                if _held_val <= LAST_WINDOW_STOP_HELD + 1e-9:
+                    decision = ExitDecision(True, f"last_window_stop ({_held_val*100:.0f}c held side <= {LAST_WINDOW_STOP_HELD*100:.0f}c "
+                                                  f"with {_secs:.0f}s left -- selling immediately)")
+                else:
+                    if decision.should_exit:
+                        print(f"LAST {LAST_WINDOW_SECONDS}s: {ticker} -- ignoring '{decision.reason[:40]}' (held side "
+                              f"{_held_val*100:.0f}c, above the {LAST_WINDOW_STOP_HELD*100:.0f}c line) -- holding to settle.")
+                    decision = ExitDecision(False, "")
             if not decision.should_exit:
                 continue
             position_is_real = position.get("dry_run") is False
