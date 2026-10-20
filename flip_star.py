@@ -23,7 +23,7 @@ FLIP_SHARES = 10                    # shares per flip-star entry
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 1.5            # 19 Oct 18:10: buy from Yellow 1 up (1.5+ sigma); sells the moment it turns red (<0.5)
+FLIP_ENTRY_SIGMA = 2.0            # 20 Oct 10:17: back to green only (2.0+ sigma) -- all 3 losses in the 10:00 CT round were Yellow 1 (1.5-1.7) entries
 FLIP_EXIT_SIGMA = 0.2              # 19 Oct 18:52: sell the moment To flip falls under 0.2 sigma (was 0.5 = start of red)
 FLIP_EXIT_CONFIRM_SECONDS = 0      # 19 Oct: sell the moment To flip turns red (was 10s wait)
 FLIP_EXIT_MAX_WIN = 0.70           # 19 Oct 19:35: at <0.2 sigma sell only if win % is also under 70% (SOL 19:25 was sold at 73% and won)
@@ -34,7 +34,7 @@ FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 19 Oct 18:08: bid 93-98c (red star)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 19 Oct 18:08: bid 93-98c (Y3 and up)
 FLIP_NONSTAR_MIN_PRICE = 0.93      # 19 Oct 18:08: 93c or higher
-FLIP_NONSTAR_MIN_WIN = 0.0         # 19 Oct 18:08: no win-% requirement for non-star entries (price range 93-98c is the filter)
+FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 10:17: green entries need 95%+ win again
 FLIP_STAR_MIN_PRICE = 0.93         # 19 Oct 18:08: red star 93c or higher; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
