@@ -23,7 +23,7 @@ FLIP_SHARES = 10                    # shares per flip-star entry
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 1.0            # 20 Oct 11:49 CT: buy from Yellow 2 up (1.0+ sigma), per Matthew
+FLIP_ENTRY_SIGMA = 0.5            # 20 Oct 11:50 CT: buy from Yellow 3 up (0.5+ sigma), per Matthew
 FLIP_EXIT_SIGMA = 0.2              # 19 Oct 18:52: sell the moment To flip falls under 0.2 sigma (was 0.5 = start of red)
 FLIP_EXIT_CONFIRM_SECONDS = 0      # 19 Oct: sell the moment To flip turns red (was 10s wait)
 FLIP_EXIT_MAX_WIN = 0.70           # 19 Oct 19:35: at <0.2 sigma sell only if win % is also under 70% (SOL 19:25 was sold at 73% and won)
