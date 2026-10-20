@@ -75,7 +75,7 @@ _loss_count = 0
 #   50% crash: sell when the position is worth half (or less) of what was paid
 # The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
 FLIP_STOPS_ONLY_6040_AND_CRASH = True
-FLIP_6040_HELD = 0.60
+FLIP_6040_HELD = 0.70             # 20 Oct 13:46 CT: 70/30 immediate pull-out back on (held side <= 70c) before the last 45s; last 45s stays 60/40
 FLIP_CRASH_FRACTION = 0.50
 FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
 FLIP_HALTED = FLIP_PAUSED
