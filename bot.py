@@ -278,6 +278,7 @@ _exit_sent_at = {}            # ticker -> when Kalshi last accepted an exit orde
 EXIT_IN_FLIGHT_SECONDS = 30   # a second exit for the same ticker inside this window is a duplicate -- skip it
 
 
+_exit_misses = {}            # ticker -> unfilled exit tries in a row (widens the limit each time)
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
 
 # 19 Oct 21:33 CT: in the last LAST_WINDOW_SECONDS of a round every other stop is switched off -- 6 of 7 stop-outs on
@@ -306,10 +307,14 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
     try:
         mk = client.get_market(ticker).get("market", {})
         ya, yb = mk.get("yes_ask_dollars"), mk.get("yes_bid_dollars")
+        # 21 Oct (ETH 03:43 CT): three tries at "quote + 10c" all missed while the book collapsed (54c -> 10c in 12s).
+        # Each unfilled try now reaches further: 10c, then 25c, then any price.
+        _tries = _exit_misses.get(ticker, 0)
+        _slip = EXIT_MAX_SLIPPAGE if _tries == 0 else (0.25 if _tries == 1 else 1.0)
         if close_side == "bid" and ya is not None and float(ya) > 0:
-            price = min(0.99, round(float(ya) + EXIT_MAX_SLIPPAGE, 2))
+            price = min(0.99, round(float(ya) + _slip, 2))
         elif close_side == "ask" and yb is not None and float(yb) > 0:
-            price = max(0.01, round(float(yb) - EXIT_MAX_SLIPPAGE, 2))
+            price = max(0.01, round(float(yb) - _slip, 2))
     except Exception as e:
         print(f"EXIT PRICE: couldn't read the live quote for {ticker} ({e}) -- using the wide limit this once.")
     if close_side == "bid":
@@ -377,10 +382,12 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
                 break
         left = held_after if close_side == "ask" else -held_after
         if left >= before - 1e-9:
-            print(f"EXIT: {ticker} -- nothing filled at ${price:.2f}; retrying at the live price in 2s.")
-            _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 2)
+            _exit_misses[ticker] = _exit_misses.get(ticker, 0) + 1
+            print(f"EXIT: {ticker} -- nothing filled at ${price:.2f}; retrying in 1s with a wider limit (try {_exit_misses[ticker] + 1}).")
+            _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 1)
         else:
             sold = before - max(left, 0)
+            _exit_misses.pop(ticker, None)
             print(f"EXIT: {ticker} -- sold {sold:g} of {before:g}; {max(left, 0):g} left.")
             _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 8)
             # 20 Oct: record what the sale REALLY paid (cash in / shares sold), not the screen price when the stop fired.
