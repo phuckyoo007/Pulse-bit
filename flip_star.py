@@ -20,6 +20,10 @@ import requests
 
 FLIP_ENABLED = True
 FLIP_SHARES = 15                    # shares per flip-star entry
+# 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
+# A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
+FLIP_MAX_BET_FRACTION = 0.20      # one bet costs at most 20% of the cash balance (shares cut to fit; FLIP_SHARES is the ceiling)
+FLIP_MAX_OPEN = 2                 # at most 2 Pulse bets open at once (coins often spike together)
 FLIP_MAX_SECONDS_LEFT = 360        # only the last 6 minutes of the window (was 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
@@ -414,10 +418,21 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                                  "flip_star": True}
             continue
         try:
-            ensure_shard_funds(client, ticker, limit_side_price * FLIP_SHARES)
+            _open = sum(1 for _t, _p in list(state.items()) if isinstance(_p, dict) and _p.get("flip_star"))
+            if _open >= FLIP_MAX_OPEN:
+                print(f"[FLIP] {ticker}: skipping -- already {_open} Pulse bets open (max {FLIP_MAX_OPEN}).")
+                continue
+            _cash = float(client.get_balance().get("balance", 0)) / 100
+            n_sh = min(FLIP_SHARES, int((FLIP_MAX_BET_FRACTION * _cash) // max(limit_side_price, 0.01)))
+            if n_sh < 1:
+                print(f"[FLIP] {ticker}: skipping -- 20% of the ${_cash:.2f} balance is less than one share at ${limit_side_price:.2f}.")
+                continue
+            if n_sh < FLIP_SHARES:
+                print(f"[FLIP] {ticker}: sizing down to {n_sh} shares (20% of ${_cash:.2f} balance).")
+            ensure_shard_funds(client, ticker, limit_side_price * n_sh)
             yes_price = limit_side_price if side == "bid" else round(1 - limit_side_price, 2)
             client.create_order(ticker=ticker, client_order_id=f"pulse-flip-{uuid.uuid4()}", side=side,
-                                count=str(FLIP_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+                                count=str(n_sh), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
         except Exception as e:
             print(f"[FLIP] {ticker}: entry order failed ({e}).")
             if "market_closed" in str(e) or "market_not_found" in str(e):
