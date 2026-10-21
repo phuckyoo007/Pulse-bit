@@ -71,6 +71,19 @@ except Exception:
     pass
 
 
+# WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
+# 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
+FLIP_WIN_SAFE_MIN = 0.98
+_WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
+try:
+    if os.path.exists(_WIN_BREAKER_FILE):
+        FLIP_MIN_WIN_ALL = max(FLIP_MIN_WIN_ALL, FLIP_WIN_SAFE_MIN)
+        FLIP_NONSTAR_MIN_WIN = max(FLIP_NONSTAR_MIN_WIN, FLIP_WIN_SAFE_MIN)
+        print(f"[FLIP] win-% breaker already tripped earlier -- minimum win stays at {FLIP_MIN_WIN_ALL*100:.0f}%.")
+except Exception:
+    pass
+
+
 # LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 3
@@ -90,7 +103,7 @@ _halt_note_at = 0.0
 def record_result(position, pnl, how=""):
     """Called by bot.py whenever a position closes. Counts losses for the kill switch and trips the floor breaker
     on a losing flip-star bet bought under 93c."""
-    global FLIP_STAR_MIN_PRICE, _loss_count, FLIP_HALTED
+    global FLIP_STAR_MIN_PRICE, _loss_count, FLIP_HALTED, FLIP_MIN_WIN_ALL, FLIP_NONSTAR_MIN_WIN
     try:
         if not position or not position.get("flip_star"):
             return
@@ -102,6 +115,17 @@ def record_result(position, pnl, how=""):
                 FLIP_HALTED = True
                 print(f"[FLIP] KILL SWITCH: {_loss_count} losing bets since the last restart -- NO NEW BETS until Pulse "
                       f"is restarted in Railway. Open bets are still protected by their stops.")
+        _ew = position.get("entry_win")
+        if (pnl < -1e-9 and _ew is not None and float(_ew) < FLIP_WIN_SAFE_MIN - 0.005
+                and FLIP_MIN_WIN_ALL < FLIP_WIN_SAFE_MIN):
+            FLIP_MIN_WIN_ALL = FLIP_WIN_SAFE_MIN
+            FLIP_NONSTAR_MIN_WIN = max(FLIP_NONSTAR_MIN_WIN, FLIP_WIN_SAFE_MIN)
+            print(f"[FLIP] WIN-% BREAKER TRIPPED: a bet bought at {float(_ew)*100:.0f}% win lost ${-pnl:.2f} ({how}) -- "
+                  f"minimum win back to {FLIP_WIN_SAFE_MIN*100:.0f}%.")
+            try:
+                open(_WIN_BREAKER_FILE, "w").write('{"tripped": true}')
+            except Exception:
+                pass
         if pnl < -1e-9 and entry < FLIP_STAR_SAFE_MIN_PRICE - 0.005 and FLIP_STAR_MIN_PRICE < FLIP_STAR_SAFE_MIN_PRICE:
             FLIP_STAR_MIN_PRICE = FLIP_STAR_SAFE_MIN_PRICE
             print(f"[FLIP] FLOOR CIRCUIT BREAKER TRIPPED: a bet bought at ${entry:.2f} lost ${-pnl:.2f} ({how}) -- "
@@ -284,7 +308,7 @@ def _record_fill(client, state, state_lock, log_trade, ticker, n, side, count, e
     with state_lock:
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                          "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                         "flip_star": True, "force_exit": False}
+                         "flip_star": True, "force_exit": False, "entry_win": n.get("p")}
     print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} ({how}) -- holding until To flip turns red.")
     try:
         from types import SimpleNamespace
@@ -461,7 +485,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                             "flip_star": True, "force_exit": below_floor}
+                             "flip_star": True, "force_exit": below_floor, "entry_win": n.get("p")}
         if below_floor:
             print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- UNDER the {floor*100:.0f}c floor "
                   f"(price dropped between the check and the fill) -- selling right away.")
