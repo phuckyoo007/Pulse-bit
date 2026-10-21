@@ -425,10 +425,10 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             _cash = float(client.get_balance().get("balance", 0)) / 100
             n_sh = min(FLIP_SHARES, int((FLIP_MAX_BET_FRACTION * _cash) // max(limit_side_price, 0.01)))
             if n_sh < 1:
-                print(f"[FLIP] {ticker}: skipping -- 20% of the ${_cash:.2f} balance is less than one share at ${limit_side_price:.2f}.")
+                print(f"[FLIP] {ticker}: skipping -- {FLIP_MAX_BET_FRACTION*100:.0f}% of the ${_cash:.2f} cash is less than one share at ${limit_side_price:.2f}.")
                 continue
             if n_sh < FLIP_SHARES:
-                print(f"[FLIP] {ticker}: sizing down to {n_sh} shares (20% of ${_cash:.2f} balance).")
+                print(f"[FLIP] {ticker}: sizing down to {n_sh} shares ({FLIP_MAX_BET_FRACTION*100:.0f}% of ${_cash:.2f} cash).")
             ensure_shard_funds(client, ticker, limit_side_price * n_sh)
             yes_price = limit_side_price if side == "bid" else round(1 - limit_side_price, 2)
             client.create_order(ticker=ticker, client_order_id=f"pulse-flip-{uuid.uuid4()}", side=side,
