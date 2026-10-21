@@ -19,7 +19,7 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 15                    # shares per flip-star entry
+FLIP_SHARES = 10                    # shares per flip-star entry (ceiling; 20%-of-balance cap can size down)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.20      # one bet costs at most 20% of the cash balance (shares cut to fit; FLIP_SHARES is the ceiling)

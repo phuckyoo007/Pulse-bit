@@ -284,7 +284,7 @@ EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past
 # 19 Oct were end-of-round swings on bets that went on to win. The only exit left is an immediate pull-out when the
 # side we hold is at/under LAST_WINDOW_STOP_HELD (60c), i.e. the other side at/over 40c.
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
-LAST_WINDOW_STOP_HELD = 0.60
+LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES and NO alike (was 60 in the last 45s)
 
 
 def _secs_left_from_market(market: dict):
