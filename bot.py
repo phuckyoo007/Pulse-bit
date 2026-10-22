@@ -287,6 +287,16 @@ EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past
 PROFIT_LOCK_ARM_DOLLARS = 0.25   # 21 Oct: once up this much, a Pulse bet is sold if it falls back to break-even
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES and NO alike (was 60 in the last 45s)
+# 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
+# one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
+# the timer resets.
+LINE_STOP_CONFIRM_SECONDS = 4
+
+
+def _line_held_seconds(position: dict) -> float:
+    """Seconds the held side has been at/under the stop line (starts the timer on first touch)."""
+    since = position.setdefault("line_since", time.time())
+    return time.time() - since
 
 
 def _secs_left_from_market(market: dict):
@@ -855,19 +865,37 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _hv = current_position_value(position, result.market_price)
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
-                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
-                    decision = ExitDecision(True, f"stop_6040 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- selling immediately)")
                 elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
+                    # 50% crash stop stays INSTANT (checked first so a crash never waits on the 70/30 timer).
                     decision = ExitDecision(True, f"crash_stop (held side {_hv*100:.0f}c <= 50% of entry ${position['entry_price']:.2f})")
+                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
+                    _held_for = _line_held_seconds(position)
+                    if _held_for >= LINE_STOP_CONFIRM_SECONDS:
+                        decision = ExitDecision(True, f"stop_6040 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c "
+                                                      f"for {_held_for:.1f}s -- selling)")
+                    else:
+                        print(f"STOP LINE: {ticker} held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c for {_held_for:.1f}s -- "
+                              f"waiting {LINE_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
+                        decision = ExitDecision(False, "")
                 else:
+                    position.pop("line_since", None)
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
             if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
                 _held_val = current_position_value(position, result.market_price)
-                if _held_val <= LAST_WINDOW_STOP_HELD + 1e-9:
-                    decision = ExitDecision(True, f"last_window_stop ({_held_val*100:.0f}c held side <= {LAST_WINDOW_STOP_HELD*100:.0f}c "
-                                                  f"with {_secs:.0f}s left -- selling immediately)")
+                if _held_val <= position["entry_price"] * HARD_BACKSTOP_CRASH_FRACTION + 1e-9:
+                    decision = ExitDecision(True, f"crash_stop ({_held_val*100:.0f}c held side <= 50% of entry with {_secs:.0f}s left -- instant)")
+                elif _held_val <= LAST_WINDOW_STOP_HELD + 1e-9:
+                    _held_for = _line_held_seconds(position)
+                    if _held_for >= LINE_STOP_CONFIRM_SECONDS:
+                        decision = ExitDecision(True, f"last_window_stop ({_held_val*100:.0f}c held side <= {LAST_WINDOW_STOP_HELD*100:.0f}c "
+                                                      f"for {_held_for:.1f}s with {_secs:.0f}s left -- selling)")
+                    else:
+                        print(f"STOP LINE (last {LAST_WINDOW_SECONDS}s): {ticker} held side {_held_val*100:.0f}c for {_held_for:.1f}s -- "
+                              f"waiting {LINE_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
+                        decision = ExitDecision(False, "")
                 else:
+                    position.pop("line_since", None)
                     if decision.should_exit:
                         print(f"LAST {LAST_WINDOW_SECONDS}s: {ticker} -- ignoring '{decision.reason[:40]}' (held side "
                               f"{_held_val*100:.0f}c, above the {LAST_WINDOW_STOP_HELD*100:.0f}c line) -- holding to settle.")
