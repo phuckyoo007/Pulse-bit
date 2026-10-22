@@ -384,11 +384,15 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         left = held_after if close_side == "ask" else -held_after
         if left >= before - 1e-9:
             _exit_misses[ticker] = _exit_misses.get(ticker, 0) + 1
+            if isinstance(resp, dict):
+                resp["_sold"] = 0.0
             print(f"EXIT: {ticker} -- nothing filled at ${price:.2f}; retrying in 1s with a wider limit (try {_exit_misses[ticker] + 1}).")
             _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 1)
         else:
             sold = before - max(left, 0)
             _exit_misses.pop(ticker, None)
+            if isinstance(resp, dict):
+                resp["_sold"] = sold
             print(f"EXIT: {ticker} -- sold {sold:g} of {before:g}; {max(left, 0):g} left.")
             _exit_sent_at[ticker] = time.time() - (EXIT_IN_FLIGHT_SECONDS - 8)
             # 20 Oct: record what the sale REALLY paid (cash in / shares sold), not the screen price when the stop fired.
@@ -887,6 +891,11 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # Position was already closed (e.g. by another copy of the bot) -- stop tracking it, record nothing.
                     del state[ticker]
                     excluded_tickers.add(ticker)
+                    continue
+                # 21 Oct: an exit that filled NOTHING is not an exit. It used to be logged as a loss each try -- the ETH
+                # sell at 03:43 CT was counted 3 times and tripped the 3-loss kill switch after 2 real losses. Keep the
+                # position tracked and let the next loop retry with a wider limit.
+                if isinstance(exit_resp, dict) and exit_resp.get("_sold") is not None and exit_resp["_sold"] <= 1e-9:
                     continue
             except Exception as e:
                 if "market_closed" in str(e) or "market_not_found" in str(e):
