@@ -22,7 +22,7 @@ STOP_LOSS_ENABLED = True
 # Stop levels. LOSS_PCT is the max loss; EXIT_FRACTION is the same thing
 # expressed as "exit when value <= this share of what was paid".
 STOP_LOSS_PCT = 0.20                               # was 0.14 (86%) until 18 Oct
-STOP_EXIT_FRACTION = 1.0 - STOP_LOSS_PCT          # 0.80
+STOP_EXIT_FRACTION = 0.82                          # 0.80
 
 # Separate knobs per side, both default to the same 80% exit.
 YES_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION       # YES / bid positions
