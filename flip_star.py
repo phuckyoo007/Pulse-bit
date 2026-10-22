@@ -48,7 +48,7 @@ FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only
 FLIP_MAX_SIDE_DROP_1M = 0.02       # skip if our side's Kalshi price fell 2c+ in the last minute
 FLIP_MAX_SPOT_AGAINST_1M = 0.05    # 19 Oct 18:07: loosened from 0.02% -- tiny wiggles were blocking most entries; still blocks real moves (0.1%+)
 FLIP_KNIFE_GUARD = False           # 20 Oct 12:00 CT: falling-knife guard OFF (temporary, per Matthew) -- set True to turn it back on
-FLIP_RED_STAR_ONLY = False         # 18 Oct: green entries back on (red star + green at 95%+)
+FLIP_RED_STAR_ONLY = True         # 18 Oct: green entries back on (red star + green at 95%+)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
 # ends in a loss (early exit, emergency backstop or settlement), the floor goes straight back to 93c and stays
