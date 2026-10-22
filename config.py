@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(encoding="utf-8-sig")   # tolerate a .env saved by Windows Notepad with a BOM
 
 
 class Config:
