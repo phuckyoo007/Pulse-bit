@@ -25,7 +25,7 @@ FLIP_SHARES = 15                    # shares per flip-star entry (ceiling; 20%-o
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 9                 # at most 2 Pulse bets open at once (coins often spike together)
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
-FLIP_MIN_SECONDS_LEFT = 02         # too close to the bell to get a clean fill
+FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA = 2.0            # 20 Oct 13:47 CT: green and red stars only (2.0+ sigma), no yellow
 FLIP_EXIT_SIGMA = 0.35              # 20 Oct 15:32 CT: sell the moment To flip turns red (<0.5 sigma); Yellow 3 = get ready
