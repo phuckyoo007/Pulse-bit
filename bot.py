@@ -529,7 +529,11 @@ def ensure_shard_funds(client: KalshiClient, ticker: str, needed_dollars: float)
         _floor_check_cache[0] = None
         time.sleep(1.0)
     except Exception as e:
-        print(f"  SHARD FUNDS: transfer check failed ({e}) -- placing the order anyway.")
+        # Used to say "placing the order anyway" -- but with the shard under-funded that just sent an order Kalshi
+        # rejects with insufficient_balance (and burned one of the ticker's attempts). Fail closed: callers skip
+        # this pass and try again on the next scan.
+        print(f"  SHARD FUNDS: couldn't confirm/move funds ({e}) -- NOT placing this order.")
+        raise
 
 
 def decide_entry_side_and_price(seconds_remaining: float, market_price: float):
@@ -1583,7 +1587,10 @@ def run():
                 if flip_star.FLIP_HALTED:
                     print(f"  KILL SWITCH: {result.ticker} -- Pulse is halted after 3 losses, not entering (restart to resume).")
                     continue
-                ensure_shard_funds(client, result.ticker, this_trade_cost)
+                try:
+                    ensure_shard_funds(client, result.ticker, this_trade_cost)
+                except Exception:
+                    continue   # couldn't confirm the shard has the cash -- skip this pass, retry next scan
             for attempt in range(1, ORDER_RETRY_ATTEMPTS + 1):
                 try:
                     if side == "bid":

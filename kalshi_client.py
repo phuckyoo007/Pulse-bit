@@ -94,9 +94,31 @@ class KalshiClient:
             params["tags"] = tags
         return self._request("GET", "/series", params=params)
 
+    def get_balance_cached(self, max_age: float = 3.0):
+        """GET /portfolio/balance, cached for a few seconds and retried on 429 (rate limit).
+        Entry paths (flip sizing + shard top-up) used to call the raw endpoint twice per attempt and got
+        429s, which made the shard top-up silently skip and the order bounce with insufficient_balance.
+        The cache is cleared after every order and every shard transfer so it never hides a real change."""
+        cached = getattr(self, "_bal_cache", None)
+        if cached and (time.time() - cached[1]) < max_age:
+            return cached[0]
+        last_err = None
+        for delay in (0.0, 0.4, 1.0):
+            if delay:
+                time.sleep(delay)
+            try:
+                resp = self.get_balance()
+                self._bal_cache = (resp, time.time())
+                return resp
+            except Exception as e:
+                last_err = e
+                if "429 error" not in str(e):
+                    break
+        raise last_err
+
     def get_balance_by_shard(self):
         """Returns {exchange_index: dollars} from /portfolio/balance's balance_breakdown."""
-        resp = self.get_balance()
+        resp = self.get_balance_cached()
         out = {}
         for row in resp.get("balance_breakdown", []) or []:
             out[int(row["exchange_index"])] = float(row["balance"])
@@ -107,7 +129,10 @@ class KalshiClient:
         body = {"source": "event_contract", "destination": "event_contract",
                 "source_exchange_shard": int(source_shard), "destination_exchange_shard": int(dest_shard),
                 "amount": int(round(dollars * 10000))}
-        return self._request("POST", "/portfolio/intra_exchange_instance_transfer", json_body=body)
+        try:
+            return self._request("POST", "/portfolio/intra_exchange_instance_transfer", json_body=body)
+        finally:
+            self._bal_cache = None
 
     def get_market(self, ticker: str):
         return self._request("GET", f"/markets/{ticker}")
@@ -147,7 +172,10 @@ class KalshiClient:
             "self_trade_prevention_type": "taker_at_cross",
         }
         print(f"  [RAW ORDER BODY]: {body}")
-        return self._request("POST", "/portfolio/events/orders", json_body=body)
+        try:
+            return self._request("POST", "/portfolio/events/orders", json_body=body)
+        finally:
+            self._bal_cache = None   # a fill/reservation just changed the balance -- don't serve a stale one
 
     def cancel_order(self, order_id: str):
         return self._request("DELETE", f"/portfolio/events/orders/{order_id}")

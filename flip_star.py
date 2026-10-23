@@ -446,7 +446,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if _open >= FLIP_MAX_OPEN:
                 print(f"[FLIP] {ticker}: skipping -- already {_open} Pulse bets open (max {FLIP_MAX_OPEN}).")
                 continue
-            _cash = float(client.get_balance().get("balance", 0)) / 100
+            _cash = float(client.get_balance_cached().get("balance", 0)) / 100
             n_sh = min(FLIP_SHARES, int((FLIP_MAX_BET_FRACTION * _cash) // max(limit_side_price, 0.01)))
             if n_sh < 1:
                 print(f"[FLIP] {ticker}: skipping -- {FLIP_MAX_BET_FRACTION*100:.0f}% of the ${_cash:.2f} cash is less than one share at ${limit_side_price:.2f}.")
@@ -461,6 +461,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             print(f"[FLIP] {ticker}: entry order failed ({e}).")
             if "market_closed" in str(e) or "market_not_found" in str(e):
                 excluded_tickers.add(ticker)
+            if "too_many_requests" in str(e):
+                _attempts[ticker] = max(0, _attempts.get(ticker, 1) - 1)   # Kalshi rate limit, not a real try -- don't burn the 3-per-market budget
             continue
         # Read what actually filled (immediate-or-cancel: whatever didn't fill right away is cancelled).
         filled, exposure = 0.0, 0.0
