@@ -4,7 +4,7 @@ FLIP-STAR strategy -- runs ALONGSIDE Pulse's other entry rules.
 Uses the exact same numbers the Crypto Edge Board dashboard shows (it reads the board's /api/state), so what the
 bot does matches what you see on the top coin boxes:
 
-  ENTRY (15 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
+  ENTRY (9 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
       the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.5-2 sigma).
   HOLD through Yellow 1/2/3 (0.5-2 sigma); Yellow 3 (0.5-1) is the dashboard's "get ready to sell" warning.
   EXIT as soon as "To flip" turns RED (under 0.5 sigma).  [zones moved down 18 Oct: red was under 1]
@@ -19,11 +19,11 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 15                    # shares per flip-star entry (ceiling; 20%-of-balance cap can size down)
+FLIP_SHARES = 9                    # shares per flip-star entry (ceiling; 20%-of-balance cap can size down)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
-FLIP_MAX_OPEN = 4                 # at most 2 Pulse bets open at once (coins often spike together)
+FLIP_MAX_OPEN = 9                 # at most 2 Pulse bets open at once (coins often spike together)
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
 FLIP_MIN_SECONDS_LEFT = 30         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
