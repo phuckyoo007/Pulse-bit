@@ -38,8 +38,8 @@ FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # 20 Oct 15:45 CT: 97-99c only (94-96c bets lost money over 5 days)
 FLIP_NONSTAR_MAX_PRICE = 0.99      # 20 Oct 15:45 CT: 97-99c
 FLIP_NONSTAR_MIN_PRICE = 0.94      # 20 Oct 21:06 CT: 94-99c (per Matthew)
-FLIP_NONSTAR_MIN_WIN = 0.97        # 20 Oct 21:09 CT: 97%+ win
-FLIP_MIN_WIN_ALL = 0.97            # 20 Oct 21:09 CT: 97%+ win (per Matthew; was 98)
+FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 21:09 CT: 97%+ win
+FLIP_MIN_WIN_ALL = 0.95            # 20 Oct 21:09 CT: 97%+ win (per Matthew; was 98)
 FLIP_STAR_MIN_PRICE = 0.94         # 20 Oct 21:06 CT: 94-99c (per Matthew); breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
@@ -86,7 +86,7 @@ except Exception:
 
 # LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
-FLIP_MAX_LOSSES_BEFORE_HALT = 3
+FLIP_MAX_LOSSES_BEFORE_HALT = 2
 _loss_count = 0
 # 20 Oct 11:29 CT (Matthew): every stop OFF for Pulse bets except two --
 #   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
