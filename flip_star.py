@@ -73,7 +73,7 @@ except Exception:
 
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.98
+FLIP_WIN_SAFE_MIN = 0.95
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
