@@ -42,7 +42,7 @@ FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 21:09 CT: 97%+ win
 FLIP_MIN_WIN_ALL = 0.95            # 20 Oct 21:09 CT: 97%+ win (per Matthew; was 98)
 FLIP_STAR_MIN_PRICE = 0.94         # 20 Oct 21:06 CT: 94-99c (per Matthew); breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
-FLIP_RESTING_BIDS = True          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
+FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
 # FALLING-KNIFE GUARD (18 Oct): never buy while the coin or our side's price is moving against us.
 FLIP_MAX_SIDE_DROP_1M = 0.02       # skip if our side's Kalshi price fell 2c+ in the last minute
