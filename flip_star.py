@@ -86,7 +86,7 @@ except Exception:
 
 # LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
-FLIP_MAX_LOSSES_BEFORE_HALT = 2
+FLIP_MAX_LOSSES_BEFORE_HALT = 10
 _loss_count = 0
 # 20 Oct 11:29 CT (Matthew): every stop OFF for Pulse bets except two --
 #   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
