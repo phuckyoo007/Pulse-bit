@@ -27,9 +27,9 @@ FLIP_SHARES = 10                   # 24 Oct 12:59 CT (per Matthew): was 15 (20 b
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 9                 # at most 2 Pulse bets open at once (coins often spike together)
-FLIP_MAX_SECONDS_LEFT = 320        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
+FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
-FLIP_NONSTAR_MIN_SECONDS_LEFT = 30   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
+FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA = 1.8            # 20 Oct 13:47 CT: green and red stars only (2.0+ sigma), no yellow
 FLIP_EXIT_SIGMA = 0.35              # 20 Oct 15:32 CT: sell the moment To flip turns red (<0.5 sigma); Yellow 3 = get ready
 FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red
