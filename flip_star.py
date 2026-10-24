@@ -43,7 +43,7 @@ FLIP_NONSTAR_MAX_PRICE = 0.99      # 20 Oct 15:45 CT: 97-99c
 FLIP_NONSTAR_MIN_PRICE = 0.96      # 20 Oct 21:06 CT: 94-99c (per Matthew)
 FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 21:09 CT: 97%+ win
 FLIP_MIN_WIN_ALL = 0.95            # 20 Oct 21:09 CT: 97%+ win (per Matthew; was 98)
-FLIP_STAR_MIN_PRICE = 0.94         # 20 Oct 21:06 CT: 94-99c (per Matthew); breaker can only raise it
+FLIP_STAR_MIN_PRICE = 0.96         # 20 Oct 21:06 CT: 96-99c (per Matthew); breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -473,6 +473,25 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             if n_sh < FLIP_SHARES:
                 print(f"[FLIP] {ticker}: sizing down to {n_sh} shares ({FLIP_MAX_BET_FRACTION*100:.0f}% of ${_cash:.2f} cash).")
             ensure_shard_funds(client, ticker, limit_side_price * n_sh)
+            # Pre-order re-check: a Kalshi IOC order only caps the MAX price, it cannot set a minimum fill price.
+            # So re-read the live quote right before sending and skip if it has dropped below the floor or below
+            # the price we decided to bid at. (A small race remains between this check and the fill.)
+            try:
+                _mk2 = client.get_market(ticker).get("market", {})
+                _ya2, _yb2 = _mk2.get("yes_ask_dollars"), _mk2.get("yes_bid_dollars")
+                if _ya2 is None or _yb2 is None:
+                    continue
+                _ya2, _yb2 = float(_ya2), float(_yb2)
+                live_cost = _ya2 if side == "bid" else 1 - _yb2
+                effective_floor = max(FLIP_STAR_MIN_PRICE if n["lock"] else FLIP_NONSTAR_MIN_PRICE, cost)
+            except Exception as e:
+                print(f"[FLIP] {ticker}: couldn't re-check the live quote ({e}) -- skipping this pass.")
+                continue
+            if live_cost < effective_floor - 1e-9:
+                print(f"[FLIP] {ticker}: SKIPPED: price dropped below bid/floor "
+                      f"(live {live_cost:.2f} < floor {effective_floor:.2f}) -- no order sent, no position taken.")
+                _attempts[ticker] = FLIP_MAX_ATTEMPTS_PER_TICKER
+                continue
             yes_price = limit_side_price if side == "bid" else round(1 - limit_side_price, 2)
             client.create_order(ticker=ticker, client_order_id=f"pulse-flip-{uuid.uuid4()}", side=side,
                                 count=str(n_sh), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
