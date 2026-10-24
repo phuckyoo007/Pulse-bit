@@ -45,6 +45,9 @@ CRASH_STOP_FRACTION = 0.50
 HARD_STOP_FRACTION = 0.70
 HARD_STOP_HELD = 0.70
 
+# INSTANT STOP: sell at the next price check, no hold / confirmation, once the held side is worth 86% or less of entry.
+INSTANT_STOP_FRACTION = 0.86
+
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
 MODEL_FLIP_ENABLED = True     # manual bets: sell if the model clearly favors the other side
@@ -66,6 +69,16 @@ def is_yes_side(position: dict) -> bool:
 def current_position_value(position: dict, market_price: float) -> float:
     """Price of the side we hold. market_price is the YES price."""
     return market_price if is_yes_side(position) else (1 - market_price)
+
+
+def instant_stop_decision(position: dict, market_price: float) -> ExitDecision:
+    """Instant stop at INSTANT_STOP_FRACTION of entry, every position, no wait."""
+    entry_price = position["entry_price"]
+    value_now = current_position_value(position, market_price)
+    if value_now <= entry_price * INSTANT_STOP_FRACTION + 1e-9:
+        return ExitDecision(True, f"instant_stop (value ${value_now:.2f} <= {INSTANT_STOP_FRACTION*100:.0f}% of entry "
+                                  f"${entry_price:.2f} (${entry_price * INSTANT_STOP_FRACTION:.2f}) -- selling now, no wait)")
+    return ExitDecision(False)
 
 
 def stop_exit_fraction(position: dict) -> float:
@@ -99,6 +112,11 @@ def check_exit(position: dict, current_market_price: float, current_model_prob: 
         side = "YES" if is_yes_side(position) else "NO"
         return ExitDecision(True, f"hard_stop ({side} now ${value_now:.2f}, entry ${entry_price:.2f}; 70% / 70c line -- "
                                   f"selling immediately, no wait)")
+
+    # INSTANT STOP (86% of entry): fires before the price stop and the normal stop loss, no wait.
+    _instant = instant_stop_decision(position, current_market_price)
+    if _instant.should_exit:
+        return _instant
 
     # TAKE PROFIT (off by default)
     if TAKE_PROFIT_ENABLED and value_now >= TAKE_PROFIT_PRICE - 1e-9:
