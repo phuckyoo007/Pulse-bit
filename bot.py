@@ -891,6 +891,19 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     position.pop("line_since", None)
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
+            # To-flip RED exit for held flip positions: the price-stop gate above (FLIP_STOPS_ONLY_6040_AND_CRASH) wipes the
+            # board-based decision, so ask the board here. Only the flip_red reason is accepted; win-collapse stays OFF
+            # (allow_collapse=False keeps it from consuming the red timer). Price stops above take priority, and the last
+            # LAST_WINDOW_SECONDS keep their hold-to-settle rule, so the board is not polled inside that window.
+            if (position.get("flip_star") and not position.get("ride") and not decision.should_exit
+                    and (_secs is None or _secs > LAST_WINDOW_SECONDS)):
+                _red = flip_star.exit_decision(ticker, allow_collapse=False)
+                if _red is not None and _red[0] and _red[1].startswith("flip_red"):
+                    _red_n = flip_star.board().get(ticker) or {}
+                    _red_zs = _red_n.get("zs")
+                    print(f"[FLIP RED EXIT] {ticker} To flip sigma {(_red_zs if _red_zs is not None else 0.0):.2f} < "
+                          f"{flip_star.FLIP_EXIT_SIGMA:g} for {flip_star.FLIP_EXIT_CONFIRM_SECONDS}s -- selling")
+                    decision = ExitDecision(True, _red[1])
             if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
                 _held_val = current_position_value(position, result.market_price)
                 if _held_val <= position["entry_price"] * HARD_BACKSTOP_CRASH_FRACTION + 1e-9:
