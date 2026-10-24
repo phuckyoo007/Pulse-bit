@@ -773,7 +773,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                           "dry_run": False, "peak_gain_per_contract": 0.0,
                           "entry_time": time.time(), "manually_adopted": is_manual, "adopted": True,
                           # 20 Oct 00:20 CT: a Pulse bet re-adopted after a restart/redeploy keeps the flip-star rules
-                          # (red <0.2 sigma, 70/30 hard stop, 60/40 last window) instead of falling back to the 80c stop.
+                          # (red <0.35 sigma, 70/30 hard stop, 60/40 last window) instead of falling back to the 80c stop.
                           # SOL & ETH NO were sold at 79c/76c at 00:10 this way right after a redeploy, then came back.
                           "flip_star": not is_manual}
         origin = ("MANUAL (no Pulse order in its history) -- 100% stop" if is_manual else
@@ -912,6 +912,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         print(f"LAST {LAST_WINDOW_SECONDS}s: {ticker} -- ignoring '{decision.reason[:40]}' (held side "
                               f"{_held_val*100:.0f}c, above the {LAST_WINDOW_STOP_HELD*100:.0f}c line) -- holding to settle.")
                     decision = ExitDecision(False, "")
+            # FLIP RED EXIT: red-only (To flip < FLIP_EXIT_SIGMA for FLIP_EXIT_CONFIRM_SECONDS). Win-collapse (flip_collapse)
+            # stays OFF -- flip_star.exit_decision() is not called here. Skipped when an earlier exit already fired this cycle,
+            # so there is only one sell; the sell itself goes through place_exit() below (EXIT_IN_FLIGHT guard applies).
+            if not decision.should_exit and position.get("flip_star") and not position.get("ride"):
+                _red = flip_star.flip_red_exit(ticker)
+                if _red is not None and _red[0]:
+                    decision = ExitDecision(*_red)
             # PROFIT LOCK (21 Oct 13:26 CT, Matthew): once a Pulse bet has been up $0.25 or more, it may not turn into a
             # loss -- if it falls back to what was paid, sell at once (any time in the round, last 45s included).
             if (not decision.should_exit and position.get("flip_star")
