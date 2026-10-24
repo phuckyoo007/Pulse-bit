@@ -290,7 +290,9 @@ LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
 # the timer resets.
-LINE_STOP_CONFIRM_SECONDS = 4
+# 24 Oct 12:52 CT (Matthew): set to 0 -- the line stops now sell the instant the held side touches the line.
+# (Was 4s. The HYPE stop_6040 sat under the line 6.6s and sold 68c.)
+LINE_STOP_CONFIRM_SECONDS = 0
 
 
 def _line_held_seconds(position: dict) -> float:
