@@ -874,6 +874,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
                     # 50% crash stop stays INSTANT (checked first so a crash never waits on the 70/30 timer).
                     decision = ExitDecision(True, f"crash_stop (held side {_hv*100:.0f}c <= 50% of entry ${position['entry_price']:.2f})")
+                elif position.get("manually_adopted") and _hv <= position["entry_price"] * flip_star.MANUAL_STOP_FRACTION + 1e-9:
+                    # 24 Oct 13:53 CT (Matthew): manual bets get an instant 85%-of-cost stop.
+                    decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
+                                                  f"of entry ${position['entry_price']:.2f})")
                 elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
                     _held_for = _line_held_seconds(position)
                     if _held_for >= LINE_STOP_CONFIRM_SECONDS:
@@ -900,6 +904,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         print(f"STOP LINE (last {LAST_WINDOW_SECONDS}s): {ticker} held side {_held_val*100:.0f}c for {_held_for:.1f}s -- "
                               f"waiting {LINE_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
                         decision = ExitDecision(False, "")
+                elif decision.should_exit and decision.reason.startswith("manual_stop"):
+                    pass   # manual bets keep their 85% stop right through the last 45s
                 else:
                     position.pop("line_since", None)
                     if decision.should_exit:
