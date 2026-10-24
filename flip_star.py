@@ -7,7 +7,7 @@ bot does matches what you see on the top coin boxes:
   ENTRY (10 shares of the favored side) when, with 8 minutes or less left in the 15-minute window:
       the coin has the RED STAR, or its "To flip" line is GREEN (2+ sigma) or YELLOW 1 / bid zone (1.5-2 sigma).
   HOLD through Yellow 1/2/3 (0.5-2 sigma); Yellow 3 (0.5-1) is the dashboard's "get ready to sell" warning.
-  EXIT as soon as "To flip" turns RED (under 0.5 sigma).  [zones moved down 18 Oct: red was under 1]
+  EXIT as soon as "To flip" turns RED (under 0.35 sigma for 3s).  [zones moved down 18 Oct: red was under 1]
 
 If the board can't be reached (or its data is stale) the bot opens nothing new, and any flip-star position it holds
 falls back to Pulse's normal stop-loss until fresh numbers come back. Pulse's hard backstop (72%) still applies.
@@ -31,12 +31,12 @@ FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the las
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA = 1.8            # 20 Oct 13:47 CT: green and red stars only (2.0+ sigma), no yellow
-FLIP_EXIT_SIGMA = 0.35              # 20 Oct 15:32 CT: sell the moment To flip turns red (<0.5 sigma); Yellow 3 = get ready
+FLIP_EXIT_SIGMA = 0.35              # 20 Oct 15:32 CT: sell when To flip turns red (<0.35 sigma) for FLIP_EXIT_CONFIRM_SECONDS; Yellow 3 = get ready
 FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red
 FLIP_EXIT_MAX_WIN = 1.01           # 20 Oct 15:32 CT: red alone sells (no win-% check)
 FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
 FLIP_STOP_CONFIRM_SECONDS = 4      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
-FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips that came back). Stops now: To-flip red <0.2 sigma, 70/30 hard stop, 60/40 last 45s
+FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips that came back). Stops now: To-flip red <0.35 sigma, 70/30 hard stop, 60/40 last 45s
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.99              # 20 Oct 15:45 CT: 97-99c only (94-96c bets lost money over 5 days)
 FLIP_NONSTAR_MAX_PRICE = 0.99      # 20 Oct 15:45 CT: 97-99c
@@ -94,8 +94,9 @@ _loss_count = 0
 # 20 Oct 11:29 CT (Matthew): every stop OFF for Pulse bets except two --
 #   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
 #   50% crash: sell when the position is worth half (or less) of what was paid
-# The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
-FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price stops only -- 70/30 (60/40 last 45s) + 50% crash; red/win-collapse exits OFF
+# The 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True. exit_decision() (red <0.35 sigma
+# and win-collapse) is also off while this is True; the red-only exit is run separately by bot.py through flip_red_exit().
+FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price stops only -- 70/30 (60/40 last 45s) + 50% crash; win-collapse exit OFF (red exit runs via flip_red_exit)
 # 24 Oct 12:49 CT (per Matthew): stops tightened after the last losses -- NEAR crash_stop 18c (entry 99c, -$16.20),
 # DOGE crash_stop 41c (entry 94c, -$10.79), HYPE stop_6040 68c after 6.6s (-$7.13). All three sold far below the line.
 FLIP_6040_HELD = 0.75             # (was 0.70) line stop before the last 45s -- the last-45s line stays 0.70 in bot.py
@@ -289,6 +290,34 @@ def exit_decision(ticker: str):
         return False, ""
     if ticker in _red_since:
         print(f"[FLIP] {ticker}: back out of red ({n['zs']:.1f} sigma) -- holding.")
+        _red_since.pop(ticker, None)
+    return False, ""
+
+
+def flip_red_exit(ticker: str):
+    """Red-only exit for a flip-star position: (should_exit, reason), or None if the board has no fresh numbers.
+    Same timer / _red_since / _sold_red logic and same condition as the red branch of exit_decision() (To flip under
+    FLIP_EXIT_SIGMA for FLIP_EXIT_CONFIRM_SECONDS), but WITHOUT the win-collapse (FLIP_EXIT_PANIC_WIN) branch."""
+    n = board().get(ticker)
+    if not n or n["zs"] is None:
+        return None
+    now = time.time()
+    if n["zs"] < FLIP_EXIT_SIGMA:
+        since = _red_since.setdefault(ticker, now)
+        held = now - since
+        if held >= FLIP_EXIT_CONFIRM_SECONDS and n["p"] < FLIP_EXIT_MAX_WIN:
+            _red_since.pop(ticker, None)
+            _sold_red.add(ticker)
+            zs = n["zs"]
+            print(f"[FLIP RED EXIT] {ticker} To flip sigma {zs:.2f} < {FLIP_EXIT_SIGMA} for {FLIP_EXIT_CONFIRM_SECONDS}s -- selling")
+            return True, (f"flip_red (To flip under {FLIP_EXIT_SIGMA:g} sigma for {held:.0f}s, now {zs:.2f}; "
+                          f"win {n['p']*100:.0f}%)")
+        if held < 1.0:
+            print(f"[FLIP] {ticker}: To flip red ({n['zs']:.2f} sigma, win {n['p']*100:.0f}%) -- watching; sells if it stays red "
+                  f"{FLIP_EXIT_CONFIRM_SECONDS}s.")
+        return False, ""
+    if ticker in _red_since:
+        print(f"[FLIP] {ticker}: back out of red ({n['zs']:.2f} sigma) -- holding.")
         _red_since.pop(ticker, None)
     return False, ""
 
