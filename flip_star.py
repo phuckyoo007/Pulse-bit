@@ -19,7 +19,10 @@ import uuid
 import requests
 
 FLIP_ENABLED = True
-FLIP_SHARES = 20                    # shares per flip-star entry (ceiling; 20%-of-balance cap can size down)
+# 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
+# RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
+FLIP_EXCLUDED_COINS = {"NEAR"}
+FLIP_SHARES = 20                   # shares per flip-star entry (ceiling; 20%-of-balance cap can size down)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
@@ -93,8 +96,10 @@ _loss_count = 0
 #   50% crash: sell when the position is worth half (or less) of what was paid
 # The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
 FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price stops only -- 70/30 (60/40 last 45s) + 50% crash; red/win-collapse exits OFF
-FLIP_6040_HELD = 0.70             # 70/30 immediate pull-out before the last 45s (last 45s: 60/40 in bot.py)
-FLIP_CRASH_FRACTION = 0.50
+# 24 Oct 12:49 CT (per Matthew): stops tightened after the last losses -- NEAR crash_stop 18c (entry 99c, -$16.20),
+# DOGE crash_stop 41c (entry 94c, -$10.79), HYPE stop_6040 68c after 6.6s (-$7.13). All three sold far below the line.
+FLIP_6040_HELD = 0.75             # (was 0.70) line stop before the last 45s -- the last-45s line stays 0.70 in bot.py
+FLIP_CRASH_FRACTION = 0.70        # (was 0.50) instant sell when the position is worth 70% or less of what was paid
 FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
@@ -192,6 +197,8 @@ def board(force: bool = False) -> dict:
         for m in st.get("markets", []):
             if m.get("kind") != "15m":
                 continue
+            if _is_excluded(m.get("coin"), m.get("ticker")):
+                continue
             n = _side_numbers(m, age, st.get("coins"))
             if n and n["ticker"]:
                 out[n["ticker"]] = n
@@ -222,7 +229,16 @@ def _falling_against(n: dict) -> bool:
     return why is not None
 
 
+def _is_excluded(coin, ticker) -> bool:
+    """True for coins we never bid on (FLIP_EXCLUDED_COINS). Matches the coin name or the KX<COIN> ticker prefix."""
+    c = str(coin or "").upper()
+    t = str(ticker or "").upper()
+    return c in FLIP_EXCLUDED_COINS or any(t.startswith("KX" + x) for x in FLIP_EXCLUDED_COINS)
+
+
 def entry_signal(n: dict) -> bool:
+    if _is_excluded(n.get("coin"), n.get("ticker")):
+        return False
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
         return False
     if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
