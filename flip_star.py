@@ -99,7 +99,7 @@ FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price st
 # 24 Oct 12:49 CT (per Matthew): stops tightened after the last losses -- NEAR crash_stop 18c (entry 99c, -$16.20),
 # DOGE crash_stop 41c (entry 94c, -$10.79), HYPE stop_6040 68c after 6.6s (-$7.13). All three sold far below the line.
 FLIP_6040_HELD = 0.75             # (was 0.70) line stop before the last 45s -- the last-45s line stays 0.70 in bot.py
-FLIP_CRASH_FRACTION = 0.70        # (was 0.50) instant sell when the position is worth 70% or less of what was paid
+FLIP_CRASH_FRACTION = 0.87        # (was 0.50) instant sell when the position is worth 70% or less of what was paid
 # 24 Oct 13:53 CT (per Matthew): manually entered bets (bot.py "manually_adopted") also get an instant stop at 85% of what
 # was paid, all round long incl. the last 45s. The 75c line and 70% crash stops above still apply to them too.
 MANUAL_STOP_FRACTION = 0.85
