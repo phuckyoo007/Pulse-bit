@@ -299,6 +299,11 @@ LINE_STOP_CONFIRM_SECONDS = 0
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
+def _held_sigma_now(ticker: str, position: dict):
+    """Board 'To flip' sigma for the side this position holds (None if the board has no fresh numbers)."""
+    return flip_star.held_sigma(ticker, "yes" if position.get("side") == "bid" else "no")
+
+
 def _line_held_seconds(position: dict) -> float:
     """Seconds the held side has been at/under the stop line (starts the timer on first touch)."""
     since = position.setdefault("line_since", time.time())
@@ -879,6 +884,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
                     decision = ExitDecision(True, f"stop_75 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- instant)")
+                elif (position.get("flip_star")
+                        and _held_sigma_now(ticker, position) is not None
+                        and _held_sigma_now(ticker, position) <= flip_star.FLIP_EXIT_SIGMA + 1e-9):
+                    _zs_held = _held_sigma_now(ticker, position)
+                    # 25 Oct 13:35 CT (Matthew): sell instantly when To flip for our side falls to 0.35 sigma.
+                    decision = ExitDecision(True, f"sigma_exit (To flip {_zs_held:.2f} sigma <= {flip_star.FLIP_EXIT_SIGMA:g}, "
+                                                  f"held side {_hv*100:.0f}c -- instant)")
                 elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): the 87%-of-entry stop must hold CRASH_CONFIRM_SECONDS before selling.
                     _cs = position.setdefault("crash_since", time.time())
