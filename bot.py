@@ -285,6 +285,8 @@ EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past
 # 19 Oct were end-of-round swings on bets that went on to win. The only exit left is an immediate pull-out when the
 # side we hold is at/under LAST_WINDOW_STOP_HELD (60c), i.e. the other side at/over 40c.
 PROFIT_LOCK_ARM_DOLLARS = 0.25   # 21 Oct: once up this much, a Pulse bet is sold if it falls back to break-even
+PROFIT_FLOOR_ARM_DOLLARS = 0.50   # 25 Oct: once up $0.50 ...
+PROFIT_FLOOR_KEEP_DOLLARS = 0.25  # ... sell when the gain falls back to $0.25
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES and NO alike (was 60 in the last 45s)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
@@ -935,6 +937,15 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 if _hv2 <= position["entry_price"] + 1e-9:
                     decision = ExitDecision(True, f"profit_lock (was up ${position['peak_gain_per_contract']*float(position['count']):.2f}, "
                                                   f"now back to {_hv2*100:.0f}c vs entry {position['entry_price']*100:.0f}c -- selling at break-even)")
+            # PROFIT FLOOR (25 Oct 13:29 CT, Matthew): once a Pulse bet has been up $0.50 or more, sell as soon as the gain
+            # falls back to $0.25 -- keep at least $0.25 instead of riding it back down.
+            if (not decision.should_exit and position.get("flip_star")
+                    and position.get("peak_gain_per_contract", 0.0) * float(position.get("count", 0)) >= PROFIT_FLOOR_ARM_DOLLARS - 1e-9):
+                _hv3 = current_position_value(position, result.market_price)
+                _gain_now = (_hv3 - position["entry_price"]) * float(position.get("count", 0))
+                if _gain_now <= PROFIT_FLOOR_KEEP_DOLLARS + 1e-9:
+                    decision = ExitDecision(True, f"profit_floor (was up ${position['peak_gain_per_contract']*float(position['count']):.2f}, "
+                                                  f"now ${_gain_now:.2f} -- cashing out to keep at least ${PROFIT_FLOOR_KEEP_DOLLARS:.2f})")
             if not decision.should_exit:
                 continue
             if decision.reason.startswith("instant_stop"):
