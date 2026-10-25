@@ -22,6 +22,7 @@ from priority import RankedCandidate, potential_points, rank_candidates, size_sc
 from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
+import pulse_v2
 import ride
 import build_dashboard_data
 import reversion
@@ -1009,6 +1010,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             })
             realized_pnl.append(pnl)
             print(f"Early exit {ticker}: {decision.reason}, pnl=${pnl:.2f}")
+            try:
+                pulse_v2.track_live_exit(ticker, position, exit_value)   # follow it to settlement: did the sell help?
+            except Exception:
+                pass
             flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40])
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
@@ -1164,6 +1169,10 @@ def run():
             ride.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[RIDE] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            pulse_v2.run(client)   # PAPER ONLY -- simulated Pulse v2 next to the live bot, never sends orders
+        except Exception as e:
+            print(f"[V2-PAPER] pass failed (non-fatal): {e}")
 
         if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
             try:
