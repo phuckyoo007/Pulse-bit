@@ -26,7 +26,7 @@ FLIP_SHARES = 20                   # 25 Oct 10:48 CT (per Matthew): was 15. Shar
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
-FLIP_MAX_OPEN = 9                 # at most 2 Pulse bets open at once (coins often spike together)
+FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
@@ -38,12 +38,12 @@ FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coi
 FLIP_STOP_CONFIRM_SECONDS = 4      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
 FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips that came back). Stops now: To-flip red <0.2 sigma, 70/30 hard stop, 60/40 last 45s
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
-FLIP_MAX_PRICE = 0.99              # 20 Oct 15:45 CT: 97-99c only (94-96c bets lost money over 5 days)
-FLIP_NONSTAR_MAX_PRICE = 0.99      # 20 Oct 15:45 CT: 97-99c
-FLIP_NONSTAR_MIN_PRICE = 0.96      # 20 Oct 21:06 CT: 94-99c (per Matthew)
+FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
+FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
+FLIP_NONSTAR_MIN_PRICE = 0.94      # 25 Oct 13:33 CT (per Matthew): 94-98c
 FLIP_NONSTAR_MIN_WIN = 0.95        # 20 Oct 21:09 CT: 97%+ win
 FLIP_MIN_WIN_ALL = 0.95            # 20 Oct 21:09 CT: 97%+ win (per Matthew; was 98)
-FLIP_STAR_MIN_PRICE = 0.96         # 20 Oct 21:06 CT: 96-99c (per Matthew); breaker can only raise it
+FLIP_STAR_MIN_PRICE = 0.94         # 25 Oct 13:33 CT (per Matthew): 94-98c; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
