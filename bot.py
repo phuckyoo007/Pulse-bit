@@ -774,7 +774,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                   f"computed count={count}, computed exposure={exposure}")
             continue
         side = "bid" if position_fp > 0 else "ask"
-        # Who placed it? Only a position with NO order from this bot in its history is treated as manual (100% stop).
+        # Who placed it? Only a position with NO order from this bot in its history is treated as manual (85%-of-cost stop only).
         # A bot-placed position that was merely forgotten across a restart keeps the normal stop; if the origin can't be
         # determined, it also gets the normal stop (safer than selling something the bot itself bought).
         by_bot = placed_by_pulse(client, ticker)
@@ -786,7 +786,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                           # (red <0.2 sigma, 70/30 hard stop, 60/40 last window) instead of falling back to the 80c stop.
                           # SOL & ETH NO were sold at 79c/76c at 00:10 this way right after a redeploy, then came back.
                           "flip_star": not is_manual}
-        origin = ("MANUAL (no Pulse order in its history) -- 100% stop" if is_manual else
+        origin = ("MANUAL (no Pulse order in its history) -- 85%-of-cost stop only" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
         print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
               f"(derived from Kalshi's real position data; {origin}) -- stop-loss now protecting it.")
@@ -881,6 +881,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _hv = current_position_value(position, result.market_price)
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("manually_adopted"):
+                    # 25 Oct 13:49 CT (Matthew): manual bets get ONLY their 85%-of-cost stop. The absolute 75c line was
+                    # selling manual bets bought under 75c the second they were adopted (BTC manual @73c sold at 74c).
+                    if _hv <= position["entry_price"] * flip_star.MANUAL_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
+                                                      f"of entry ${position['entry_price']:.2f})")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
@@ -911,7 +919,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     position.pop("crash_since", None)
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
-            if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
+            if _secs is not None and _secs <= LAST_WINDOW_SECONDS and not position.get("manually_adopted"):
                 _held_val = current_position_value(position, result.market_price)
                 if _held_val <= position["entry_price"] * HARD_BACKSTOP_CRASH_FRACTION + 1e-9:
                     decision = ExitDecision(True, f"crash_stop ({_held_val*100:.0f}c held side <= 50% of entry with {_secs:.0f}s left -- instant)")
@@ -938,7 +946,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
             if not decision.should_exit:
                 # 25 Oct 13:27 CT (Matthew): the 86% stop also waits CRASH_CONFIRM_SECONDS (same timer as the 87% stop).
-                _isd = instant_stop_decision(position, result.market_price)
+                _isd = (ExitDecision(False, "") if position.get("manually_adopted")
+                        else instant_stop_decision(position, result.market_price))
                 if _isd.should_exit:
                     _cs = position.setdefault("crash_since", time.time())
                     if time.time() - _cs >= CRASH_CONFIRM_SECONDS:
