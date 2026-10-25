@@ -22,7 +22,7 @@ FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR"}
-FLIP_SHARES = 15                   # 25 Oct 08:37 CT (per Matthew): was 10. Shares per flip-star entry (ceiling; cash cap can size down)
+FLIP_SHARES = 20                   # 25 Oct 10:48 CT (per Matthew): was 15. Shares per flip-star entry (ceiling; cash cap can size down)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
