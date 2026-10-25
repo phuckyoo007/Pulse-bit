@@ -30,7 +30,7 @@ FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at m
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 1.8            # 20 Oct 13:47 CT: green and red stars only (2.0+ sigma), no yellow
+FLIP_ENTRY_SIGMA = 1.8            # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma
 FLIP_EXIT_SIGMA = 0.35              # 20 Oct 15:32 CT: sell the moment To flip turns red (<0.5 sigma); Yellow 3 = get ready
 FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red
 FLIP_EXIT_MAX_WIN = 1.01           # 20 Oct 15:32 CT: red alone sells (no win-% check)
@@ -51,7 +51,7 @@ FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only
 FLIP_MAX_SIDE_DROP_1M = 0.02       # skip if our side's Kalshi price fell 2c+ in the last minute
 FLIP_MAX_SPOT_AGAINST_1M = 0.05    # 19 Oct 18:07: loosened from 0.02% -- tiny wiggles were blocking most entries; still blocks real moves (0.1%+)
 FLIP_KNIFE_GUARD = False           # 20 Oct 12:00 CT: falling-knife guard OFF (temporary, per Matthew) -- set True to turn it back on
-FLIP_RED_STAR_ONLY = True         # 18 Oct: green entries back on (red star + green at 95%+)
+FLIP_RED_STAR_ONLY = False        # 25 Oct 13:34 CT (per Matthew): also bid without the red star once To flip >= FLIP_ENTRY_SIGMA (1.8)
 
 # FLOOR CIRCUIT BREAKER (18 Oct): the red-star floor is on trial at 92c. If any flip-star bet bought under 93c
 # ends in a loss (early exit, emergency backstop or settlement), the floor goes straight back to 93c and stays
