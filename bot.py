@@ -293,6 +293,7 @@ LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES
 # 24 Oct 12:52 CT (Matthew): set to 0 -- the line stops now sell the instant the held side touches the line.
 # (Was 4s. The HYPE stop_6040 sat under the line 6.6s and sold 68c.)
 LINE_STOP_CONFIRM_SECONDS = 0
+LINE_75_CONFIRM_SECONDS = 3   # 25 Oct 13:25 CT (Matthew): 75c line waits 3s; 70c is instant (LINE_STOP_CONFIRM_SECONDS = 0)
 
 
 def _line_held_seconds(position: dict) -> float:
@@ -878,14 +879,18 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 24 Oct 13:53 CT (Matthew): manual bets get an instant 85%-of-cost stop.
                     decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
                                                   f"of entry ${position['entry_price']:.2f})")
+                elif _hv <= LAST_WINDOW_STOP_HELD + 1e-9:
+                    # 25 Oct 13:25 CT (Matthew): at/under 70c -> sell instantly, any time in the round.
+                    decision = ExitDecision(True, f"stop_70 (held side {_hv*100:.0f}c <= {LAST_WINDOW_STOP_HELD*100:.0f}c -- instant)")
                 elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
+                    # 25 Oct 13:25 CT (Matthew): between 70c and 75c -> must stay there LINE_75_CONFIRM_SECONDS before selling.
                     _held_for = _line_held_seconds(position)
-                    if _held_for >= LINE_STOP_CONFIRM_SECONDS:
+                    if _held_for >= LINE_75_CONFIRM_SECONDS:
                         decision = ExitDecision(True, f"stop_6040 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c "
                                                       f"for {_held_for:.1f}s -- selling)")
                     else:
                         print(f"STOP LINE: {ticker} held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c for {_held_for:.1f}s -- "
-                              f"waiting {LINE_STOP_CONFIRM_SECONDS}s for it to hold before selling.")
+                              f"waiting {LINE_75_CONFIRM_SECONDS}s for it to hold before selling.")
                         decision = ExitDecision(False, "")
                 else:
                     position.pop("line_since", None)
