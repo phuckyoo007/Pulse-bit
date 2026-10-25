@@ -925,6 +925,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(False, "")
                 elif decision.should_exit and decision.reason.startswith("manual_stop"):
                     pass   # manual bets keep their 85% stop right through the last 45s
+                elif decision.should_exit and decision.reason.startswith("sigma_exit"):
+                    pass   # 25 Oct 13:36 CT (Matthew): the 0.35-sigma exit applies all the time, last 45s included
                 else:
                     position.pop("line_since", None)
                     if decision.should_exit:
