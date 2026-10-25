@@ -293,7 +293,7 @@ LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES
 # 24 Oct 12:52 CT (Matthew): set to 0 -- the line stops now sell the instant the held side touches the line.
 # (Was 4s. The HYPE stop_6040 sat under the line 6.6s and sold 68c.)
 LINE_STOP_CONFIRM_SECONDS = 0
-LINE_75_CONFIRM_SECONDS = 3   # 25 Oct 13:25 CT (Matthew): 75c line waits 3s; 70c is instant (LINE_STOP_CONFIRM_SECONDS = 0)
+CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
 def _line_held_seconds(position: dict) -> float:
@@ -872,28 +872,27 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _hv = current_position_value(position, result.market_price)
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
+                    # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
+                    position.pop("crash_since", None)
+                    decision = ExitDecision(True, f"stop_75 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- instant)")
                 elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
-                    # 50% crash stop stays INSTANT (checked first so a crash never waits on the 70/30 timer).
-                    decision = ExitDecision(True, f"crash_stop (held side {_hv*100:.0f}c <= 50% of entry ${position['entry_price']:.2f})")
+                    # 25 Oct 13:27 CT (Matthew): the 87%-of-entry stop must hold CRASH_CONFIRM_SECONDS before selling.
+                    _cs = position.setdefault("crash_since", time.time())
+                    if time.time() - _cs >= CRASH_CONFIRM_SECONDS:
+                        decision = ExitDecision(True, f"crash_stop (held side {_hv*100:.0f}c <= {flip_star.FLIP_CRASH_FRACTION*100:.0f}% of entry "
+                                                      f"${position['entry_price']:.2f} for {time.time()-_cs:.1f}s)")
+                    else:
+                        print(f"CRASH STOP: {ticker} held side {_hv*100:.0f}c under {flip_star.FLIP_CRASH_FRACTION*100:.0f}% of entry for "
+                              f"{time.time()-_cs:.1f}s -- waiting {CRASH_CONFIRM_SECONDS}s before selling.")
+                        decision = ExitDecision(False, "")
                 elif position.get("manually_adopted") and _hv <= position["entry_price"] * flip_star.MANUAL_STOP_FRACTION + 1e-9:
                     # 24 Oct 13:53 CT (Matthew): manual bets get an instant 85%-of-cost stop.
                     decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
                                                   f"of entry ${position['entry_price']:.2f})")
-                elif _hv <= LAST_WINDOW_STOP_HELD + 1e-9:
-                    # 25 Oct 13:25 CT (Matthew): at/under 70c -> sell instantly, any time in the round.
-                    decision = ExitDecision(True, f"stop_70 (held side {_hv*100:.0f}c <= {LAST_WINDOW_STOP_HELD*100:.0f}c -- instant)")
-                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
-                    # 25 Oct 13:25 CT (Matthew): between 70c and 75c -> must stay there LINE_75_CONFIRM_SECONDS before selling.
-                    _held_for = _line_held_seconds(position)
-                    if _held_for >= LINE_75_CONFIRM_SECONDS:
-                        decision = ExitDecision(True, f"stop_6040 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c "
-                                                      f"for {_held_for:.1f}s -- selling)")
-                    else:
-                        print(f"STOP LINE: {ticker} held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c for {_held_for:.1f}s -- "
-                              f"waiting {LINE_75_CONFIRM_SECONDS}s for it to hold before selling.")
-                        decision = ExitDecision(False, "")
                 else:
                     position.pop("line_since", None)
+                    position.pop("crash_since", None)
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
             if _secs is not None and _secs <= LAST_WINDOW_SECONDS:
@@ -920,7 +919,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             # INSTANT STOP (86% of entry): applied last so no line-stop hold, last-45s rule or stop filter above can
             # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
             if not decision.should_exit:
-                decision = instant_stop_decision(position, result.market_price)
+                # 25 Oct 13:27 CT (Matthew): the 86% stop also waits CRASH_CONFIRM_SECONDS (same timer as the 87% stop).
+                _isd = instant_stop_decision(position, result.market_price)
+                if _isd.should_exit:
+                    _cs = position.setdefault("crash_since", time.time())
+                    if time.time() - _cs >= CRASH_CONFIRM_SECONDS:
+                        decision = _isd
+                elif position.get("ride") or not flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
+                    position.pop("crash_since", None)   # Pulse bets reset this timer in the stop block above
             # PROFIT LOCK (21 Oct 13:26 CT, Matthew): once a Pulse bet has been up $0.25 or more, it may not turn into a
             # loss -- if it falls back to what was paid, sell at once (any time in the round, last 45s included).
             if (not decision.should_exit and position.get("flip_star")
