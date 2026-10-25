@@ -287,6 +287,7 @@ EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past
 PROFIT_LOCK_ARM_DOLLARS = 0.25   # 21 Oct: once up this much, a Pulse bet is sold if it falls back to break-even
 PROFIT_FLOOR_ARM_DOLLARS = 0.50   # 25 Oct: once up $0.50 ...
 PROFIT_FLOOR_KEEP_DOLLARS = 0.25  # ... sell when the gain falls back to $0.25
+TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet is up $1.00
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES and NO alike (was 60 in the last 45s)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
@@ -937,6 +938,11 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 if _hv2 <= position["entry_price"] + 1e-9:
                     decision = ExitDecision(True, f"profit_lock (was up ${position['peak_gain_per_contract']*float(position['count']):.2f}, "
                                                   f"now back to {_hv2*100:.0f}c vs entry {position['entry_price']*100:.0f}c -- selling at break-even)")
+            # TAKE PROFIT (25 Oct 13:31 CT, Matthew): cash out as soon as a Pulse bet is up $1.00 or more.
+            if not decision.should_exit and position.get("flip_star"):
+                _gain_tp = (current_position_value(position, result.market_price) - position["entry_price"]) * float(position.get("count", 0))
+                if _gain_tp >= TAKE_PROFIT_DOLLARS - 1e-9:
+                    decision = ExitDecision(True, f"take_profit (up ${_gain_tp:.2f} >= ${TAKE_PROFIT_DOLLARS:.2f} -- cashing out)")
             # PROFIT FLOOR (25 Oct 13:29 CT, Matthew): once a Pulse bet has been up $0.50 or more, sell as soon as the gain
             # falls back to $0.25 -- keep at least $0.25 instead of riding it back down.
             if (not decision.should_exit and position.get("flip_star")
