@@ -20,7 +20,7 @@ from strategy import discover_crypto_markets, evaluate_crypto_market, \
     discover_index_markets, evaluate_index_market, GENERIC_MAX_SECONDS_REMAINING
 from priority import RankedCandidate, potential_points, rank_candidates, size_scale_factor_91_95
 from risk import RiskParams, CircuitBreaker, kelly_size
-from exits import check_exit, current_position_value, ExitDecision
+from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
 import ride
 import build_dashboard_data
@@ -912,6 +912,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         print(f"LAST {LAST_WINDOW_SECONDS}s: {ticker} -- ignoring '{decision.reason[:40]}' (held side "
                               f"{_held_val*100:.0f}c, above the {LAST_WINDOW_STOP_HELD*100:.0f}c line) -- holding to settle.")
                     decision = ExitDecision(False, "")
+            # INSTANT STOP (86% of entry): applied last so no line-stop hold, last-45s rule or stop filter above can
+            # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
+            if not decision.should_exit:
+                decision = instant_stop_decision(position, result.market_price)
             # PROFIT LOCK (21 Oct 13:26 CT, Matthew): once a Pulse bet has been up $0.25 or more, it may not turn into a
             # loss -- if it falls back to what was paid, sell at once (any time in the round, last 45s included).
             if (not decision.should_exit and position.get("flip_star")
@@ -922,6 +926,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                                   f"now back to {_hv2*100:.0f}c vs entry {position['entry_price']*100:.0f}c -- selling at break-even)")
             if not decision.should_exit:
                 continue
+            if decision.reason.startswith("instant_stop"):
+                print(f"[INSTANT STOP] {ticker} value {current_position_value(position, result.market_price):.2f} <= "
+                      f"{INSTANT_STOP_FRACTION*100:.0f}% of entry {position['entry_price']:.2f} -- selling now")
             position_is_real = position.get("dry_run") is False
             send_real_order = position_is_real and not EXIT_DRY_RUN
             close_side = "ask" if position["side"] == "bid" else "bid"
