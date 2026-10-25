@@ -700,6 +700,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
 
 
 BOT_ORDER_ID_PREFIX = "pulse-"
+PULSE_SERIES = {f"KX{c}15M" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "ZEC", "NEAR", "BCH", "SUI")}
 PROCESS_START_TIME = time.time()
 
 
@@ -711,18 +712,15 @@ def placed_by_pulse(client: KalshiClient, ticker: str):
         orders = resp.get("orders", []) or []
         if not orders:
             return None
-        if any(str(o.get("client_order_id", "")).startswith(BOT_ORDER_ID_PREFIX) for o in orders):
+        # 25 Oct 18:35 CT: only an ENTRY order counts as "Pulse placed it". Pulse's own SELL orders ("pulse-x-") used to
+        # count too, so after Pulse partly sold a manual bet the rest was re-adopted as "bot-placed" and got Pulse's stops
+        # (SOL manual bet 25 Oct 18:22 sold by the 80c line). Every Pulse entry since Oct 15 is tagged, so a market with
+        # orders but no tagged entry was placed by hand.
+        def _is_entry(o):
+            c = str(o.get("client_order_id", ""))
+            return c.startswith(BOT_ORDER_ID_PREFIX) and not c.startswith(BOT_ORDER_ID_PREFIX + "x-")
+        if any(_is_entry(o) for o in orders):
             return True
-        # No tagged order. Orders placed by an OLDER bot version (before tagging existed, or before this process started)
-        # carry no marker either, so only call it manual if at least one order was created after this process started.
-        newest = None
-        for o in orders:
-            ct = o.get("created_time")
-            if ct:
-                t = datetime.fromisoformat(str(ct).replace("Z", "+00:00")).timestamp()
-                newest = t if newest is None else max(newest, t)
-        if newest is None or newest < PROCESS_START_TIME:
-            return None
         return False
     except Exception as e:
         print(f"  Couldn't read order history for {ticker} ({e}) -- treating its origin as unknown.")
@@ -778,6 +776,10 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         # A bot-placed position that was merely forgotten across a restart keeps the normal stop; if the origin can't be
         # determined, it also gets the normal stop (safer than selling something the bot itself bought).
         by_bot = placed_by_pulse(client, ticker)
+        # 25 Oct 18:35 CT: Pulse only ever bets on the crypto 15-minute coins. Anything else (natural gas etc.) is manual.
+        _series = ticker.split("-")[0]
+        if by_bot is not True and _series not in PULSE_SERIES:
+            by_bot = False
         is_manual = (by_bot is False)
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side,
                           "dry_run": False, "peak_gain_per_contract": 0.0,
