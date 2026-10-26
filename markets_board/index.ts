@@ -899,6 +899,7 @@ async function yahoo(sym: string, interval: string, range: string): Promise<{ pr
   const price = r.meta && Number(r.meta.regularMarketPrice) > 0 ? Number(r.meta.regularMarketPrice) : bars.length ? bars[bars.length - 1][1] : null;
   return { price, bars };
 }
+const yLogged = new Set<string>();
 async function spotFastLoop() {
   // live price + 1-minute candles every ~5s, 5-minute candles every minute
   const c5At = new Map<string, number>();
@@ -909,13 +910,14 @@ async function spotFastLoop() {
       try {
         const a = await yahoo(sym, "1m", "1d");
         if (a.price) spotEx.set(coin, { price: a.price, ts: Date.now() });
+        if (!yLogged.has(coin)) { yLogged.add(coin); console.log(`Yahoo OK ${coin} (${sym}): price ${a.price}, ${a.bars.length} 1m bars`); }
         const prev = candles.get(coin) || { c1: [], c5: [], ts: 0 };
         let c5 = prev.c5;
         if ((c5At.get(coin) || 0) < Date.now() - 60_000) {
           try { c5 = (await yahoo(sym, "5m", "5d")).bars; c5At.set(coin, Date.now()); } catch { /* keep old */ }
         }
         candles.set(coin, { c1: a.bars, c5, ts: Date.now() });
-      } catch (e) { noteError("Yahoo " + sym + ": " + String(e).slice(0, 80)); }
+      } catch (e) { noteError("Yahoo " + sym + ": " + String(e).slice(0, 80)); if (!yLogged.has("x" + coin)) { yLogged.add("x" + coin); console.log(`Yahoo FAILED ${coin} (${sym}): ${String(e).slice(0, 120)}`); } }
       await sleep(250);
     }
     await sleep(3000);

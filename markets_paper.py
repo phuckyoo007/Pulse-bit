@@ -38,7 +38,14 @@ MK_LAST_WINDOW_STOP = 0.70
 MK_POLL_SECONDS = 5
 
 # Every non-crypto 15-minute series Pulse knows about, plus a few likely ones (wrong guesses just come back empty).
-_EXTRA_PREFIXES = {"KXNATGAS15M": "NATGAS", "KXWTI15M": "OIL", "KXOIL15M": "OIL", "KXBRENT15M": "BRENT"}
+_EXTRA_PREFIXES = {   # 26 Oct: the real series names, from the Markets Edge Board's scan of Kalshi's full series list
+    "KXNATGAS15M": "NATGAS", "KXWTI15M": "OIL", "KXWTIH": "OIL", "KXBRENT15M": "BRENT",
+    "KXGOLD15M": "GOLD", "KXGOLDH": "GOLD", "KXSILVER15M": "SILVER", "KXSILVERH": "SILVER",
+    "KXCOPPER15M": "COPPER", "KXPLATINUM15M": "PLATINUM", "KXPLATINUMH": "PLATINUM",
+    "KXPALLADIUM15M": "PALLADIUM", "KXPALLADIUMH": "PALLADIUM",
+    "KXEURUSD15M": "EURUSD", "KXEURUSDH": "EURUSD", "KXGBPUSD15M": "GBPUSD", "KXGBPUSDH": "GBPUSD",
+    "KXUSDJPY15M": "USDJPY", "KXUSDJPYH": "USDJPY",
+    "KXINX15M": "SP500", "KXNDQ15M": "NASDAQ", "KXDJIA15M": "DOW", "KXDJIAH": "DOW"}
 
 # Hourly + 15-minute commodity / currency series are also found from Kalshi's live series list (refreshed every 30 min).
 _KEYWORDS = ("GOLD", "SILVER", "COPPER", "PLATINUM", "PALLADIUM", "NATURAL GAS", "NATGAS", "CRUDE", "OIL", "WTI", "BRENT",
