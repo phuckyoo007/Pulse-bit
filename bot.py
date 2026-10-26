@@ -317,6 +317,7 @@ LINE_STOP_CONFIRM_SECONDS = 0
 PROFIT_LOCK_ENABLED = False
 PULSE_PCT_STOPS_ENABLED = False
 SIGMA_EXIT_MAX_HELD = 0.90
+RED_EXIT_SECONDS = 3          # 26 Oct 17:30 CT (Matthew): red (<= 0.35 sigma) must last 3s, then sell -- both bots
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
@@ -932,6 +933,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 # 20 Oct 11:31: applies to manual bets too (BTC manual NO @92c was sold by the 70c stop at 11:27)
                 # Only two stops for Pulse bets: 60/40 (held side <= 60c) and the 50% crash stop. Everything else is ignored.
                 _hv = current_position_value(position, result.market_price)
+                _zr = _held_sigma_now(ticker, position)
+                if (_zr is None or _zr > flip_star.FLIP_EXIT_SIGMA + 1e-9) and position.pop("red_since", None):
+                    print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
                 elif position.get("manually_adopted"):
@@ -946,13 +950,17 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
                     decision = ExitDecision(True, f"stop_80pct (held side {_hv*100:.0f}c <= 80% of entry ${position['entry_price']:.2f} -- instant)")
-                elif (position.get("flip_star") and _hv <= SIGMA_EXIT_MAX_HELD + 1e-9
-                        and _held_sigma_now(ticker, position) is not None
+                elif (position.get("flip_star") and _held_sigma_now(ticker, position) is not None
                         and _held_sigma_now(ticker, position) <= flip_star.FLIP_EXIT_SIGMA + 1e-9):
                     _zs_held = _held_sigma_now(ticker, position)
-                    # 25 Oct 13:35 CT (Matthew): sell instantly when To flip for our side falls to 0.35 sigma.
-                    decision = ExitDecision(True, f"sigma_exit (To flip {_zs_held:.2f} sigma <= {flip_star.FLIP_EXIT_SIGMA:g}, "
-                                                  f"held side {_hv*100:.0f}c -- instant)")
+                    # 26 Oct 17:30 CT (Matthew): sell once To flip for our side has been red (<= 0.35 sigma) for 3 seconds
+                    # -- same rule as Pulse Markets. (Replaces "instant, only if held side <= 90c".)
+                    _rs = position.setdefault("red_since", time.time())
+                    if time.time() - _rs >= RED_EXIT_SECONDS:
+                        decision = ExitDecision(True, f"sigma_exit (To flip {_zs_held:.2f} sigma <= {flip_star.FLIP_EXIT_SIGMA:g} "
+                                                      f"for {time.time()-_rs:.1f}s, held side {_hv*100:.0f}c)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif PULSE_PCT_STOPS_ENABLED and _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): the 87%-of-entry stop must hold CRASH_CONFIRM_SECONDS before selling.
                     _cs = position.setdefault("crash_since", time.time())
