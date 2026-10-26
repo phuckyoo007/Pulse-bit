@@ -25,7 +25,7 @@ import strategy
 MK_ENABLED = True
 MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
 MK_START_BALANCE = 40.0
-MK_SHARES = 2
+MK_SHARES = 5
 MK_MAX_OPEN = 4
 MK_MAX_SECONDS_LEFT = 240
 MK_MIN_SECONDS_LEFT = 20
