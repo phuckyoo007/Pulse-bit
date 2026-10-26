@@ -781,6 +781,9 @@ def actual_fill_cost(client: KalshiClient, ticker: str, tries: int = 4, delay: f
     return None
 
 
+_settled_tickers = set()   # tickers check_settlements already booked this run
+
+
 def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     try:
         positions_resp = client.get_positions()
@@ -793,6 +796,15 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         if ticker and ticker in state and ticker in markets_paper.owned():
             state.pop(ticker, None)   # the commodity/currency bot owns this one -- Pulse lets it go
             continue
+        if ticker and ticker not in state:
+            try:
+                _m = get_market_cached(client, ticker)
+                if _m.get("result"):
+                    _settled_tickers.add(ticker)   # market already decided (survives redeploys too)
+            except Exception:
+                pass
+        if ticker in _settled_tickers:
+            continue   # 26 Oct: already settled -- Kalshi still lists it until payout; don't re-adopt & re-count it
         if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
@@ -1108,6 +1120,9 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
                 pass
             continue
         position = state.pop(ticker)
+        if ticker in _settled_tickers:
+            continue   # already booked once
+        _settled_tickers.add(ticker)
         won = (position["side"] == "bid" and market["result"] == "yes") or \
               (position["side"] == "ask" and market["result"] == "no")
         pnl = ((1.0 if won else 0.0) - position["entry_price"]) * position["count"]
