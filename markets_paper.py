@@ -34,7 +34,7 @@ MK_MAX_PRICE = 0.98
 MK_MAX_SPREAD = 0.03
 MK_STOP = 0.80
 MK_LAST_WINDOW_SECONDS = 45
-MK_LAST_WINDOW_STOP = 0.70
+MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80c line in the last 45s
 MK_POLL_SECONDS = 5
 
 # Every non-crypto 15-minute series Pulse knows about, plus a few likely ones (wrong guesses just come back empty).
