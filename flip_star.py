@@ -146,7 +146,8 @@ def record_result(position, pnl, how=""):
                 print(f"[FLIP] couldn't save the breaker state ({e}) -- floor is 93c until the next restart.")
     except Exception as e:
         print(f"[FLIP] record_result error (non-fatal): {e}")
-FLIP_SLIPPAGE = 0.01               # limit price = ask + 1c (capped at FLIP_MAX_PRICE); order is immediate-or-cancel
+FLIP_SLIPPAGE = 0.02               # 26 Oct 14:48 CT (Matthew): if the price ticks UP while ordering, still buy (up to 2c more)
+FLIP_FILL_CAP = 0.99               # ...but never pay more than 99c. A price that DROPS is still skipped (floor re-check below).
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
 EDGE_BOARD_URL = os.getenv("EDGE_BOARD_URL", "https://edge-board-production.up.railway.app/api/state")
@@ -430,7 +431,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                 continue   # no red star: only buy at 96c or higher
             if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
                 continue   # red star: only buy at the current floor or higher
-            limit_side_price = min(max_px, round(cost + FLIP_SLIPPAGE, 2))
+            limit_side_price = min(FLIP_FILL_CAP, round(cost + FLIP_SLIPPAGE, 2))   # quote must be <= max_px to qualify; fill may tick up
             rest = FLIP_RESTING_BIDS and bool(n["lock"]) and cost > FLIP_STAR_REST_PRICE + 1e-9
             if not rest and cost > FLIP_STAR_REST_PRICE + 1e-9 and not FLIP_RESTING_BIDS:
                 pass   # resting bids off: buy at the live price (up to the cap) like before
