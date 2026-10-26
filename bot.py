@@ -286,6 +286,7 @@ _exit_misses = {}            # ticker -> unfilled exit tries in a row (widens th
 # After that it sells at whatever price is there, so a real crash still gets out a few seconds later.
 EXIT_SPIKE_SPREAD = 0.15
 EXIT_SPIKE_WAIT_SECONDS = 3
+EXIT_INSTANT_FLOOR = 0.20     # 26 Oct 09:10 CT (Matthew): at/under 20c the sell goes out INSTANTLY -- no spike wait
 _spike_wait = {}             # ticker -> when the spike guard started holding this sell
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
 
@@ -349,8 +350,11 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         # Each unfilled try now reaches further: 10c, then 25c, then any price.
         _tries = _exit_misses.get(ticker, 0)
         _slip = EXIT_MAX_SLIPPAGE if _tries == 0 else (0.25 if _tries == 1 else 1.0)
+        # what our side would sell for right now (closing YES sells at the YES bid; closing NO = buying YES at the ask)
+        _our_now = (float(yb) if close_side == "ask" else 1 - float(ya)) if (ya is not None and yb is not None) else None
         if (not dry_run and ya is not None and yb is not None and float(ya) > 0 and float(yb) > 0
-                and float(ya) - float(yb) > EXIT_SPIKE_SPREAD + 1e-9):
+                and float(ya) - float(yb) > EXIT_SPIKE_SPREAD + 1e-9
+                and (_our_now is None or _our_now > EXIT_INSTANT_FLOOR + 1e-9)):
             _first = _spike_wait.setdefault(ticker, time.time())
             if time.time() - _first < EXIT_SPIKE_WAIT_SECONDS:
                 print(f"SPIKE GUARD: {ticker} -- book torn open (YES bid ${float(yb):.2f} / ask ${float(ya):.2f}); "
