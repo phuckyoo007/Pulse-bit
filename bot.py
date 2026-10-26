@@ -637,7 +637,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             ticker = p.get("ticker")
             if not ticker:
                 continue
-            if ticker in _permanently_unexitable_tickers:
+            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned():
                 continue
             position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
             if position_fp == 0:
@@ -787,7 +787,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
-        if not ticker or ticker in state or ticker in flip_star.pending_tickers():
+        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
         if position_fp == 0:
@@ -1218,7 +1218,7 @@ def run():
         except Exception as e:
             print(f"[V2-PAPER] pass failed (non-fatal): {e}")
         try:
-            markets_paper.run(client)   # PAPER ONLY -- commodity / currency 15-min + hourly markets, never sends orders
+            markets_paper.run(client, place_exit)   # commodity / currency 15-min + hourly markets (2 shares, live)
         except Exception as e:
             print(f"[MKTS-PAPER] pass failed (non-fatal): {e}")
 

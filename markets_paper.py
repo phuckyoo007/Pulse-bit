@@ -1,6 +1,8 @@
 """
-PULSE MARKETS -- PAPER TRIAL for Kalshi's non-crypto 15-minute AND hourly markets (commodities like natural gas / gold / silver,
-FX like EUR/USD, stock indexes). NO REAL ORDERS: this module has no order code at all. Log prefix [MKTS-PAPER].
+PULSE MARKETS -- Kalshi's non-crypto 15-minute AND hourly markets (commodities like natural gas / gold / silver,
+FX like EUR/USD, stock indexes). 26 Oct 14:29 CT (Matthew): LIVE with 2-share bets (MK_PAPER = False).
+Live orders are immediate-or-cancel buys; sells go through Pulse's own place_exit (spike guard, 20c instant floor).
+Pulse's hard backstop and manual-bet adopter leave these positions alone (see owned()). Log prefix [MKTS].
 
 Runs inside bot.py next to live Pulse, using Pulse's current crypto rules as the starting point:
   ENTRY  last MK_MAX_SECONDS_LEFT seconds of the round, favored side priced MK_MIN_PRICE-MK_MAX_PRICE,
@@ -21,9 +23,9 @@ from datetime import datetime, timezone
 import strategy
 
 MK_ENABLED = True
-MK_PAPER = True                    # MUST stay True -- there is no live-order code in this module
+MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
 MK_START_BALANCE = 40.0
-MK_SHARES = 15
+MK_SHARES = 2
 MK_MAX_OPEN = 4
 MK_MAX_SECONDS_LEFT = 240
 MK_MIN_SECONDS_LEFT = 20
@@ -57,6 +59,11 @@ try:
         _s.update(json.load(open(_STATE_FILE)))
 except Exception:
     pass
+
+
+def owned() -> set:
+    """Live tickers this module is managing -- Pulse's adopter and hard backstop must not touch them."""
+    return set(_open) if not MK_PAPER else set()
 
 
 def _save():
@@ -134,7 +141,11 @@ def _discover(client):
     tables.update(_series_from_list(client))
     for prefix in tables:
         try:
-            for m in client.get_markets(status="open", series_ticker=prefix, limit=100).get("markets", []):
+            _now = time.time()
+            for m in client.get_markets(status=None, series_ticker=prefix, limit=200, min_close_ts=_now,
+                                        max_close_ts=_now + 16 * 60).get("markets", []):
+                if m.get("status") and m.get("status") not in ("active", "open"):
+                    continue
                 sl = _secs_left(m)
                 if sl is None or not (0 < sl <= 15 * 60 + 30):
                     continue
@@ -165,7 +176,8 @@ def _batch(client, tickers):
 def _close(ticker, pos, value, why, settled):
     fee_out = 0.0 if settled else _fee(pos["count"], value)
     pnl = (value - pos["entry"]) * pos["count"] - pos["fee_in"] - fee_out
-    _s["balance"] += value * pos["count"] - fee_out
+    if MK_PAPER:
+        _s["balance"] += value * pos["count"] - fee_out
     _s["n"] += 1
     _s["wins"] += 1 if pnl > 0 else 0
     _s["pnl"] += pnl
@@ -173,17 +185,47 @@ def _close(ticker, pos, value, why, settled):
     k[0] += 1
     k[1] += 1 if pnl > 0 else 0
     k[2] += pnl
-    print(f"[MKTS-PAPER] EXIT {ticker} ({pos['label']}): {why} -- {pos['count']} @ ${pos['entry']:.2f} -> ${value:.2f}, "
-          f"pnl ${pnl:+.2f} | paper balance ${_s['balance']:.2f} | trial: {_s['n']} bets, {_s['wins']} wins, ${_s['pnl']:+.2f}")
+    print(f"{_tag()} EXIT {ticker} ({pos['label']}): {why} -- {pos['count']} @ ${pos['entry']:.2f} -> ${value:.2f}, "
+          f"pnl ${pnl:+.2f} | trial: {_s['n']} bets, {_s['wins']} wins, ${_s['pnl']:+.2f}")
     _open.pop(ticker, None)
     if not settled:
         _aftermath[ticker] = {"side": pos["side"], "exit_value": value, "entry": pos["entry"], "count": pos["count"]}
     _save()
 
 
-def run(client):
-    """One pass. Never sends an order."""
-    if not MK_ENABLED or not MK_PAPER:
+def _tag():
+    return "[MKTS-PAPER]" if MK_PAPER else "[MKTS]"
+
+
+def _buy(client, ticker, side, cost):
+    """Live IOC buy of MK_SHARES of `side` at up to `cost`. Returns (filled_count, avg_entry) or (0, None)."""
+    import uuid
+    import flip_star
+    limit = min(MK_MAX_PRICE, round(cost, 2))
+    yes_price = limit if side == "yes" else round(1 - limit, 2)
+    try:
+        client.create_order(ticker=ticker, client_order_id=f"pulse-mkts-{uuid.uuid4()}",
+                            side="bid" if side == "yes" else "ask", count=str(MK_SHARES),
+                            price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+    except Exception as e:
+        print(f"[MKTS] {ticker}: buy order failed ({e}).")
+        return 0, None
+    for _ in range(4):
+        try:
+            held, exposure = flip_star._held_count(client, ticker)
+        except Exception:
+            held, exposure = 0.0, 0.0
+        if abs(held) > 1e-9:
+            return abs(held), (exposure / abs(held) if exposure > 0 else limit)
+        time.sleep(0.4)
+    return 0, None
+
+
+def run(client, place_exit=None):
+    """One pass. In paper mode nothing is ever sent; live mode buys IOC and sells via Pulse's place_exit."""
+    if not MK_ENABLED:
+        return
+    if not MK_PAPER and place_exit is None:
         return
     now = time.time()
     if now - _round["last_poll"] < MK_POLL_SECONDS:
@@ -195,7 +237,7 @@ def run(client):
     if in_window and _round["key"] != rkey:
         _round["key"], _round["tickers"] = rkey, _discover(client)
         if _round["tickers"]:
-            print(f"[MKTS-PAPER] round {utc.strftime('%H:%M')} UTC: watching {len(_round['tickers'])} market(s): "
+            print(f"{_tag()} round {utc.strftime('%H:%M')} UTC: watching {len(_round['tickers'])} market(s): "
                   f"{', '.join(sorted({_label(t) for t in _round['tickers']}))}")
     watch = set(_open) | set(_aftermath) | (set(_round["tickers"]) if in_window else set())
     if not watch:
@@ -222,7 +264,21 @@ def run(client):
         value = yb if pos["side"] == "yes" else 1 - ya   # what selling our side would get right now
         line = MK_LAST_WINDOW_STOP if sl <= MK_LAST_WINDOW_SECONDS else MK_STOP
         if value <= line + 1e-9:
-            _close(ticker, pos, value, f"stop (our side {value*100:.0f}c <= {line*100:.0f}c, {sl:.0f}s left)", False)
+            why = f"stop (our side {value*100:.0f}c <= {line*100:.0f}c, {sl:.0f}s left)"
+            if MK_PAPER:
+                _close(ticker, pos, value, why, False)
+            else:
+                try:
+                    r = place_exit(client, ticker, "ask" if pos["side"] == "yes" else "bid", pos["count"], dry_run=False)
+                except Exception as e:
+                    print(f"[MKTS] {ticker}: sell failed ({e}) -- retrying next pass.")
+                    continue
+                if isinstance(r, dict) and r.get("skipped"):
+                    print(f"[MKTS] {ticker}: Kalshi shows nothing left to sell -- dropping it.")
+                    _open.pop(ticker, None)
+                    continue
+                if isinstance(r, dict) and (r.get("_sold") or 0) > 1e-9:
+                    _close(ticker, pos, r.get("_real_exit_px", value), why, False)
     for ticker in list(_aftermath):
         m = q.get(ticker)
         if not m or m.get("result") not in ("yes", "no"):
@@ -256,15 +312,24 @@ def run(client):
         side, cost = ("yes", ya) if ya >= no_ask else ("no", no_ask)
         if not (MK_MIN_PRICE <= cost <= MK_MAX_PRICE):
             continue
-        fee_in = _fee(MK_SHARES, cost)
-        if _s["balance"] < cost * MK_SHARES + fee_in:
-            continue
-        _s["balance"] -= cost * MK_SHARES + fee_in
-        _open[ticker] = {"side": side, "entry": cost, "count": MK_SHARES, "fee_in": fee_in, "label": _label(ticker),
+        count = MK_SHARES
+        if MK_PAPER:
+            fee_in = _fee(MK_SHARES, cost)
+            if _s["balance"] < cost * MK_SHARES + fee_in:
+                continue
+            _s["balance"] -= cost * MK_SHARES + fee_in
+        else:
+            _tried.add(ticker)
+            count, filled_px = _buy(client, ticker, side, cost)
+            if count <= 0:
+                print(f"[MKTS] {ticker}: nothing filled at ${cost:.2f} (price moved).")
+                continue
+            cost, fee_in = filled_px, _fee(count, filled_px)
+        _open[ticker] = {"side": side, "entry": cost, "count": count, "fee_in": fee_in, "label": _label(ticker),
                          "event": m.get("event_ticker")}
         _tried.add(ticker)
         if m.get("event_ticker"):
             _events_tried.add(m["event_ticker"])
-        print(f"[MKTS-PAPER] ENTRY {ticker} ({_label(ticker)}): {side.upper()} {MK_SHARES} @ ${cost:.2f} (simulated), "
-              f"{sl:.0f}s left | paper balance ${_s['balance']:.2f}")
+        print(f"{_tag()} ENTRY {ticker} ({_label(ticker)}): {side.upper()} {count:g} @ ${cost:.2f}"
+              f"{' (simulated)' if MK_PAPER else ''}, {sl:.0f}s left")
         _save()
