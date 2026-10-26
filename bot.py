@@ -287,7 +287,7 @@ _exit_misses = {}            # ticker -> unfilled exit tries in a row (widens th
 # After that it sells at whatever price is there, so a real crash still gets out a few seconds later.
 EXIT_SPIKE_SPREAD = 0.15
 EXIT_SPIKE_WAIT_SECONDS = 3
-EXIT_INSTANT_FLOOR = 0.20     # 26 Oct 09:10 CT (Matthew): at/under 20c the sell goes out INSTANTLY -- no spike wait
+EXIT_INSTANT_FLOOR = 0.20     # 26 Oct 17:08 CT (Matthew): at/under 20% OF ENTRY (not 20c) the sell goes out INSTANTLY -- no spike wait
 _spike_wait = {}             # ticker -> when the spike guard started holding this sell
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
 
@@ -341,7 +341,7 @@ def _secs_left_from_market(market: dict):
         return None
 
 
-def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool):
+def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float, dry_run: bool, entry_price=None):
     # Lesson from SOL 19 Oct 19:25 CT: the exit was a resting (good-till-canceled) order at 99c. On a thin book during
     # a spike it walked the book, and whatever didn't fill sat at 99c and filled there later -- the bot logged -$1.63
     # but Kalshi showed about -54%. Exits are now immediate-or-cancel, limited to 10c past the live quote. Anything
@@ -358,7 +358,7 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         _our_now = (float(yb) if close_side == "ask" else 1 - float(ya)) if (ya is not None and yb is not None) else None
         if (not dry_run and ya is not None and yb is not None and float(ya) > 0 and float(yb) > 0
                 and float(ya) - float(yb) > EXIT_SPIKE_SPREAD + 1e-9
-                and (_our_now is None or _our_now > EXIT_INSTANT_FLOOR + 1e-9)):
+                and (_our_now is None or _our_now > (float(entry_price) if entry_price else 1.0) * EXIT_INSTANT_FLOOR + 1e-9)):
             _first = _spike_wait.setdefault(ticker, time.time())
             if time.time() - _first < EXIT_SPIKE_WAIT_SECONDS:
                 print(f"SPIKE GUARD: {ticker} -- book torn open (YES bid ${float(yb):.2f} / ask ${float(ya):.2f}); "
@@ -707,7 +707,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                   f"the primary stop-loss system.")
             close_side = "ask" if side == "bid" else "bid"
             try:
-                exit_resp = place_exit(client, ticker, close_side, count, dry_run=False)
+                exit_resp = place_exit(client, ticker, close_side, count, dry_run=False, entry_price=real_entry_price)
                 if isinstance(exit_resp, dict) and exit_resp.get("waiting"):
                     continue   # spike guard is holding this sell for a few seconds
                 if isinstance(exit_resp, dict) and exit_resp.get("skipped"):
@@ -993,7 +993,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     position.pop("line_since", None)
                     if decision.should_exit:
                         print(f"LAST {LAST_WINDOW_SECONDS}s: {ticker} -- ignoring '{decision.reason[:40]}' (held side "
-                              f"{_held_val*100:.0f}c, above the {LAST_WINDOW_STOP_HELD*100:.0f}c line) -- holding to settle.")
+                              f"{_held_val*100:.0f}c, above the 80%-of-entry line {position['entry_price']*STOP_FRACTION_OF_ENTRY*100:.0f}c) -- holding to settle.")
                     decision = ExitDecision(False, "")
             # INSTANT STOP (86% of entry): applied last so no line-stop hold, last-45s rule or stop filter above can
             # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
@@ -1038,7 +1038,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             send_real_order = position_is_real and not EXIT_DRY_RUN
             close_side = "ask" if position["side"] == "bid" else "bid"
             try:
-                exit_resp = place_exit(client, ticker, close_side, position["count"], dry_run=not send_real_order)
+                exit_resp = place_exit(client, ticker, close_side, position["count"], dry_run=not send_real_order, entry_price=position.get("entry_price"))
                 if isinstance(exit_resp, dict) and exit_resp.get("skipped"):
                     # Position was already closed (e.g. by another copy of the bot) -- stop tracking it, record nothing.
                     del state[ticker]

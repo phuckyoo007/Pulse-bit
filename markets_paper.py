@@ -8,7 +8,7 @@ Runs inside bot.py next to live Pulse, using Pulse's current crypto rules as the
   ENTRY  last MK_MAX_SECONDS_LEFT seconds of the round, favored side priced MK_MIN_PRICE-MK_MAX_PRICE,
          tight book (spread <= MK_MAX_SPREAD), one bet per market, at most MK_MAX_OPEN open, MK_SHARES shares.
          (No price model: there is no working commodity/FX price feed from Railway, so these bet on price alone.)
-  EXIT   our side <= MK_STOP (80c) -> sell; last 45s the line is MK_LAST_WINDOW_STOP (70c); otherwise hold to settlement.
+  EXIT   our side <= 80% of entry -> sell instantly, all round (20%-of-entry instant floor skips the spike wait); otherwise hold to settlement.
   AFTER  every paper sell is followed to settlement ("would have WON/LOST") so the stop can be judged.
 
 Kalshi API load is kept small: one discovery pass per round (when the round enters its last 5 minutes), then ONE
@@ -35,7 +35,7 @@ MK_MAX_SPREAD = 0.03
 MK_STOP = 0.80
 MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any time in the round
 MK_LAST_WINDOW_SECONDS = 45
-MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80c line in the last 45s
+MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
 
 # Every non-crypto 15-minute series Pulse knows about, plus a few likely ones (wrong guesses just come back empty).
@@ -278,7 +278,7 @@ def run(client, place_exit=None):
                 _close(ticker, pos, value, why, False)
             else:
                 try:
-                    r = place_exit(client, ticker, "ask" if pos["side"] == "yes" else "bid", pos["count"], dry_run=False)
+                    r = place_exit(client, ticker, "ask" if pos["side"] == "yes" else "bid", pos["count"], dry_run=False, entry_price=pos["entry"])
                 except Exception as e:
                     print(f"[MKTS] {ticker}: sell failed ({e}) -- retrying next pass.")
                     continue
