@@ -299,7 +299,7 @@ PROFIT_FLOOR_ARM_DOLLARS = 0.50   # 25 Oct: once up $0.50 ...
 PROFIT_FLOOR_KEEP_DOLLARS = 0.25  # ... sell when the gain falls back to $0.25
 TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet is up $1.00
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
-LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES and NO alike (was 60 in the last 45s)
+LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
 # the timer resets.
