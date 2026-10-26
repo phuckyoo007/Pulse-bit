@@ -8,7 +8,8 @@ Runs inside bot.py next to live Pulse, using Pulse's current crypto rules as the
   ENTRY  last MK_MAX_SECONDS_LEFT seconds of the round, favored side priced MK_MIN_PRICE-MK_MAX_PRICE,
          tight book (spread <= MK_MAX_SPREAD), one bet per market, at most MK_MAX_OPEN open, MK_SHARES shares.
          (No price model: there is no working commodity/FX price feed from Railway, so these bet on price alone.)
-  EXIT   our side <= 80% of entry -> sell instantly, all round (20%-of-entry instant floor skips the spike wait); otherwise hold to settlement.
+  EXIT   our side <= 80% of entry -> sell instantly, all round (20%-of-entry instant floor skips the spike wait);
+         'To flip' sigma (Yahoo spot + 1m volatility vs the strike) <= 0.35 for 3 seconds -> sell; otherwise hold to settlement.
   AFTER  every paper sell is followed to settlement ("would have WON/LOST") so the stop can be judged.
 
 Kalshi API load is kept small: one discovery pass per round (when the round enters its last 5 minutes), then ONE
@@ -19,6 +20,8 @@ import math
 import os
 import time
 from datetime import datetime, timezone
+
+import requests
 
 import strategy
 
@@ -37,6 +40,15 @@ MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any 
 MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
+MK_RED_SIGMA = 0.35          # 26 Oct 17:29 CT (Matthew): sell once 'To flip' for our side is red (same 0.35-sigma line as crypto Pulse) ...
+MK_RED_SECONDS = 3           # ... and has stayed red for 3 seconds
+MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
+_YAHOO = [("NATGAS", "NG=F"), ("NATURAL GAS", "NG=F"), ("BRENT", "BZ=F"), ("WTI", "CL=F"), ("OIL", "CL=F"), ("CRUDE", "CL=F"),
+          ("GOLD", "GC=F"), ("SILVER", "SI=F"), ("COPPER", "HG=F"), ("PLATINUM", "PL=F"), ("PALLADIUM", "PA=F"),
+          ("EURUSD", "EURUSD=X"), ("GBPUSD", "GBPUSD=X"), ("AUDUSD", "AUDUSD=X"), ("USDJPY", "JPY=X"), ("USDCAD", "CAD=X"),
+          ("SP500", "^GSPC"), ("INX", "^GSPC"), ("NASDAQ", "^NDX"), ("NDQ", "^NDX"), ("DOW", "^DJI"), ("DJIA", "^DJI")]
+_yq = {}              # yahoo symbol -> {"at", "spot", "vol"}
+_red_since = {}       # ticker -> when our side first read red
 
 # Every non-crypto 15-minute series Pulse knows about, plus a few likely ones (wrong guesses just come back empty).
 _EXTRA_PREFIXES = {   # 26 Oct: the real series names, from the Markets Edge Board's scan of Kalshi's full series list
@@ -183,6 +195,7 @@ def _batch(client, tickers):
 
 
 def _close(ticker, pos, value, why, settled):
+    _red_since.pop(ticker, None)
     fee_out = 0.0 if settled else _fee(pos["count"], value)
     pnl = (value - pos["entry"]) * pos["count"] - pos["fee_in"] - fee_out
     if MK_PAPER:
@@ -230,6 +243,63 @@ def _buy(client, ticker, side, cost):
     return 0, None
 
 
+def _yahoo_symbol(ticker):
+    key = (_label(ticker) + " " + ticker.split("-")[0]).upper().replace("/", "")
+    for word, sym in _YAHOO:
+        if word in key:
+            return sym
+    return None
+
+
+def _spot_vol(sym):
+    """(spot, per-minute volatility of log returns) from Yahoo 1-minute bars, cached 4s. None if unavailable."""
+    c = _yq.get(sym)
+    if c and time.time() - c["at"] < 4:
+        return c["spot"], c["vol"]
+    try:
+        r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}", params={"interval": "1m", "range": "1d"},
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
+        res = r.json()["chart"]["result"][0]
+        closes = [x for x in res["indicators"]["quote"][0]["close"] if x]
+        spot = float(res["meta"].get("regularMarketPrice") or closes[-1])
+        bars = closes[-61:]
+        rets = [math.log(bars[i] / bars[i - 1]) for i in range(1, len(bars)) if bars[i - 1] > 0]
+        if len(rets) < 15:
+            return None
+        mu = sum(rets) / len(rets)
+        vol = math.sqrt(sum((x - mu) ** 2 for x in rets) / (len(rets) - 1))
+        if vol <= 0:
+            return None
+        _yq[sym] = {"at": time.time(), "spot": spot, "vol": vol}
+        return spot, vol
+    except Exception as e:
+        if not c or time.time() - c.get("warned", 0) > 300:
+            print(f"[MKTS] Yahoo price for {sym} unavailable ({e}) -- red-sigma sell off for it, 80% stop still on.")
+            _yq[sym] = {**(c or {"spot": None, "vol": None}), "at": 0, "warned": time.time()}
+        return None
+
+
+def _held_sigma(ticker, m, side, secs_left):
+    """'To flip' sigma for OUR side (negative = crossed to the other side), or None if it can't be worked out."""
+    sym = _yahoo_symbol(ticker)
+    if not sym or not secs_left or secs_left <= 0:
+        return None
+    sv = _spot_vol(sym)
+    if not sv:
+        return None
+    spot, vol = sv
+    st = (m.get("strike_type") or "").lower()
+    fl, cp = _f(m.get("floor_strike")), _f(m.get("cap_strike"))
+    t = max(secs_left, 5) / 60.0
+    if st in ("greater", "greater_or_equal") and fl:
+        z_yes = math.log(spot / fl) / (vol * math.sqrt(t))
+    elif st in ("less", "less_or_equal") and cp:
+        z_yes = math.log(cp / spot) / (vol * math.sqrt(t))
+    else:
+        return None
+    return z_yes if side == "yes" else -z_yes
+
+
 def run(client, place_exit=None):
     """One pass. In paper mode nothing is ever sent; live mode buys IOC and sells via Pulse's place_exit."""
     if not MK_ENABLED:
@@ -237,7 +307,7 @@ def run(client, place_exit=None):
     if not MK_PAPER and place_exit is None:
         return
     now = time.time()
-    if now - _round["last_poll"] < MK_POLL_SECONDS:
+    if now - _round["last_poll"] < (MK_RED_POLL_SECONDS if _red_since else MK_POLL_SECONDS):
         return
     _round["last_poll"] = now
     utc = datetime.now(timezone.utc)
@@ -272,8 +342,22 @@ def run(client, place_exit=None):
             continue
         value = yb if pos["side"] == "yes" else 1 - ya   # what selling our side would get right now
         line = pos["entry"] * MK_STOP_FRACTION   # 26 Oct (Matthew): 80% of what was paid, all round
+        why = None
         if value <= line + 1e-9:
             why = f"stop (our side {value*100:.0f}c <= {line*100:.0f}c, {sl:.0f}s left)"
+        else:
+            zs = _held_sigma(ticker, m, pos["side"], sl)
+            if zs is not None and zs <= MK_RED_SIGMA + 1e-9:
+                first = _red_since.setdefault(ticker, now)
+                if now - first >= MK_RED_SECONDS:
+                    why = f"red (To flip {zs:.2f} sigma <= {MK_RED_SIGMA} for {now - first:.0f}s, our side {value*100:.0f}c, {sl:.0f}s left)"
+                else:
+                    print(f"[MKTS] {ticker}: RED -- To flip {zs:.2f} sigma, {now - first:.0f}s of {MK_RED_SECONDS}s (our side {value*100:.0f}c).")
+            else:
+                if ticker in _red_since:
+                    print(f"[MKTS] {ticker}: back out of red (To flip {('?' if zs is None else f'{zs:.2f}')} sigma) -- holding.")
+                _red_since.pop(ticker, None)
+        if why:
             if MK_PAPER:
                 _close(ticker, pos, value, why, False)
             else:
