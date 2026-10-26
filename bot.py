@@ -23,6 +23,7 @@ from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
 import pulse_v2
+import markets_paper
 import ride
 import build_dashboard_data
 import reversion
@@ -1216,6 +1217,10 @@ def run():
             pulse_v2.run(client)   # PAPER ONLY -- simulated Pulse v2 next to the live bot, never sends orders
         except Exception as e:
             print(f"[V2-PAPER] pass failed (non-fatal): {e}")
+        try:
+            markets_paper.run(client)   # PAPER ONLY -- commodity / currency 15-min + hourly markets, never sends orders
+        except Exception as e:
+            print(f"[MKTS-PAPER] pass failed (non-fatal): {e}")
 
         if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
             try:
