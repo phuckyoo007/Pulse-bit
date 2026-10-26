@@ -1184,6 +1184,20 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
 def run():
     client = KalshiClient()
     state = load_json(STATE_FILE, {})
+    # 26 Oct: remove duplicate settlement rows (KXGOLDH was booked ~100x by a re-adopt loop)
+    try:
+        _rows = load_json(SETTLEMENTS_FILE, [])
+        _seen, _clean = set(), []
+        for _r in _rows:
+            _k = _r.get("ticker")
+            if _k in _seen and str(_k).startswith("KXGOLDH-26OCT2616"):
+                continue
+            _seen.add(_k); _clean.append(_r)
+        if len(_clean) != len(_rows):
+            save_json(SETTLEMENTS_FILE, _clean)
+            print(f"Removed {len(_rows)-len(_clean)} duplicate settlement rows.")
+    except Exception as _e:
+        print(f"Settlement dedupe skipped ({_e})")
     settlements = load_json(SETTLEMENTS_FILE, [])
     bankroll = STARTING_BANKROLL
     try:
