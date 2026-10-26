@@ -787,6 +787,9 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
+        if ticker and ticker in state and ticker in markets_paper.owned():
+            state.pop(ticker, None)   # the commodity/currency bot owns this one -- Pulse lets it go
+            continue
         if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)

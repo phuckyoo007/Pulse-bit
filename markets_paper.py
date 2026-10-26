@@ -57,6 +57,7 @@ _STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "markets_
 _s = {"balance": MK_START_BALANCE, "n": 0, "wins": 0, "pnl": 0.0, "by_kind": {}}
 _open = {}            # ticker -> paper position
 _tried = set()
+_buying = set()      # buy in flight -- Pulse must not adopt the ticker meanwhile
 _events_tried = set()
 _aftermath = {}       # ticker -> {"side", "exit_value", "entry", "count"}
 _round = {"key": None, "tickers": [], "last_poll": 0.0}
@@ -70,7 +71,7 @@ except Exception:
 
 def owned() -> set:
     """Live tickers this module is managing -- Pulse's adopter and hard backstop must not touch them."""
-    return set(_open) if not MK_PAPER else set()
+    return (set(_open) | _buying) if not MK_PAPER else set()
 
 
 def _save():
@@ -327,13 +328,16 @@ def run(client, place_exit=None):
             _s["balance"] -= cost * MK_SHARES + fee_in
         else:
             _tried.add(ticker)
+            _buying.add(ticker)
             count, filled_px = _buy(client, ticker, side, cost)
             if count <= 0:
+                _buying.discard(ticker)
                 print(f"[MKTS] {ticker}: nothing filled at ${cost:.2f} (price moved).")
                 continue
             cost, fee_in = filled_px, _fee(count, filled_px)
         _open[ticker] = {"side": side, "entry": cost, "count": count, "fee_in": fee_in, "label": _label(ticker),
                          "event": m.get("event_ticker")}
+        _buying.discard(ticker)
         _tried.add(ticker)
         if m.get("event_ticker"):
             _events_tried.add(m["event_ticker"])
