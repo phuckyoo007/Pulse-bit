@@ -40,10 +40,10 @@ FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips th
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
-FLIP_NONSTAR_MIN_PRICE = 0.94      # 25 Oct 13:33 CT (per Matthew): 94-98c
+FLIP_NONSTAR_MIN_PRICE = 0.92      # 26 Oct 14:38 CT (per Matthew): 92-98c
 FLIP_NONSTAR_MIN_WIN = 0.97        # 25 Oct 20:48 CT (per Matthew): 97%+ win
 FLIP_MIN_WIN_ALL = 0.97            # 25 Oct 20:48 CT (per Matthew): 97%+ win; breaker steps up to 98% after a loss
-FLIP_STAR_MIN_PRICE = 0.94         # 25 Oct 13:33 CT (per Matthew): 94-98c; breaker can only raise it
+FLIP_STAR_MIN_PRICE = 0.92         # 26 Oct 14:38 CT (per Matthew): 92-98c; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
