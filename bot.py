@@ -299,6 +299,9 @@ PROFIT_FLOOR_ARM_DOLLARS = 0.50   # 25 Oct: once up $0.50 ...
 PROFIT_FLOOR_KEEP_DOLLARS = 0.25  # ... sell when the gain falls back to $0.25
 TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet is up $1.00
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
+# 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
+# last 45s included. For a NO bet it is the NO price falling to 80% of entry (= YES rising the same amount).
+STOP_FRACTION_OF_ENTRY = 0.80
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
@@ -664,13 +667,13 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             _pos0 = state.get(ticker) or {}
             if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
                 # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
-                if not (current_value <= flip_star.FLIP_6040_HELD + 1e-9
+                if not (current_value <= real_entry_price * STOP_FRACTION_OF_ENTRY + 1e-9
                         or current_value * count <= real_entry_price * count * flip_star.FLIP_CRASH_FRACTION + 1e-9):
                     _backstop_since.pop(ticker, None)
                     continue
             _sl = _secs_left_from_market(market)
             if _sl is not None and _sl <= LAST_WINDOW_SECONDS:
-                if current_value > LAST_WINDOW_STOP_HELD + 1e-9:
+                if current_value > real_entry_price * STOP_FRACTION_OF_ENTRY + 1e-9:
                     _backstop_since.pop(ticker, None)
                     continue   # last 30s: only the 60/40 pull-out applies (handled in the main exit loop)
             real_bet_dollars = real_entry_price * count
@@ -927,10 +930,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                                       f"of entry ${position['entry_price']:.2f})")
                     else:
                         decision = ExitDecision(False, "")
-                elif _hv <= flip_star.FLIP_6040_HELD + 1e-9:
+                elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
-                    decision = ExitDecision(True, f"stop_75 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- instant)")
+                    decision = ExitDecision(True, f"stop_80pct (held side {_hv*100:.0f}c <= 80% of entry ${position['entry_price']:.2f} -- instant)")
                 elif (position.get("flip_star") and _hv <= SIGMA_EXIT_MAX_HELD + 1e-9
                         and _held_sigma_now(ticker, position) is not None
                         and _held_sigma_now(ticker, position) <= flip_star.FLIP_EXIT_SIGMA + 1e-9):
@@ -961,10 +964,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _held_val = current_position_value(position, result.market_price)
                 if _held_val <= position["entry_price"] * HARD_BACKSTOP_CRASH_FRACTION + 1e-9:
                     decision = ExitDecision(True, f"crash_stop ({_held_val*100:.0f}c held side <= 50% of entry with {_secs:.0f}s left -- instant)")
-                elif _held_val <= LAST_WINDOW_STOP_HELD + 1e-9:
+                elif _held_val <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
                     _held_for = _line_held_seconds(position)
                     if _held_for >= LINE_STOP_CONFIRM_SECONDS:
-                        decision = ExitDecision(True, f"last_window_stop ({_held_val*100:.0f}c held side <= {LAST_WINDOW_STOP_HELD*100:.0f}c "
+                        decision = ExitDecision(True, f"last_window_stop ({_held_val*100:.0f}c held side <= 80% of entry "
                                                       f"for {_held_for:.1f}s with {_secs:.0f}s left -- selling)")
                     else:
                         print(f"STOP LINE (last {LAST_WINDOW_SECONDS}s): {ticker} held side {_held_val*100:.0f}c for {_held_for:.1f}s -- "

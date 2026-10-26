@@ -33,6 +33,7 @@ MK_MIN_PRICE = 0.94
 MK_MAX_PRICE = 0.98
 MK_MAX_SPREAD = 0.03
 MK_STOP = 0.80
+MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any time in the round
 MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80c line in the last 45s
 MK_POLL_SECONDS = 5
@@ -270,7 +271,7 @@ def run(client, place_exit=None):
         if ya is None or yb is None:
             continue
         value = yb if pos["side"] == "yes" else 1 - ya   # what selling our side would get right now
-        line = MK_LAST_WINDOW_STOP if sl <= MK_LAST_WINDOW_SECONDS else MK_STOP
+        line = pos["entry"] * MK_STOP_FRACTION   # 26 Oct (Matthew): 80% of what was paid, all round
         if value <= line + 1e-9:
             why = f"stop (our side {value*100:.0f}c <= {line*100:.0f}c, {sl:.0f}s left)"
             if MK_PAPER:
