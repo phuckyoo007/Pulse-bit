@@ -280,6 +280,13 @@ EXIT_IN_FLIGHT_SECONDS = 30   # a second exit for the same ticker inside this wi
 
 
 _exit_misses = {}            # ticker -> unfilled exit tries in a row (widens the limit each time)
+# 26 Oct 09:10 CT (Matthew): SPIKE GUARD. DOGE Down 7:14 CT sold at 20c in a 1-second spike and was 48c two seconds
+# later; SOL 25 Oct sold at 45c while the screen showed 92c. When the book is torn open (YES bid/ask more than
+# EXIT_SPIKE_SPREAD apart) a sell waits up to EXIT_SPIKE_WAIT_SECONDS for buyers to come back, re-checking every loop.
+# After that it sells at whatever price is there, so a real crash still gets out a few seconds later.
+EXIT_SPIKE_SPREAD = 0.15
+EXIT_SPIKE_WAIT_SECONDS = 3
+_spike_wait = {}             # ticker -> when the spike guard started holding this sell
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
 
 # 19 Oct 21:33 CT: in the last LAST_WINDOW_SECONDS of a round every other stop is switched off -- 6 of 7 stop-outs on
@@ -342,6 +349,16 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         # Each unfilled try now reaches further: 10c, then 25c, then any price.
         _tries = _exit_misses.get(ticker, 0)
         _slip = EXIT_MAX_SLIPPAGE if _tries == 0 else (0.25 if _tries == 1 else 1.0)
+        if (not dry_run and ya is not None and yb is not None and float(ya) > 0 and float(yb) > 0
+                and float(ya) - float(yb) > EXIT_SPIKE_SPREAD + 1e-9):
+            _first = _spike_wait.setdefault(ticker, time.time())
+            if time.time() - _first < EXIT_SPIKE_WAIT_SECONDS:
+                print(f"SPIKE GUARD: {ticker} -- book torn open (YES bid ${float(yb):.2f} / ask ${float(ya):.2f}); "
+                      f"holding the sell {time.time() - _first:.1f}s of {EXIT_SPIKE_WAIT_SECONDS}s for buyers to come back.")
+                return {"_sold": 0.0, "waiting": True}
+            print(f"SPIKE GUARD: {ticker} -- still torn open after {EXIT_SPIKE_WAIT_SECONDS}s -- selling now.")
+        else:
+            _spike_wait.pop(ticker, None)
         if close_side == "bid" and ya is not None and float(ya) > 0:
             price = min(0.99, round(float(ya) + _slip, 2))
         elif close_side == "ask" and yb is not None and float(yb) > 0:
@@ -421,6 +438,7 @@ def place_exit(client: KalshiClient, ticker: str, close_side: str, count: float,
         else:
             sold = before - max(left, 0)
             _exit_misses.pop(ticker, None)
+            _spike_wait.pop(ticker, None)
             if isinstance(resp, dict):
                 resp["_sold"] = sold
             print(f"EXIT: {ticker} -- sold {sold:g} of {before:g}; {max(left, 0):g} left.")
@@ -682,6 +700,8 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             close_side = "ask" if side == "bid" else "bid"
             try:
                 exit_resp = place_exit(client, ticker, close_side, count, dry_run=False)
+                if isinstance(exit_resp, dict) and exit_resp.get("waiting"):
+                    continue   # spike guard is holding this sell for a few seconds
                 if isinstance(exit_resp, dict) and exit_resp.get("skipped"):
                     if ticker in state:
                         del state[ticker]
