@@ -297,6 +297,14 @@ LAST_WINDOW_STOP_HELD = 0.70   # 20 Oct 19:30 CT: 70/30 for the whole round, YES
 # 24 Oct 12:52 CT (Matthew): set to 0 -- the line stops now sell the instant the held side touches the line.
 # (Was 4s. The HYPE stop_6040 sat under the line 6.6s and sold 68c.)
 LINE_STOP_CONFIRM_SECONDS = 0
+# 25 Oct 20:46 CT (Matthew: "tighten up whatever is causing the losses"). Today's end-of-market tracking showed:
+#   - profit lock / profit floor sold 5 bets that went on to WIN (each sold 1-4c under entry) and saved none -> OFF
+#   - 87%/86% stops: 2 of 3 sold winners (DOGE 79c, ETH 84c); the instant 80c line caught every real reversal -> OFF
+#     for Pulse bets (manual bets keep their own 85% stop)
+#   - sigma exit dumped SOL at 45c while the screen showed 92c -> now only fires once the price agrees (held side <= 90c)
+PROFIT_LOCK_ENABLED = False
+PULSE_PCT_STOPS_ENABLED = False
+SIGMA_EXIT_MAX_HELD = 0.90
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
@@ -895,14 +903,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
                     decision = ExitDecision(True, f"stop_75 (held side {_hv*100:.0f}c <= {flip_star.FLIP_6040_HELD*100:.0f}c -- instant)")
-                elif (position.get("flip_star")
+                elif (position.get("flip_star") and _hv <= SIGMA_EXIT_MAX_HELD + 1e-9
                         and _held_sigma_now(ticker, position) is not None
                         and _held_sigma_now(ticker, position) <= flip_star.FLIP_EXIT_SIGMA + 1e-9):
                     _zs_held = _held_sigma_now(ticker, position)
                     # 25 Oct 13:35 CT (Matthew): sell instantly when To flip for our side falls to 0.35 sigma.
                     decision = ExitDecision(True, f"sigma_exit (To flip {_zs_held:.2f} sigma <= {flip_star.FLIP_EXIT_SIGMA:g}, "
                                                   f"held side {_hv*100:.0f}c -- instant)")
-                elif _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
+                elif PULSE_PCT_STOPS_ENABLED and _hv <= position["entry_price"] * flip_star.FLIP_CRASH_FRACTION + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): the 87%-of-entry stop must hold CRASH_CONFIRM_SECONDS before selling.
                     _cs = position.setdefault("crash_since", time.time())
                     if time.time() - _cs >= CRASH_CONFIRM_SECONDS:
@@ -948,7 +956,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
             if not decision.should_exit:
                 # 25 Oct 13:27 CT (Matthew): the 86% stop also waits CRASH_CONFIRM_SECONDS (same timer as the 87% stop).
-                _isd = (ExitDecision(False, "") if position.get("manually_adopted")
+                _isd = (ExitDecision(False, "") if (position.get("manually_adopted") or not PULSE_PCT_STOPS_ENABLED)
                         else instant_stop_decision(position, result.market_price))
                 if _isd.should_exit:
                     _cs = position.setdefault("crash_since", time.time())
@@ -958,7 +966,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     position.pop("crash_since", None)   # Pulse bets reset this timer in the stop block above
             # PROFIT LOCK (21 Oct 13:26 CT, Matthew): once a Pulse bet has been up $0.25 or more, it may not turn into a
             # loss -- if it falls back to what was paid, sell at once (any time in the round, last 45s included).
-            if (not decision.should_exit and position.get("flip_star")
+            if (PROFIT_LOCK_ENABLED and not decision.should_exit and position.get("flip_star")
                     and position.get("peak_gain_per_contract", 0.0) * float(position.get("count", 0)) >= PROFIT_LOCK_ARM_DOLLARS - 1e-9):
                 _hv2 = current_position_value(position, result.market_price)
                 if _hv2 <= position["entry_price"] + 1e-9:
@@ -971,7 +979,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     decision = ExitDecision(True, f"take_profit (up ${_gain_tp:.2f} >= ${TAKE_PROFIT_DOLLARS:.2f} -- cashing out)")
             # PROFIT FLOOR (25 Oct 13:29 CT, Matthew): once a Pulse bet has been up $0.50 or more, sell as soon as the gain
             # falls back to $0.25 -- keep at least $0.25 instead of riding it back down.
-            if (not decision.should_exit and position.get("flip_star")
+            if (PROFIT_LOCK_ENABLED and not decision.should_exit and position.get("flip_star")
                     and position.get("peak_gain_per_contract", 0.0) * float(position.get("count", 0)) >= PROFIT_FLOOR_ARM_DOLLARS - 1e-9):
                 _hv3 = current_position_value(position, result.market_price)
                 _gain_now = (_hv3 - position["entry_price"]) * float(position.get("count", 0))

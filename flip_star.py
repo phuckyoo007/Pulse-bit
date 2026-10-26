@@ -530,7 +530,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         # price had dropped and the order filled at 91c (a buy limit is only a MAXIMUM -- it happily fills cheaper).
         # A cheaper fill means the market just lost confidence, so anything under the floor is sold straight away.
         floor = FLIP_STAR_MIN_PRICE if n["lock"] else FLIP_NONSTAR_MIN_PRICE
-        below_floor = entry_price < floor - 0.005
+        below_floor = entry_price < floor - 0.025   # 25 Oct: a 1-2c cheaper fill is fine (DOGE 93c was sold at 93c and then won)
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
