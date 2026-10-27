@@ -344,7 +344,7 @@ function safety(m,crit){
   return Math.max(0,Math.min(100,Math.round(v)));
 }
 function fmtD(v){return v>=10000?Math.round(v).toLocaleString():v>=100?v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):v.toPrecision(6);}
-function flipZone(z){return z>=2?['wp-hi','']:z>=1.5?['fy1','Y1 · BID ZONE']:z>=1?['fy2','Y2 · HOLD']:z>=0.5?['fy3','Y3 · GET READY TO SELL']:['wp-lo','RED · SELL'];}
+function flipZone(z){return z>=2?['wp-hi','']:z>=1.5?['fy1','Y1 · BID ZONE']:z>=1?['fy2','Y2 · HOLD']:z>=0.5?['fy3','Y3 · GET READY TO SELL']:z>=0.33?['wp-lo','RED 1 · WATCH']:z>=0.17?['wp-lo','RED 2 · READY']:['wp-lo','RED 3 · SELL'];}
 function tcls(t){return t==null?"":t>600?"t-red":t>300?"t-yel":"t-grn";}
 function sfClass(v){return v==null?"":v>=85?"sf-hi":v>=70?"sf-mid":"sf-lo";}
 function fixedOrder(a,b){const P=["GOLD","SILVER","OIL","BRENT","NATGAS","COPPER","PLATINUM","PALLADIUM","EURUSD","GBPUSD","USDJPY","SP500","NASDAQ","DOW"];

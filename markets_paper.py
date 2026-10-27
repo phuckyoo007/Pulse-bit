@@ -40,7 +40,7 @@ MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any 
 MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
-MK_RED_SIGMA = 0.35          # 26 Oct 17:29 CT (Matthew): sell once 'To flip' for our side is red (same 0.35-sigma line as crypto Pulse) ...
+MK_RED_SIGMA = 0.17          # 26 Oct 19:21 CT (Matthew): sell only in RED 3 (<0.17 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 3           # ... and has stayed red for 3 seconds
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
 _YAHOO = [("NATGAS", "NG=F"), ("NATURAL GAS", "NG=F"), ("BRENT", "BZ=F"), ("WTI", "CL=F"), ("OIL", "CL=F"), ("CRUDE", "CL=F"),
