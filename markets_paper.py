@@ -16,6 +16,7 @@ Kalshi API load is kept small: one discovery pass per round (when the round ente
 batched /markets?tickers=... read every MK_POLL_SECONDS for the handful of live markets and open paper bets.
 """
 import json
+import re
 import math
 import os
 import time
@@ -26,7 +27,9 @@ import requests
 import strategy
 
 MK_ENABLED = True
-MK_NEW_BETS = False   # 27 Oct 08:43 CT (Matthew: "turn off everything that's losing") -- Pulse Markets was -$11.20 over 33 bets; no new bets, open ones still managed to the end
+MK_NEW_BETS = True    # 27 Oct 13:03 CT (Matthew): add the 15-minute interest-rate markets -- back on, RATES ONLY (see MK_RATES_ONLY)
+MK_RATES_ONLY = True  # currencies + commodities stay off; only Treasury-yield (5Y/10Y/30Y...) 15-minute markets are bid on
+# (was) MK_NEW_BETS = False   # 27 Oct 08:43 CT (Matthew: "turn off everything that's losing") -- Pulse Markets was -$11.20 over 33 bets; no new bets, open ones still managed to the end
 MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
 MK_START_BALANCE = 40.0
 MK_SHARES = 5
@@ -77,7 +80,8 @@ _EXTRA_PREFIXES = {   # 26 Oct: the real series names, from the Markets Edge Boa
 
 # Hourly + 15-minute commodity / currency series are also found from Kalshi's live series list (refreshed every 30 min).
 _KEYWORDS = ("GOLD", "SILVER", "COPPER", "PLATINUM", "PALLADIUM", "NATURAL GAS", "NATGAS", "CRUDE", "OIL", "WTI", "BRENT",
-             "EUR", "GBP", "JPY", "USD/", "/USD", "YEN", "EURO", "POUND", "DOLLAR", "CAD", "AUD", "CHF")
+             "EUR", "GBP", "JPY", "USD/", "/USD", "YEN", "EURO", "POUND", "DOLLAR", "CAD", "AUD", "CHF",
+             "TREASURY", "YIELD", "T-NOTE", "T-BOND", "10Y", "30Y", "5Y", "2Y", "10-YEAR", "30-YEAR", "5-YEAR", "2-YEAR")
 _series_cache = {"at": 0.0, "found": {}}
 MK_ONE_PER_EVENT = True          # hourly events list many strike prices -- bet at most one per event
 
@@ -279,7 +283,28 @@ def _buy(client, ticker, side, cost):
     return 0, None
 
 
+def _rate_key(ticker):
+    return re.sub(r"[\s\-/]", "", (_label(ticker) + " " + ticker.split("-")[0]).upper()).replace("YEAR", "Y")
+
+
+def _is_rate(ticker):
+    """27 Oct: Kalshi's 15-minute Treasury-yield markets (5Y / 10Y / 30Y ...)."""
+    k = _rate_key(ticker)
+    return "TREASURY" in k or "YIELD" in k or bool(re.search(r"(?<![0-9])(2|5|10|30)Y", k))
+
+
+def _rate_symbol(ticker):
+    """Yahoo's CBOE yield indexes -- quoted in percent, same units as Kalshi's targets (e.g. 4.99)."""
+    k = _rate_key(ticker)
+    for pat, sym in ((r"(?<![0-9])30Y", "^TYX"), (r"(?<![0-9])10Y", "^TNX"), (r"(?<![0-9])5Y", "^FVX")):
+        if re.search(pat, k):
+            return sym
+    return None        # 2Y etc.: no clean Yahoo feed -> no sigma -> no bid
+
+
 def _yahoo_symbol(ticker):
+    if _is_rate(ticker):
+        return _rate_symbol(ticker)
     key = (_label(ticker) + " " + ticker.split("-")[0]).upper().replace("/", "")
     for word, sym in _YAHOO:
         if word in key:
@@ -467,6 +492,8 @@ def run(client, place_exit=None):
             break
         if ticker in _open or ticker in _tried:
             continue
+        if MK_RATES_ONLY and not _is_rate(ticker):
+            continue   # 27 Oct 13:03 CT: only interest-rate markets get new bets
         if MK_NO_COMMODITIES and _is_commodity(ticker):
             continue   # 27 Oct: commodities off -- see MK_NO_COMMODITIES
         m = q.get(ticker)
