@@ -260,7 +260,10 @@ def _spot_vol(sym):
         r = requests.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}", params={"interval": "1m", "range": "1d"},
                          headers={"User-Agent": "Mozilla/5.0"}, timeout=4)
         res = r.json()["chart"]["result"][0]
-        closes = [x for x in res["indicators"]["quote"][0]["close"] if x]
+        _ts = res.get("timestamp") or []
+        _cl = res["indicators"]["quote"][0]["close"]
+        bars_ts = [(t, x) for t, x in zip(_ts, _cl) if x]
+        closes = [x for _, x in bars_ts]
         spot = float(res["meta"].get("regularMarketPrice") or closes[-1])
         bars = closes[-61:]
         rets = [math.log(bars[i] / bars[i - 1]) for i in range(1, len(bars)) if bars[i - 1] > 0]
@@ -270,7 +273,7 @@ def _spot_vol(sym):
         vol = math.sqrt(sum((x - mu) ** 2 for x in rets) / (len(rets) - 1))
         if vol <= 0:
             return None
-        _yq[sym] = {"at": time.time(), "spot": spot, "vol": vol}
+        _yq[sym] = {"at": time.time(), "spot": spot, "vol": vol, "bars": bars_ts}
         return spot, vol
     except Exception as e:
         if not c or time.time() - c.get("warned", 0) > 300:
@@ -281,6 +284,8 @@ def _spot_vol(sym):
 
 def _held_sigma(ticker, m, side, secs_left):
     """'To flip' sigma for OUR side (negative = crossed to the other side), or None if it can't be worked out."""
+    if "15M" not in ticker.split("-")[0]:
+        return None        # hourly: no open-price anchor to line Yahoo up with Kalshi -> 80% stop only
     sym = _yahoo_symbol(ticker)
     if not sym or not secs_left or secs_left <= 0:
         return None
@@ -290,6 +295,31 @@ def _held_sigma(ticker, m, side, secs_left):
     spot, vol = sv
     st = (m.get("strike_type") or "").lower()
     fl, cp = _f(m.get("floor_strike")), _f(m.get("cap_strike"))
+    # 26 Oct 19:31 CT: Yahoo's price is not Kalshi's settlement price (futures basis, different FX source), which
+    # gave 6 false RED readings in a row (our side still 93-98c, all 6 would have WON). For a 15-minute up/down market
+    # the strike IS the price at the round's open, so shift Yahoo by (Yahoo at open - strike). Hourly markets have no
+    # such anchor -> no red sell for them (80% stop only).
+    strike = fl if st in ("greater", "greater_or_equal") else cp
+    ct = m.get("close_time")
+    bars = (_yq.get(sym) or {}).get("bars") or []
+    if not (strike and ct and bars):
+        return None
+    try:
+        open_ts = datetime.fromisoformat(str(ct).replace("Z", "+00:00")).timestamp() - 900
+    except Exception:
+        return None
+    # close of the 1-minute bar that ends at the round's open (Yahoo stamps bars by their start time)
+    at_open = None
+    for t, x in bars:
+        if t <= open_ts - 60 + 1:
+            at_open = x
+        else:
+            break
+    if at_open is None or abs(math.log(at_open / strike)) > 0.01:
+        return None        # no bar for the open, or Yahoo is clearly a different price series -- don't trust it
+    spot = spot - (at_open - strike)
+    if spot <= 0:
+        return None
     t = max(secs_left, 5) / 60.0
     if st in ("greater", "greater_or_equal") and fl:
         z_yes = math.log(spot / fl) / (vol * math.sqrt(t))
