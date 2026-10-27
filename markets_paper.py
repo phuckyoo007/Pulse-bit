@@ -467,6 +467,11 @@ def run(client, place_exit=None):
         side, cost = ("yes", ya) if ya >= no_ask else ("no", no_ask)
         if not (MK_MIN_PRICE <= cost <= MK_MAX_PRICE):
             continue
+        # 26 Oct 19:41 CT (Matthew): no sigma value -> no bid (hourly markets, no Yahoo match, bad price match).
+        zs_in = _held_sigma(ticker, m, side, sl)
+        if zs_in is None:
+            _note(ticker, f"[MKTS] {ticker}: no sigma value for it -- not bidding.", every=300.0)
+            continue
         count = MK_SHARES
         if MK_PAPER:
             fee_in = _fee(MK_SHARES, cost)
@@ -488,6 +493,6 @@ def run(client, place_exit=None):
         _tried.add(ticker)
         if m.get("event_ticker"):
             _events_tried.add(m["event_ticker"])
-        print(f"{_tag()} ENTRY {ticker} ({_label(ticker)}): {side.upper()} {count:g} @ ${cost:.2f}"
+        print(f"{_tag()} ENTRY {ticker} ({_label(ticker)}): {side.upper()} {count:g} @ ${cost:.2f}, To flip {zs_in:.2f} sigma"
               f"{' (simulated)' if MK_PAPER else ''}, {sl:.0f}s left")
         _save()
