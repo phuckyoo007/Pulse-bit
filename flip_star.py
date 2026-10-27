@@ -311,6 +311,7 @@ def _held_count(client, ticker):
     return 0.0, 0.0
 
 
+external_owned = [lambda: set()]   # bot.py: tickers another live bot (V2) owns -- never enter them
 _resting = {}   # ticker -> resting red-star bid waiting at FLIP_STAR_REST_PRICE
 
 
@@ -404,7 +405,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
     for ticker, n in b.items():
         if not entry_signal(n):
             continue
-        if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red:
+        if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red or ticker in external_owned[0]():
             continue
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue

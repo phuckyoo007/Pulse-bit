@@ -641,7 +641,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             ticker = p.get("ticker")
             if not ticker:
                 continue
-            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned():
+            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned() or ticker in pulse_v2.owned():
                 continue
             position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
             if position_fp == 0:
@@ -794,8 +794,8 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
-        if ticker and ticker in state and ticker in markets_paper.owned():
-            state.pop(ticker, None)   # the commodity/currency bot owns this one -- Pulse lets it go
+        if ticker and ticker in state and (ticker in markets_paper.owned() or ticker in pulse_v2.owned()):
+            state.pop(ticker, None)   # the commodity/currency bot or live V2 owns this one -- Pulse lets it go
             continue
         if ticker and ticker not in state:
             try:
@@ -806,7 +806,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                 pass
         if ticker in _settled_tickers:
             continue   # 26 Oct: already settled -- Kalshi still lists it until payout; don't re-adopt & re-count it
-        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned():
+        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in pulse_v2.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
         if position_fp == 0:
@@ -1249,6 +1249,7 @@ def run():
             adopt_manual_positions(client, state)
 
         try:
+            flip_star.external_owned[0] = pulse_v2.owned   # live V2's markets are off-limits to Pulse
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")
@@ -1257,7 +1258,8 @@ def run():
         except Exception as e:
             print(f"[RIDE] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
-            pulse_v2.run(client)   # PAPER ONLY -- simulated Pulse v2 next to the live bot, never sends orders
+            pulse_v2._busy_fn[0] = lambda: set(state) | flip_star.pending_tickers()
+            pulse_v2.run(client, place_exit)   # 26 Oct 19:42 CT: LIVE V2 next to Pulse (5 shares, max 2 open, -$10/day stop)
         except Exception as e:
             print(f"[V2-PAPER] pass failed (non-fatal): {e}")
         try:
