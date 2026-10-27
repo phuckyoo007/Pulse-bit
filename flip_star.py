@@ -311,6 +311,7 @@ def _held_count(client, ticker):
     return 0.0, 0.0
 
 
+FLIP_MAX_PER_EVENT = 3   # 27 Oct 12:51 CT (Matthew): at most 3 bets in one hourly event (both bots together)
 external_owned = [lambda: set()]   # bot.py: tickers another live bot (V2) owns -- never enter them
 _resting = {}   # ticker -> resting red-star bid waiting at FLIP_STAR_REST_PRICE
 
@@ -408,8 +409,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red or ticker in external_owned[0]():
             continue
         _ev = ticker.rsplit("-", 1)[0]
-        if any(t.rsplit("-", 1)[0] == _ev for t in list(state) + list(external_owned[0]())):
-            continue   # hourly events list many strikes -- one bet per event (15-minute rounds have one market anyway)
+        if sum(1 for t in list(state) + list(external_owned[0]()) if t.rsplit("-", 1)[0] == _ev) >= FLIP_MAX_PER_EVENT:
+            continue   # 27 Oct 12:51 CT (Matthew): up to 3 bets per hourly event (15-minute rounds have one market anyway)
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue
         if _falling_against(n):

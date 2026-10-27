@@ -362,8 +362,8 @@ def run(client, place_exit=None):
     for ticker, n in b.items():
         if ticker in _open or ticker in _tried:
             continue
-        if any(t.rsplit("-", 1)[0] == ticker.rsplit("-", 1)[0] for t in _open):
-            continue   # one bet per event (hourly events list many strikes)
+        if sum(1 for t in _open if t.rsplit("-", 1)[0] == ticker.rsplit("-", 1)[0]) >= flip_star.FLIP_MAX_PER_EVENT:
+            continue   # up to 3 bets per hourly event
         if n.get("tl") is None or not (V2_MIN_SECONDS_LEFT <= n["tl"] <= V2_MAX_SECONDS_LEFT):
             continue
         if _benched(n.get("coin")):
@@ -407,8 +407,9 @@ _busy_fn = [lambda: set()]   # bot.py sets this to "tickers live Pulse holds / i
 
 def _enter_live(client, ticker, n, side_yes, cost, edge):
     _ev = ticker.rsplit("-", 1)[0]
-    if ticker in flip_star.pending_tickers() or any(t.rsplit("-", 1)[0] == _ev for t in _busy_fn[0]()):
-        return            # live Pulse is in this market/event -- one bot per event
+    if (ticker in flip_star.pending_tickers() or ticker in _busy_fn[0]()
+            or sum(1 for t in list(_busy_fn[0]()) + list(_open) if t.rsplit("-", 1)[0] == _ev) >= flip_star.FLIP_MAX_PER_EVENT):
+        return            # live Pulse holds it, or this event already has 3 bets between the two bots
     try:
         held, _ = flip_star._held_count(client, ticker)
         if abs(held) > 1e-9:
