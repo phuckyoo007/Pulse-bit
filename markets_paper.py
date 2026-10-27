@@ -77,6 +77,7 @@ def _min_sigma(ticker):
 # 27 Oct 17:58 CT (Matthew): currencies back on, with much stricter rules. Since the 1.8-sigma rule they went 14 wins /
 # 1 loss but net -$0.13: the loss (EUR/USD, filled at 91c, 80s left, gapped to 45c) erased the 14 small wins.
 MK_FX_ON = True
+MK_FX_SHARES = 2              # 27 Oct 18:06 CT (Matthew): currencies at 2 shares (rates stay at MK_SHARES)
 MK_FX_MIN_PRICE = 0.96        # only the safest prices (the loser was bought at 91c)
 MK_FX_MIN_SIGMA = 2.5         # well clear of the flip line (rest of Pulse Markets: 1.8)
 MK_FX_MAX_SECONDS = 120       # last 2 minutes only -- less time for a reversal
@@ -290,7 +291,7 @@ def _tag():
     return "[MKTS-PAPER]" if MK_PAPER else "[MKTS]"
 
 
-def _buy(client, ticker, side, cost):
+def _buy(client, ticker, side, cost, shares=None):
     """Live IOC buy of MK_SHARES of `side` at up to `cost`. Returns (filled_count, avg_entry) or (0, None)."""
     import uuid
     import flip_star
@@ -310,7 +311,7 @@ def _buy(client, ticker, side, cost):
     yes_price = limit if side == "yes" else round(1 - limit, 2)
     try:
         client.create_order(ticker=ticker, client_order_id=f"pulse-mkts-{uuid.uuid4()}",
-                            side="bid" if side == "yes" else "ask", count=str(MK_SHARES),
+                            side="bid" if side == "yes" else "ask", count=str(shares or MK_SHARES),
                             price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
     except Exception as e:
         print(f"[MKTS] {ticker}: buy order failed ({e}).")
@@ -585,7 +586,7 @@ def run(client, place_exit=None):
             # 26 Oct 20:10 CT: sigma bar as crypto Pulse. Entries at 0.62 / 0.66 / -0.58 sigma (Brent, USDCAD,
             # EURUSD) were sold within seconds for -$1.30; the one at 2.14 sigma won.
             continue
-        count = MK_SHARES
+        count = MK_FX_SHARES if _is_fx(ticker) else MK_SHARES
         if MK_PAPER:
             fee_in = _fee(MK_SHARES, cost)
             if _s["balance"] < cost * MK_SHARES + fee_in:
@@ -594,7 +595,7 @@ def run(client, place_exit=None):
         else:
             _tried.add(ticker)
             _buying.add(ticker)
-            count, filled_px = _buy(client, ticker, side, cost)
+            count, filled_px = _buy(client, ticker, side, cost, count)
             if count <= 0:
                 _buying.discard(ticker)
                 print(f"[MKTS] {ticker}: nothing filled at ${cost:.2f} (price moved).")
