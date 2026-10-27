@@ -58,6 +58,20 @@ def _is_commodity(ticker):
 
 
 MK_MIN_SIGMA = 1.8           # bid only at To flip >= 1.8 sigma for our side (crypto Pulse's bar)
+# 27 Oct 14:33 CT (Matthew): loosen the rules for the interest-rate (Treasury yield) markets only -- no bets had
+# gone in since 13:03 at 94c / 1.8 sigma. Everything else keeps MK_MIN_PRICE / MK_MIN_SIGMA.
+MK_RATE_MIN_PRICE = 0.90
+MK_RATE_MIN_SIGMA = 1.5
+MK_NEAR_MISS_FLOOR = 0.80    # near-miss log: only strikes whose favored side is at least 80c (skips the far-away strikes)
+MK_NEAR_MISS_EVERY = 60.0    # ... at most once a minute per market
+
+
+def _min_price(ticker):
+    return MK_RATE_MIN_PRICE if _is_rate(ticker) else MK_MIN_PRICE
+
+
+def _min_sigma(ticker):
+    return MK_RATE_MIN_SIGMA if _is_rate(ticker) else MK_MIN_SIGMA
 MK_RED_SIGMA = 0.33          # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
@@ -257,7 +271,7 @@ def _buy(client, ticker, side, cost):
         fm = client.get_market(ticker).get("market", {})
         fya, fyb = _f(fm.get("yes_ask_dollars")), _f(fm.get("yes_bid_dollars"))
         now_cost = fya if side == "yes" else (None if fyb is None else 1 - fyb)
-        if now_cost is None or now_cost < MK_MIN_PRICE - 1e-9 or now_cost < cost - 1e-9:
+        if now_cost is None or now_cost < _min_price(ticker) - 1e-9 or now_cost < cost - 1e-9:
             print(f"[MKTS] {ticker}: price fell before the buy ({cost:.2f} -> "
                   f"{'?' if now_cost is None else f'{now_cost:.2f}'}) -- not buying into a drop.")
             return 0, None
@@ -505,20 +519,34 @@ def run(client, place_exit=None):
         if sl is None or not (MK_MIN_SECONDS_LEFT <= sl <= MK_MAX_SECONDS_LEFT):
             continue
         ya, yb = _f(m.get("yes_ask_dollars")), _f(m.get("yes_bid_dollars"))
-        if ya is None or yb is None or ya <= 0 or yb <= 0 or ya - yb > MK_MAX_SPREAD + 1e-9:
+        if ya is None or yb is None or ya <= 0 or yb <= 0:
             continue
         no_ask = 1 - yb
         side, cost = ("yes", ya) if ya >= no_ask else ("no", no_ask)
-        if not (MK_MIN_PRICE <= cost <= MK_MAX_PRICE):
-            continue
-        # 26 Oct 19:41 CT (Matthew): no sigma value -> no bid (hourly markets, no Yahoo match, bad price match).
+        min_px, min_z = _min_price(ticker), _min_sigma(ticker)
+        # 27 Oct 14:33 CT (Matthew): near-miss line for the yield markets -- price, sigma and what blocked the bid,
+        # so we can see how close they come.
+        near = _is_rate(ticker) and cost >= MK_NEAR_MISS_FLOOR
         zs_in = _held_sigma(ticker, m, side, sl)
+        why = []
+        if ya - yb > MK_MAX_SPREAD + 1e-9:
+            why.append(f"spread {(ya - yb) * 100:.0f}c > {MK_MAX_SPREAD * 100:.0f}c")
+        if not (min_px <= cost <= MK_MAX_PRICE):
+            why.append(f"price {cost * 100:.0f}c outside {min_px * 100:.0f}-{MK_MAX_PRICE * 100:.0f}c")
         if zs_in is None:
-            _note(ticker, f"[MKTS] {ticker}: no sigma value for it -- not bidding.", every=300.0)
-            continue
-        # 26 Oct 20:10 CT: same entry bar as crypto Pulse. Entries at 0.62 / 0.66 / -0.58 sigma (Brent, USDCAD,
-        # EURUSD) were sold within seconds for -$1.30; the one at 2.14 sigma won.
-        if zs_in < MK_MIN_SIGMA - 1e-9:
+            why.append("no sigma value")
+        elif zs_in < min_z - 1e-9:
+            why.append(f"sigma {zs_in:.2f} < {min_z}")
+        if why:
+            if near:
+                _note("near:" + ticker, f"[MKTS-NEAR] {ticker} ({_label(ticker)}): {side.upper()} {cost * 100:.0f}c, "
+                      f"To flip {'?' if zs_in is None else f'{zs_in:.2f}'} sigma, {sl:.0f}s left -- "
+                      f"not bid: {'; '.join(why)}", every=MK_NEAR_MISS_EVERY)
+            elif zs_in is None and min_px <= cost <= MK_MAX_PRICE:
+                # 26 Oct 19:41 CT (Matthew): no sigma value -> no bid (hourly markets, no Yahoo match, bad price match).
+                _note(ticker, f"[MKTS] {ticker}: no sigma value for it -- not bidding.", every=300.0)
+            # 26 Oct 20:10 CT: sigma bar as crypto Pulse. Entries at 0.62 / 0.66 / -0.58 sigma (Brent, USDCAD,
+            # EURUSD) were sold within seconds for -$1.30; the one at 2.14 sigma won.
             continue
         count = MK_SHARES
         if MK_PAPER:
