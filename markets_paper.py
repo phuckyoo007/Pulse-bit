@@ -67,11 +67,35 @@ MK_NEAR_MISS_EVERY = 60.0    # ... at most once a minute per market
 
 
 def _min_price(ticker):
-    return MK_RATE_MIN_PRICE if _is_rate(ticker) else MK_MIN_PRICE
+    return MK_RATE_MIN_PRICE if _is_rate(ticker) else (MK_FX_MIN_PRICE if _is_fx(ticker) else MK_MIN_PRICE)
 
 
 def _min_sigma(ticker):
-    return MK_RATE_MIN_SIGMA if _is_rate(ticker) else MK_MIN_SIGMA
+    return MK_RATE_MIN_SIGMA if _is_rate(ticker) else (MK_FX_MIN_SIGMA if _is_fx(ticker) else MK_MIN_SIGMA)
+
+
+# 27 Oct 17:58 CT (Matthew): currencies back on, with much stricter rules. Since the 1.8-sigma rule they went 14 wins /
+# 1 loss but net -$0.13: the loss (EUR/USD, filled at 91c, 80s left, gapped to 45c) erased the 14 small wins.
+MK_FX_ON = True
+MK_FX_MIN_PRICE = 0.96        # only the safest prices (the loser was bought at 91c)
+MK_FX_MIN_SIGMA = 2.5         # well clear of the flip line (rest of Pulse Markets: 1.8)
+MK_FX_MAX_SECONDS = 120       # last 2 minutes only -- less time for a reversal
+MK_FX_MAX_SPREAD = 0.02       # tight books only
+MK_FX_MAX_OPEN = 1            # one currency bet at a time (EUR/GBP/AUD/CAD/JPY all move with the dollar)
+MK_FX_DAILY_LOSSES = 1        # one losing currency bet -> no more currency bets until tomorrow (Central)
+_FX_WORDS = ("EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "MXN", "YEN", "EURO", "POUND")
+
+
+def _is_fx(ticker):
+    if _is_rate(ticker) or _is_commodity(ticker):
+        return False
+    key = (ticker.split("-")[0] + " " + _label(ticker)).upper()
+    return any(w in key for w in _FX_WORDS)
+
+
+def _fx_today():
+    from datetime import timedelta
+    return datetime.now(timezone(timedelta(hours=-5))).strftime("%Y-%m-%d")
 MK_RED_SIGMA = 0.33          # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
@@ -245,6 +269,11 @@ def _close(ticker, pos, value, why, settled):
     _s["n"] += 1
     _s["wins"] += 1 if pnl > 0 else 0
     _s["pnl"] += pnl
+    if pnl < 0 and _is_fx(ticker):
+        if _s.get("fx_day") != _fx_today():
+            _s["fx_day"], _s["fx_day_losses"] = _fx_today(), 0
+        _s["fx_day_losses"] = _s.get("fx_day_losses", 0) + 1
+        print(f"[MKTS] currency bet lost -- no more currency bets today (rule: {MK_FX_DAILY_LOSSES} loss/day).")
     k = _s["by_kind"].setdefault(pos["label"], [0, 0, 0.0])
     k[0] += 1
     k[1] += 1 if pnl > 0 else 0
@@ -506,8 +535,13 @@ def run(client, place_exit=None):
             break
         if ticker in _open or ticker in _tried:
             continue
-        if MK_RATES_ONLY and not _is_rate(ticker):
-            continue   # 27 Oct 13:03 CT: only interest-rate markets get new bets
+        if MK_RATES_ONLY and not (_is_rate(ticker) or (MK_FX_ON and _is_fx(ticker))):
+            continue   # 27 Oct: interest rates, plus currencies under the strict MK_FX_* rules
+        if _is_fx(ticker):
+            if _s.get("fx_day") == _fx_today() and _s.get("fx_day_losses", 0) >= MK_FX_DAILY_LOSSES:
+                continue   # a currency bet already lost today
+            if sum(1 for t in _open if _is_fx(t)) >= MK_FX_MAX_OPEN:
+                continue
         if MK_NO_COMMODITIES and _is_commodity(ticker):
             continue   # 27 Oct: commodities off -- see MK_NO_COMMODITIES
         m = q.get(ticker)
@@ -529,8 +563,11 @@ def run(client, place_exit=None):
         near = _is_rate(ticker) and cost >= MK_NEAR_MISS_FLOOR
         zs_in = _held_sigma(ticker, m, side, sl)
         why = []
-        if ya - yb > MK_MAX_SPREAD + 1e-9:
-            why.append(f"spread {(ya - yb) * 100:.0f}c > {MK_MAX_SPREAD * 100:.0f}c")
+        max_spread = MK_FX_MAX_SPREAD if _is_fx(ticker) else MK_MAX_SPREAD
+        if ya - yb > max_spread + 1e-9:
+            why.append(f"spread {(ya - yb) * 100:.0f}c > {max_spread * 100:.0f}c")
+        if _is_fx(ticker) and sl > MK_FX_MAX_SECONDS:
+            why.append(f"{sl:.0f}s left > {MK_FX_MAX_SECONDS}s")
         if not (min_px <= cost <= MK_MAX_PRICE):
             why.append(f"price {cost * 100:.0f}c outside {min_px * 100:.0f}-{MK_MAX_PRICE * 100:.0f}c")
         if zs_in is None:
