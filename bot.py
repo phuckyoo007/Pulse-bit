@@ -738,6 +738,8 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
 
 BOT_ORDER_ID_PREFIX = "pulse-"
 PULSE_SERIES = {f"KX{c}15M" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "ZEC", "NEAR", "BCH", "SUI")}
+# 27 Oct: hourly crypto ("KXBTCD", "KXXRPD", ...) is Pulse's too -- an hourly XRP bet was adopted as MANUAL (85% stop) at 13:57 CT
+PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "ZEC", "NEAR", "BCH", "SUI")}
 PROCESS_START_TIME = time.time()
 
 
