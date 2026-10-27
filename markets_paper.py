@@ -238,7 +238,7 @@ def _buy(client, ticker, side, cost):
         fm = client.get_market(ticker).get("market", {})
         fya, fyb = _f(fm.get("yes_ask_dollars")), _f(fm.get("yes_bid_dollars"))
         now_cost = fya if side == "yes" else (None if fyb is None else 1 - fyb)
-        if now_cost is None or now_cost < MK_MIN_PRICE - 1e-9 or now_cost < cost - 0.01 - 1e-9:
+        if now_cost is None or now_cost < MK_MIN_PRICE - 1e-9 or now_cost < cost - 1e-9:
             print(f"[MKTS] {ticker}: price fell before the buy ({cost:.2f} -> "
                   f"{'?' if now_cost is None else f'{now_cost:.2f}'}) -- not buying into a drop.")
             return 0, None
