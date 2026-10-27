@@ -55,7 +55,7 @@ def _is_commodity(ticker):
 
 
 MK_MIN_SIGMA = 1.8           # bid only at To flip >= 1.8 sigma for our side (crypto Pulse's bar)
-MK_RED_SIGMA = 0.17          # 26 Oct 19:21 CT (Matthew): sell only in RED 3 (<0.17 sigma), same as crypto Pulse ...
+MK_RED_SIGMA = 0.33          # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
 _YAHOO = [("NATGAS", "NG=F"), ("NATURAL GAS", "NG=F"), ("BRENT", "BZ=F"), ("WTI", "CL=F"), ("OIL", "CL=F"), ("CRUDE", "CL=F"),

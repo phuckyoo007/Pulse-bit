@@ -53,7 +53,7 @@ V2_ROUND_CAP_FRACTION = 0.50
 V2_BENCH_LOSSES = 2
 V2_BENCH_HOURS = 24
 
-V2_EXIT_SIGMA = 0.17             # 26 Oct (Matthew's rules for every bot): sell the moment it reads RED 3 ...
+V2_EXIT_SIGMA = 0.33             # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly ...
 V2_EXIT_CONFIRM_SECONDS = 0      # ... no wait
 V2_GAP_STOP = 0.25               # (paper only) sell at once if the held side is this far under the entry price
 V2_STOP_FRACTION = 0.80          # live: sell instantly at 80% of entry (a 20% loss), like Pulse
