@@ -199,7 +199,7 @@ def board(force: bool = False) -> dict:
             return {}
         out = {}
         for m in st.get("markets", []):
-            if m.get("kind") != "15m":
+            if m.get("kind") not in ("15m", "above/below"):   # 27 Oct 12:48 CT (Matthew): hourly crypto too
                 continue
             if _is_excluded(m.get("coin"), m.get("ticker")):
                 continue
@@ -407,6 +407,9 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
         if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red or ticker in external_owned[0]():
             continue
+        _ev = ticker.rsplit("-", 1)[0]
+        if any(t.rsplit("-", 1)[0] == _ev for t in list(state) + list(external_owned[0]())):
+            continue   # hourly events list many strikes -- one bet per event (15-minute rounds have one market anyway)
         if _attempts.get(ticker, 0) >= FLIP_MAX_ATTEMPTS_PER_TICKER:
             continue
         if _falling_against(n):
