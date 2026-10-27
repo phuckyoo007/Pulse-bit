@@ -40,6 +40,7 @@ MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any 
 MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
+MK_MIN_SIGMA = 1.8           # bid only at To flip >= 1.8 sigma for our side (crypto Pulse's bar)
 MK_RED_SIGMA = 0.17          # 26 Oct 19:21 CT (Matthew): sell only in RED 3 (<0.17 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
@@ -471,6 +472,10 @@ def run(client, place_exit=None):
         zs_in = _held_sigma(ticker, m, side, sl)
         if zs_in is None:
             _note(ticker, f"[MKTS] {ticker}: no sigma value for it -- not bidding.", every=300.0)
+            continue
+        # 26 Oct 20:10 CT: same entry bar as crypto Pulse. Entries at 0.62 / 0.66 / -0.58 sigma (Brent, USDCAD,
+        # EURUSD) were sold within seconds for -$1.30; the one at 2.14 sigma won.
+        if zs_in < MK_MIN_SIGMA - 1e-9:
             continue
         count = MK_SHARES
         if MK_PAPER:
