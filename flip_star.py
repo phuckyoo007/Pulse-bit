@@ -41,8 +41,8 @@ FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
 FLIP_NONSTAR_MIN_PRICE = 0.92      # 26 Oct 14:38 CT (per Matthew): 92-98c
-FLIP_NONSTAR_MIN_WIN = 0.97        # 27 Oct 12:41 CT (Matthew): back to 97%
-FLIP_MIN_WIN_ALL = 0.97            # 27 Oct 12:41 CT (Matthew): back to 97%; breaker still steps up to 98% after a loss on a sub-98% bet
+FLIP_NONSTAR_MIN_WIN = 0.96        # 27 Oct 12:41 CT (Matthew): 96% minimum win, permanent
+FLIP_MIN_WIN_ALL = 0.96            # 27 Oct 12:41 CT (Matthew): 96% minimum win, permanent (no step-up)
 FLIP_STAR_MIN_PRICE = 0.92         # 26 Oct 14:38 CT (per Matthew): 92-98c; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
@@ -76,7 +76,7 @@ except Exception:
 
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.98   # 25 Oct 20:48 CT (per Matthew): after a loss on a sub-98% bet, minimum steps up to 98%
+FLIP_WIN_SAFE_MIN = 0.96   # 27 Oct 12:41 CT (Matthew): permanent 96% -- the step-up after a loss is OFF (same value)
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
