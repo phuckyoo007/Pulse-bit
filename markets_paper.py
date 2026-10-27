@@ -194,6 +194,15 @@ def _batch(client, tickers):
     return out
 
 
+_notes = {}
+
+
+def _note(key, msg, every=10.0):
+    if time.time() - _notes.get(key + msg[:30], 0) >= every:
+        _notes[key + msg[:30]] = time.time()
+        print(msg)
+
+
 def _close(ticker, pos, value, why, settled):
     _red_since.pop(ticker, None)
     fee_out = 0.0 if settled else _fee(pos["count"], value)
@@ -223,6 +232,18 @@ def _buy(client, ticker, side, cost):
     """Live IOC buy of MK_SHARES of `side` at up to `cost`. Returns (filled_count, avg_entry) or (0, None)."""
     import uuid
     import flip_star
+    # 26 Oct (AUD/USD bought at 91c on a 95c quote, then went to 0): re-read the price right before buying and skip
+    # if our side has dropped below the band since the quote -- never buy into a falling price.
+    try:
+        fm = client.get_market(ticker).get("market", {})
+        fya, fyb = _f(fm.get("yes_ask_dollars")), _f(fm.get("yes_bid_dollars"))
+        now_cost = fya if side == "yes" else (None if fyb is None else 1 - fyb)
+        if now_cost is None or now_cost < MK_MIN_PRICE - 1e-9 or now_cost < cost - 0.01 - 1e-9:
+            print(f"[MKTS] {ticker}: price fell before the buy ({cost:.2f} -> "
+                  f"{'?' if now_cost is None else f'{now_cost:.2f}'}) -- not buying into a drop.")
+            return 0, None
+    except Exception:
+        pass
     limit = min(MK_MAX_PRICE, round(cost, 2))
     yes_price = limit if side == "yes" else round(1 - limit, 2)
     try:
@@ -357,6 +378,12 @@ def run(client, place_exit=None):
     for ticker in list(_open):
         m = q.get(ticker)
         if not m:
+            try:
+                m = client.get_market(ticker).get("market")   # 26 Oct: missing from the batch -> read it on its own
+            except Exception:
+                m = None
+        if not m:
+            _note(ticker, f"[MKTS] {ticker}: no quote from Kalshi this pass -- can't check the stop.")
             continue
         res = m.get("result")
         pos = _open[ticker]
@@ -368,9 +395,14 @@ def run(client, place_exit=None):
         if sl is None or sl <= 0:
             continue                                    # closed, waiting for the result
         ya, yb = _f(m.get("yes_ask_dollars")), _f(m.get("yes_bid_dollars"))
-        if ya is None or yb is None:
-            continue
-        value = yb if pos["side"] == "yes" else 1 - ya   # what selling our side would get right now
+        # 26 Oct (AUD/USD -$4.58): when nobody is bidding for our side Kalshi sends no price; the old code skipped the
+        # bet entirely, so neither stop ever ran and it rode to zero. No buyers now = our side is worth 0 -> stop fires
+        # and the sell keeps trying every pass (at any price) until someone takes it.
+        mine = yb if pos["side"] == "yes" else (None if ya is None else 1 - ya)
+        if mine is None or mine <= 0:
+            _note(ticker, f"[MKTS] {ticker}: NOBODY BIDDING for our {pos['side'].upper()} -- treating it as 0 and trying to sell.")
+            mine = 0.0
+        value = mine   # what selling our side would get right now
         line = pos["entry"] * MK_STOP_FRACTION   # 26 Oct (Matthew): 80% of what was paid, all round
         why = None
         if value <= line + 1e-9:
