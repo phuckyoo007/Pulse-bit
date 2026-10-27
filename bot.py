@@ -317,7 +317,7 @@ LINE_STOP_CONFIRM_SECONDS = 0
 PROFIT_LOCK_ENABLED = False
 PULSE_PCT_STOPS_ENABLED = False
 SIGMA_EXIT_MAX_HELD = 0.90
-RED_EXIT_SECONDS = 3          # 26 Oct 17:30 CT (Matthew): red (<= 0.35 sigma) must last 3s, then sell -- both bots
+RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3 (<0.17 sigma)
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 

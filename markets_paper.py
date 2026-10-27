@@ -41,7 +41,7 @@ MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
 MK_RED_SIGMA = 0.17          # 26 Oct 19:21 CT (Matthew): sell only in RED 3 (<0.17 sigma), same as crypto Pulse ...
-MK_RED_SECONDS = 3           # ... and has stayed red for 3 seconds
+MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
 MK_RED_POLL_SECONDS = 1      # poll every second while a bet is red, so the 3s is honoured
 _YAHOO = [("NATGAS", "NG=F"), ("NATURAL GAS", "NG=F"), ("BRENT", "BZ=F"), ("WTI", "CL=F"), ("OIL", "CL=F"), ("CRUDE", "CL=F"),
           ("GOLD", "GC=F"), ("SILVER", "SI=F"), ("COPPER", "HG=F"), ("PLATINUM", "PL=F"), ("PALLADIUM", "PA=F"),
