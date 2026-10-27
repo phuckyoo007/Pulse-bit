@@ -26,6 +26,7 @@ import requests
 import strategy
 
 MK_ENABLED = True
+MK_NEW_BETS = False   # 27 Oct 08:43 CT (Matthew: "turn off everything that's losing") -- Pulse Markets was -$11.20 over 33 bets; no new bets, open ones still managed to the end
 MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
 MK_START_BALANCE = 40.0
 MK_SHARES = 5
@@ -459,7 +460,7 @@ def run(client, place_exit=None):
               f"held would have {'WON' if won else 'LOST'}; the sell {'COST' if diff > 0 else 'SAVED'} ${abs(diff):.2f}")
 
     # entries
-    if not in_window:
+    if not in_window or not MK_NEW_BETS:
         return
     for ticker in _round["tickers"]:
         if len(_open) >= MK_MAX_OPEN:
