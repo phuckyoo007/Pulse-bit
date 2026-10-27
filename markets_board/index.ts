@@ -10,13 +10,17 @@ const BINANCE_US = "https://api.binance.us/api/v3";
 const PORT = Number(Bun.env.PORT || 8787);
 const HORIZON_H = Number(Bun.env.EDGE_HORIZON_HOURS || 24);
 const PASSWORD = Bun.env.EDGE_PASSWORD || "";
+// 27 Oct: BOARD_SET=rates -> an interest-rates-only board (same code, separate Railway service)
+const BOARD_SET = (Bun.env.BOARD_SET || "all").toLowerCase();
+const RATE_ASSETS = new Set(["30Y", "10Y", "5Y"]);
+const BOARD_NAME = BOARD_SET === "rates" ? "Rates Edge Board" : "Markets Edge Board";
 const HDRS = { "User-Agent": "Mozilla/5.0 (markets-edge-board)", Accept: "application/json" };
 const YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/";
 
 const PAGE: string = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Markets Edge Board</title>
+<title>${BOARD_NAME}</title>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--line:#2a313c;--text:#e6edf3;--dim:#8b949e;
 --green:#3fb950;--red:#f85149;--amber:#e3b341;--blue:#58a6ff}
@@ -198,7 +202,7 @@ td.sf{font-size:22px;font-weight:800}
 .fy1{color:#d4dc4a}.fy2{color:#e3b341}.fy3{color:#ff9a3c}.pk .fzt{white-space:nowrap;font-size:10px;font-weight:900;letter-spacing:.04em;margin-top:1px}.pk .fzt.fy3,.pk .fzt.wp-lo{animation:fzblink 1s step-end infinite}@keyframes fzblink{50%{opacity:.35}}.pk .flip{font-size:12px;white-space:nowrap;font-weight:800;margin-top:2px}.rstar{color:#ff2d2d;font-size:26px;line-height:1;vertical-align:-3px;text-shadow:0 0 8px rgba(255,45,45,.8)}.pk .vs{font-size:13px;font-weight:900;letter-spacing:.03em;margin-top:4px}.pk .vsd{font-size:15px;font-weight:800;white-space:nowrap}.pk .vsd span{font-size:12px}.pk .vs.up,.pk .vsd.up{color:var(--green)}.pk .vs.dn,.pk .vsd.dn{color:#ff7b72}.pk .tgt{font-size:11px;color:var(--dim);margin-bottom:2px}.pk .tgt b{color:var(--text)}.pk .pr{font-size:14px;font-weight:700;color:var(--dim);margin-top:2px}.pk .pr b{font-size:20px;font-weight:800}.pk .wl{font-size:11px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}.pk .p{font-size:28px;font-weight:800;line-height:1.1}.pk small{display:block;color:var(--dim);font-size:11px;margin-top:2px}
 </style></head><body>
 <header>
-  <h1>Markets Edge Board</h1>
+  <h1>${BOARD_NAME}</h1>
   <span id="status" class="pill">connecting…</span>
   <span id="count" class="pill"></span>
   <span id="tally" class="pill"></span>
@@ -696,14 +700,23 @@ const ASSETS: Record<string, [string, RegExp]> = {
   EURUSD: ["EURUSD=X", /EUR\s*\/?\s*USD|EURUSD|\bEURO\b/i], GBPUSD: ["GBPUSD=X", /GBP\s*\/?\s*USD|GBPUSD|POUND/i],
   USDJPY: ["JPY=X", /USD\s*\/?\s*JPY|USDJPY|\bYEN\b/i],
   SP500: ["^GSPC", /S&P|SP500|KXINX/i], NASDAQ: ["^NDX", /NASDAQ|KXNDQ/i], DOW: ["^DJI", /\bDOW\b|KXDJI/i],
+  // 27 Oct: 15-minute Treasury-yield markets (KX5YRRATE15M / KX10YRRATE15M / KX30YRRATE15M); Yahoo CBOE yield indexes
+  "30Y": ["^TYX", /KX30YR|30[- ]?YEAR TREASURY|30[- ]?Y(R)? (TREASURY|YIELD)/i],
+  "10Y": ["^TNX", /KX10YR|10[- ]?YEAR TREASURY|10[- ]?Y(R)? (TREASURY|YIELD)/i],
+  "5Y": ["^FVX", /KX5YR|(?<![0-9])5[- ]?YEAR TREASURY|(?<![0-9])5[- ]?Y(R)? (TREASURY|YIELD)/i],
 };
 function coinFor(ticker: string, title: string): string | null {
   const text = `${ticker} ${title || ""}`;
   if (/BTC|ETH|SOL|XRP|DOGE|BITCOIN|ETHEREUM|CRYPTO/i.test(ticker)) return null;
-  for (const [a, [, re]] of Object.entries(ASSETS)) if (re.test(text)) return a;
+  for (const [a, [, re]] of Object.entries(ASSETS)) {
+    if (!re.test(text)) continue;
+    if (BOARD_SET === "rates" && !RATE_ASSETS.has(a)) return null;
+    return a;
+  }
   return null;
 }
-const SEED = ["KXGOLD15M", "KXSILVER15M", "KXNATGAS15M", "KXINX15M", "KXNDQ15M", "KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M"];
+const SEED = ["KXGOLD15M", "KXSILVER15M", "KXNATGAS15M", "KXINX15M", "KXNDQ15M", "KXEURUSD15M", "KXGBPUSD15M", "KXUSDJPY15M",
+  "KX5YRRATE15M", "KX10YRRATE15M", "KX30YRRATE15M"];
 
 // ---------------------------------------------------------------- state
 type Series = { ticker: string; title: string; coin: string | null; fast: boolean;
@@ -1268,7 +1281,19 @@ function evaluate(m: any, st: any) {
   const closeTs = m.close_time ? Date.parse(m.close_time) / 1000 : NaN;
   const tLeft = Number.isFinite(closeTs) ? closeTs - Date.now() / 1000 : null;
   out.t_left = tLeft;
-  const S = st.price ?? null;
+  let S = st.price ?? null;
+  // 27 Oct: line Yahoo up with Kalshi -- a 15-minute market's target IS the price at the round's open, so shift Yahoo by
+  // (Yahoo at open - target). Skipped if Yahoo is >1% off the target (wrong feed) or has no bar for the open.
+  if (S != null && m.kind === "15m" && m.open_time) {
+    const strike0 = m.strike_type === "less" || m.strike_type === "less_or_equal" ? m.cap : m.floor;
+    const cd = candles.get(m.coin);
+    const openTs = Date.parse(m.open_time) / 1000;
+    if (strike0 && cd && Array.isArray(cd.c1) && Number.isFinite(openTs)) {
+      let atOpen: number | null = null;
+      for (const b of cd.c1) { if (b[0] <= openTs - 60 + 1) atOpen = b[1]; else break; }
+      if (atOpen != null && Math.abs(Math.log(atOpen / strike0)) <= 0.01) { out.basis = atOpen - strike0; S = S - out.basis; }
+    }
+  }
   out.spot = S;
   let p: number | null = null;
   if (S != null && tLeft != null) {
@@ -1369,7 +1394,7 @@ Bun.serve({
   hostname: "0.0.0.0",
   fetch(req) {
     if (!authorized(req))
-      return new Response("Password required", { status: 401, headers: { "WWW-Authenticate": 'Basic realm="Markets Edge Board"' } });
+      return new Response("Password required", { status: 401, headers: { "WWW-Authenticate": `Basic realm="${BOARD_NAME}"` } });
     const url = new URL(req.url);
     if (url.pathname.endsWith("/api/state")) {
       return new Response(JSON.stringify(snapshot()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -1380,7 +1405,7 @@ Bun.serve({
     return new Response("not found", { status: 404 });
   },
 });
-console.log(`Markets Edge Board listening on :${PORT}`);
+console.log(`${BOARD_NAME} listening on :${PORT} (BOARD_SET=${BOARD_SET})`);
 
 await discover();
 seriesLoop(true); // 15-minute markets only
