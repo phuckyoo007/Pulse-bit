@@ -40,6 +40,19 @@ MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any 
 MK_LAST_WINDOW_SECONDS = 45
 MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
 MK_POLL_SECONDS = 5
+# 27 Oct 08:38 CT (Matthew: "make sure that does not happen ever again"). Since 26 Oct 20:10 CT commodities lost
+# -$14.91 on 5 bets (natgas -$4.87 and gold -$4.72 flipped in the last seconds and settled at 0 with no stop
+# possible; gold/silver gapped through the 80% stop) against about +$3.80 from 15 wins. Currencies were about even.
+# Commodities (gold, silver, copper, platinum, palladium, natural gas, oil, Brent) are no longer bid on.
+MK_NO_COMMODITIES = True
+_COMMODITY_WORDS = ("GOLD", "SILVER", "COPPER", "PLATINUM", "PALLADIUM", "NATGAS", "NATURAL GAS", "WTI", "OIL", "BRENT", "CRUDE", "TIN")
+
+
+def _is_commodity(ticker):
+    key = (ticker.split("-")[0] + " " + _label(ticker)).upper()
+    return any(w in key for w in _COMMODITY_WORDS)
+
+
 MK_MIN_SIGMA = 1.8           # bid only at To flip >= 1.8 sigma for our side (crypto Pulse's bar)
 MK_RED_SIGMA = 0.17          # 26 Oct 19:21 CT (Matthew): sell only in RED 3 (<0.17 sigma), same as crypto Pulse ...
 MK_RED_SECONDS = 0           # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3
@@ -453,6 +466,8 @@ def run(client, place_exit=None):
             break
         if ticker in _open or ticker in _tried:
             continue
+        if MK_NO_COMMODITIES and _is_commodity(ticker):
+            continue   # 27 Oct: commodities off -- see MK_NO_COMMODITIES
         m = q.get(ticker)
         if m and MK_ONE_PER_EVENT and m.get("event_ticker") in _events_tried:
             continue
