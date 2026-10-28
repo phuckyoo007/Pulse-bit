@@ -22,7 +22,7 @@ FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84
-FLIP_SHARES = 15                   # 27 Oct 16:14 CT (Matthew): back to 15 shares per entry (ceiling; cash cap can size down)
+FLIP_SHARES = 10                   # 28 Oct 01:48 CT (Matthew: "tighten up what we loosened") -- back to 10 (15-share losses ran -$4.82/-$5.83/-$7.27)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
@@ -32,7 +32,7 @@ FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma
 FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get more bets ...
-FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_LOOSE   # ... and the first time a bet that only got in under the looser rule
+FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT  # 28 Oct 01:48 CT: back to 1.8 (the 1.5 trial is over)
                                             # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
 _SIGMA_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_sigma_breaker.json")
 FLIP_EXIT_SIGMA = 0.33              # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly. Zones: RED 1 0.50-0.33, RED 2 0.33-0.17, RED 3 <0.17
@@ -44,10 +44,10 @@ FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips th
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
-FLIP_NONSTAR_MIN_PRICE = 0.92      # 26 Oct 14:38 CT (per Matthew): 92-98c
-FLIP_NONSTAR_MIN_WIN = 0.96        # 27 Oct 12:41 CT (Matthew): 96% minimum win, permanent
-FLIP_MIN_WIN_ALL = 0.96            # 27 Oct 12:41 CT (Matthew): 96% minimum win, permanent (no step-up)
-FLIP_STAR_MIN_PRICE = 0.92         # 26 Oct 14:38 CT (per Matthew): 92-98c; breaker can only raise it
+FLIP_NONSTAR_MIN_PRICE = 0.94      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)
+FLIP_NONSTAR_MIN_WIN = 0.98        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)
+FLIP_MIN_WIN_ALL = 0.98            # 28 Oct 01:48 CT: back to 98% minimum win
+FLIP_STAR_MIN_PRICE = 0.94         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -68,7 +68,7 @@ def _order_fee(count, price):
     return math.ceil(0.07 * count * price * (1 - price) * 100 - 1e-9) / 100
 
 
-FLIP_STAR_SAFE_MIN_PRICE = 0.93
+FLIP_STAR_SAFE_MIN_PRICE = 0.95
 _BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_floor_breaker.json")
 try:
     if os.path.exists(_BREAKER_FILE):
@@ -80,7 +80,7 @@ except Exception:
 
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.96   # 27 Oct 12:41 CT (Matthew): permanent 96% -- the step-up after a loss is OFF (same value)
+FLIP_WIN_SAFE_MIN = 0.98   # 28 Oct 01:48 CT: 98%
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
