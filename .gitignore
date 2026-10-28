@@ -3,3 +3,4 @@ flip_win_breaker.json
 __pycache__/
 pulse_v2_state.json
 markets_paper_state.json
+flip_sigma_breaker.json

@@ -30,7 +30,11 @@ FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at m
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA = 1.8            # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma
+FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma
+FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get more bets ...
+FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_LOOSE   # ... and the first time a bet that only got in under the looser rule
+                                            # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
+_SIGMA_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_sigma_breaker.json")
 FLIP_EXIT_SIGMA = 0.33              # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly. Zones: RED 1 0.50-0.33, RED 2 0.33-0.17, RED 3 <0.17
 FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red
 FLIP_EXIT_MAX_WIN = 1.01           # 20 Oct 15:32 CT: red alone sells (no win-% check)
@@ -87,6 +91,14 @@ except Exception:
     pass
 
 
+try:
+    if os.path.exists(_SIGMA_BREAKER_FILE):
+        FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT
+        print(f"[FLIP] sigma breaker already tripped earlier -- entry sigma stays at {FLIP_ENTRY_SIGMA_STRICT}.")
+except Exception:
+    pass
+
+
 # LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 10
@@ -123,6 +135,17 @@ def record_result(position, pnl, how=""):
                 FLIP_HALTED = True
                 print(f"[FLIP] KILL SWITCH: {_loss_count} losing bets since the last restart -- NO NEW BETS until Pulse "
                       f"is restarted in Railway. Open bets are still protected by their stops.")
+        global FLIP_ENTRY_SIGMA
+        _ez = position.get("entry_zs")
+        if (pnl < -1e-9 and _ez is not None and float(_ez) < FLIP_ENTRY_SIGMA_STRICT - 1e-9
+                and not position.get("lock_entry") and FLIP_ENTRY_SIGMA < FLIP_ENTRY_SIGMA_STRICT):
+            FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT
+            print(f"[FLIP] SIGMA BREAKER TRIPPED: a bet that got in at {float(_ez):.2f} sigma (under the old 1.8 bar) lost "
+                  f"${-pnl:.2f} ({how}) -- entry sigma back to {FLIP_ENTRY_SIGMA_STRICT} for good.")
+            try:
+                open(_SIGMA_BREAKER_FILE, "w").write('{"tripped": true}')
+            except Exception:
+                pass
         _ew = position.get("entry_win")
         if (pnl < -1e-9 and _ew is not None and float(_ew) < FLIP_WIN_SAFE_MIN - 0.005
                 and FLIP_MIN_WIN_ALL < FLIP_WIN_SAFE_MIN):
@@ -339,7 +362,7 @@ def _record_fill(client, state, state_lock, log_trade, ticker, n, side, count, e
     with state_lock:
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                          "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                         "flip_star": True, "force_exit": False, "entry_win": n.get("p")}
+                         "flip_star": True, "force_exit": False, "entry_win": n.get("p"), "entry_zs": n.get("zs")}
     print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} ({how}) -- holding until To flip turns red.")
     try:
         from types import SimpleNamespace
@@ -540,7 +563,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                             "flip_star": True, "force_exit": below_floor, "entry_win": n.get("p")}
+                             "flip_star": True, "force_exit": below_floor, "entry_win": n.get("p"), "entry_zs": n.get("zs")}
         if below_floor:
             print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- UNDER the {floor*100:.0f}c floor "
                   f"(price dropped between the check and the fill) -- selling right away.")
