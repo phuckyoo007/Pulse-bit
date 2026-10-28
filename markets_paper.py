@@ -40,9 +40,9 @@ MK_MIN_PRICE = 0.94
 MK_MAX_PRICE = 0.98
 MK_MAX_SPREAD = 0.03
 MK_STOP = 0.80
-MK_STOP_FRACTION = 0.80     # sell at 80% of entry (a 20% loss), instantly, any time in the round
+MK_STOP_FRACTION = 0.86     # 27 Oct 21:17 CT (Matthew): sell at 86% of entry, instantly, any time in the round
 MK_LAST_WINDOW_SECONDS = 45
-MK_LAST_WINDOW_STOP = 0.80   # 26 Oct: same 80%-of-entry line in the last 45s
+MK_LAST_WINDOW_STOP = 0.86   # (unused -- MK_STOP_FRACTION applies all round)
 MK_POLL_SECONDS = 5
 # 27 Oct 08:38 CT (Matthew: "make sure that does not happen ever again"). Since 26 Oct 20:10 CT commodities lost
 # -$14.91 on 5 bets (natgas -$4.87 and gold -$4.72 flipped in the last seconds and settled at 0 with no stop

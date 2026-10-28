@@ -56,7 +56,7 @@ V2_BENCH_HOURS = 24
 V2_EXIT_SIGMA = 0.33             # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly ...
 V2_EXIT_CONFIRM_SECONDS = 0      # ... no wait
 V2_GAP_STOP = 0.25               # (paper only) sell at once if the held side is this far under the entry price
-V2_STOP_FRACTION = 0.80          # live: sell instantly at 80% of entry (a 20% loss), like Pulse
+V2_STOP_FRACTION = 0.86          # 27 Oct 21:17 CT (Matthew): sell instantly at 86% of entry
 
 V2_DAILY_STOP_FRACTION = 0.15
 
