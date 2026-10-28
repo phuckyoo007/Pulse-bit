@@ -99,6 +99,42 @@ except Exception:
     pass
 
 
+# LOOSE MODE (28 Oct 18:44 CT, Matthew): "loosen some parameters a bit so we can see some bidding, and set it to where it
+# trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
+# 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
+# Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
+LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.94}
+LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.93}
+_LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
+LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
+
+
+def _apply_settings(v):
+    global FLIP_MIN_WIN_ALL, FLIP_NONSTAR_MIN_WIN, FLIP_ENTRY_SIGMA, FLIP_STAR_MIN_PRICE, FLIP_NONSTAR_MIN_PRICE
+    FLIP_MIN_WIN_ALL = FLIP_NONSTAR_MIN_WIN = v["win"]
+    FLIP_ENTRY_SIGMA = v["sigma"]
+    FLIP_STAR_MIN_PRICE = FLIP_NONSTAR_MIN_PRICE = v["floor"]
+
+
+_apply_settings(LOOSE_VALUES if LOOSE_ACTIVE else LOOSE_STRICT)
+print(f"[FLIP] {'LOOSE mode ON' if LOOSE_ACTIVE else 'loose mode already tripped -- STRICT'}: min win "
+      f"{FLIP_MIN_WIN_ALL*100:.0f}%, sigma {FLIP_ENTRY_SIGMA}, floor {FLIP_STAR_MIN_PRICE*100:.0f}c "
+      f"(first loss reverts to 98% / 1.8 / 94c)." if LOOSE_ACTIVE else
+      f"[FLIP] loose mode already tripped -- STRICT: 98% / 1.8 sigma / 94c.")
+
+
+def _trip_loose(pnl, how):
+    global LOOSE_ACTIVE
+    LOOSE_ACTIVE = False
+    _apply_settings(LOOSE_STRICT)
+    print(f"[FLIP] LOOSE MODE TRIPPED: a bet lost ${-pnl:.2f} ({how}) -- back to the strict settings for good: "
+          f"min win 98%, sigma 1.8, floor 94c.")
+    try:
+        open(_LOOSE_BREAKER_FILE, "w").write('{"tripped": true}')
+    except Exception:
+        pass
+
+
 # LOSS KILL SWITCH (18 Oct): after 3 losing flip-star bets, stop opening new bets until Pulse is restarted
 # (restart the pulse service in Railway). Open bets keep their stops; only new buying stops.
 FLIP_MAX_LOSSES_BEFORE_HALT = 10
@@ -128,6 +164,8 @@ def record_result(position, pnl, how=""):
         if not position or not position.get("flip_star"):
             return
         entry = float(position.get("entry_price") or 0)
+        if pnl < -1e-9 and LOOSE_ACTIVE:
+            _trip_loose(pnl, how)
         if pnl < -1e-9:
             _loss_count += 1
             print(f"[FLIP] loss {_loss_count}/{FLIP_MAX_LOSSES_BEFORE_HALT} since restart: ${-pnl:.2f} ({how}).")
