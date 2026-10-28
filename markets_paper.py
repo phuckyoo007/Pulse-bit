@@ -48,7 +48,8 @@ MK_POLL_SECONDS = 5
 # -$14.91 on 5 bets (natgas -$4.87 and gold -$4.72 flipped in the last seconds and settled at 0 with no stop
 # possible; gold/silver gapped through the 80% stop) against about +$3.80 from 15 wins. Currencies were about even.
 # Commodities (gold, silver, copper, platinum, palladium, natural gas, oil, Brent) are no longer bid on.
-MK_NO_COMMODITIES = True
+MK_NO_COMMODITIES = False   # 27 Oct 20:45 CT (Matthew): commodities back on, 2 shares each (MK_COMMOD_SHARES)
+MK_COMMOD_SHARES = 2
 _COMMODITY_WORDS = ("GOLD", "SILVER", "COPPER", "PLATINUM", "PALLADIUM", "NATGAS", "NATURAL GAS", "WTI", "OIL", "BRENT", "CRUDE", "TIN")
 
 
@@ -536,7 +537,8 @@ def run(client, place_exit=None):
             break
         if ticker in _open or ticker in _tried:
             continue
-        if MK_RATES_ONLY and not (_is_rate(ticker) or (MK_FX_ON and _is_fx(ticker))):
+        if MK_RATES_ONLY and not (_is_rate(ticker) or (MK_FX_ON and _is_fx(ticker))
+                                  or (not MK_NO_COMMODITIES and _is_commodity(ticker))):
             continue   # 27 Oct: interest rates, plus currencies under the strict MK_FX_* rules
         if _is_fx(ticker):
             if _s.get("fx_day") == _fx_today() and _s.get("fx_day_losses", 0) >= MK_FX_DAILY_LOSSES:
@@ -586,7 +588,7 @@ def run(client, place_exit=None):
             # 26 Oct 20:10 CT: sigma bar as crypto Pulse. Entries at 0.62 / 0.66 / -0.58 sigma (Brent, USDCAD,
             # EURUSD) were sold within seconds for -$1.30; the one at 2.14 sigma won.
             continue
-        count = MK_FX_SHARES if _is_fx(ticker) else MK_SHARES
+        count = MK_FX_SHARES if _is_fx(ticker) else (MK_COMMOD_SHARES if _is_commodity(ticker) else MK_SHARES)
         if MK_PAPER:
             fee_in = _fee(MK_SHARES, cost)
             if _s["balance"] < cost * MK_SHARES + fee_in:
