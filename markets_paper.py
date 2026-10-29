@@ -388,10 +388,58 @@ def _spot_vol(sym):
         return None
 
 
+_RATE_FUT = ((r"(?<![0-9])30Y", "ZB=F"), (r"(?<![0-9])10Y", "ZN=F"), (r"(?<![0-9])5Y", "ZF=F"), (r"(?<![0-9])2Y", "ZT=F"))
+
+
+def _rate_sigma(ticker, m, side, secs_left):
+    """28 Oct 22:20 CT (Matt): Yahoo's yield indexes (^TNX etc.) read flat inside a round -> sigma came out 0.00 on
+    every rate market all day, so nothing was ever bid. Use the Treasury FUTURE instead (ZT/ZF/ZN/ZB, live 1-minute
+    bars): yield moves opposite to the future's price. A 15-minute market's strike is the yield at the round's open,
+    so z = how far the future has moved since the open, in units of its own 1-minute volatility (duration cancels
+    out). Yield UP = future DOWN."""
+    k = _rate_key(ticker)
+    sym = next((f for pat, f in _RATE_FUT if re.search(pat, k)), None)
+    if not sym or not secs_left or secs_left <= 0:
+        return None
+    sv = _spot_vol(sym)
+    if not sv:
+        return None
+    spot, vol = sv
+    st = (m.get("strike_type") or "").lower()
+    ct = m.get("close_time")
+    bars = (_yq.get(sym) or {}).get("bars") or []
+    if not (ct and bars):
+        return None
+    try:
+        open_ts = datetime.fromisoformat(str(ct).replace("Z", "+00:00")).timestamp() - 900
+    except Exception:
+        return None
+    at_open = None
+    for t, x in bars:
+        if t <= open_ts - 60 + 1:
+            at_open = x
+        else:
+            break
+    if not at_open or bars[-1][0] < time.time() - 300:
+        return None        # no bar for the open, or the futures feed is stale -> no sigma -> no bid
+    last = bars[-1][1]
+    t = max(secs_left, 5) / 60.0
+    move = -math.log(last / at_open) / (vol * math.sqrt(t))    # + = yield up since the open
+    if st in ("greater", "greater_or_equal"):
+        z_yes = move
+    elif st in ("less", "less_or_equal"):
+        z_yes = -move
+    else:
+        return None
+    return z_yes if side == "yes" else -z_yes
+
+
 def _held_sigma(ticker, m, side, secs_left):
     """'To flip' sigma for OUR side (negative = crossed to the other side), or None if it can't be worked out."""
     if "15M" not in ticker.split("-")[0]:
         return None        # hourly: no open-price anchor to line Yahoo up with Kalshi -> 80% stop only
+    if _is_rate(ticker):
+        return _rate_sigma(ticker, m, side, secs_left)
     sym = _yahoo_symbol(ticker)
     if not sym or not secs_left or secs_left <= 0:
         return None
