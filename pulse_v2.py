@@ -348,6 +348,8 @@ def run(client, place_exit=None):
     if not b:
         return
     _manage(client, b)
+    if flip_star.in_pause():
+        return   # 28 Oct: 2:50-4:10 pm Central pause (stock-market close), same as Pulse
     if V2_PAPER:
         _roll_day()
         equity = _s["balance"] + sum(p["entry"] * p["count"] + p["fee_in"] for p in _open.values())

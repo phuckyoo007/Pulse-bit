@@ -99,12 +99,50 @@ except Exception:
     pass
 
 
+# 28 Oct 19:24 CT (Matthew: "implement everything you analyzed") -- from 1,120 Pulse bets, 18-28 Oct:
+# (3) PAUSE 2:50-4:10 pm Central: the 3 pm hour lost 15% of its bets (-$18.93) -- the US stock close shakes crypto.
+PAUSE_CT = ((14, 50), (16, 10))
+# (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
+NO_SIDE_NEEDS_STAR = True
+NO_SIDE_MIN_WIN = 0.98
+# (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
+# BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
+COIN_SHARE_MULT = {"BTC": 1.5, "XRP": 1.5, "DOGE": 0.5, "BNB": 0.5}
+_BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
+BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
+
+
+def in_pause():
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz(_td(hours=-5)))
+    m = now.hour * 60 + now.minute
+    (h1, m1), (h2, m2) = PAUSE_CT
+    return h1 * 60 + m1 <= m < h2 * 60 + m2
+
+
+def shares_for(coin):
+    mult = COIN_SHARE_MULT.get(coin, 1.0)
+    if mult > 1 and not BOOST_ACTIVE:
+        mult = 1.0
+    return max(1, int(round(FLIP_SHARES * mult))), mult > 1
+
+
+def _trip_boost(pnl, how):
+    global BOOST_ACTIVE
+    BOOST_ACTIVE = False
+    print(f"[FLIP] COIN BOOST TRIPPED: a boosted BTC/XRP bet lost ${-pnl:.2f} ({how}) -- BTC/XRP back to {FLIP_SHARES} shares for good.")
+    try:
+        open(_BOOST_BREAKER_FILE, "w").write('{"tripped": true}')
+    except Exception:
+        pass
+
+
 # LOOSE MODE (28 Oct 18:44 CT, Matthew): "loosen some parameters a bit so we can see some bidding, and set it to where it
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.94}
-LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.93}
+LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.96}   # 28 Oct 19:24 CT: floor 96c (fills at 94-95c lost 21-25% of the time)
+LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.96}
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
 
@@ -119,8 +157,8 @@ def _apply_settings(v):
 _apply_settings(LOOSE_VALUES if LOOSE_ACTIVE else LOOSE_STRICT)
 print(f"[FLIP] {'LOOSE mode ON' if LOOSE_ACTIVE else 'loose mode already tripped -- STRICT'}: min win "
       f"{FLIP_MIN_WIN_ALL*100:.0f}%, sigma {FLIP_ENTRY_SIGMA}, floor {FLIP_STAR_MIN_PRICE*100:.0f}c "
-      f"(first loss reverts to 98% / 1.8 / 94c)." if LOOSE_ACTIVE else
-      f"[FLIP] loose mode already tripped -- STRICT: 98% / 1.8 sigma / 94c.")
+      f"(first loss reverts to 98% / 1.8 / 96c)." if LOOSE_ACTIVE else
+      f"[FLIP] loose mode already tripped -- STRICT: 98% / 1.8 sigma / 96c.")
 
 
 def _trip_loose(pnl, how):
@@ -128,7 +166,7 @@ def _trip_loose(pnl, how):
     LOOSE_ACTIVE = False
     _apply_settings(LOOSE_STRICT)
     print(f"[FLIP] LOOSE MODE TRIPPED: a bet lost ${-pnl:.2f} ({how}) -- back to the strict settings for good: "
-          f"min win 98%, sigma 1.8, floor 94c.")
+          f"min win 98%, sigma 1.8, floor 96c.")
     try:
         open(_LOOSE_BREAKER_FILE, "w").write('{"tripped": true}')
     except Exception:
@@ -166,6 +204,8 @@ def record_result(position, pnl, how=""):
         entry = float(position.get("entry_price") or 0)
         if pnl < -1e-9 and LOOSE_ACTIVE:
             _trip_loose(pnl, how)
+        if pnl < -1e-9 and BOOST_ACTIVE and position.get("boosted"):
+            _trip_boost(pnl, how)
         if pnl < -1e-9:
             _loss_count += 1
             print(f"[FLIP] loss {_loss_count}/{FLIP_MAX_LOSSES_BEFORE_HALT} since restart: ${-pnl:.2f} ({how}).")
@@ -208,7 +248,7 @@ def record_result(position, pnl, how=""):
     except Exception as e:
         print(f"[FLIP] record_result error (non-fatal): {e}")
 FLIP_SLIPPAGE = 0.02               # 26 Oct 14:48 CT (Matthew): if the price ticks UP while ordering, still buy (up to 2c more)
-FLIP_FILL_CAP = 0.99               # ...but never pay more than 99c. A price that DROPS is still skipped (floor re-check below).
+FLIP_FILL_CAP = 0.98               # 28 Oct 19:24 CT (log review): never pay 99c -- 423 fills at 99c lost $8.20 net. Was 0.99. A price that DROPS is still skipped (floor re-check below).
 FLIP_MAX_ATTEMPTS_PER_TICKER = 3
 FLIP_STALE_SECONDS = 15            # board data older than this is not trusted
 EDGE_BOARD_URL = os.getenv("EDGE_BOARD_URL", "https://edge-board-production.up.railway.app/api/state")
@@ -308,6 +348,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
         return False
+    if NO_SIDE_NEEDS_STAR and n.get("side") == "no" and not (n["lock"] and n["p"] >= NO_SIDE_MIN_WIN - 1e-9):
+        return False   # 28 Oct: NO bets only on a red star at 98%+
     if n["lock"]:
         return True
     if FLIP_RED_STAR_ONLY:
@@ -446,6 +488,9 @@ def _check_resting(client, state, state_lock, log_trade, b):
             print(f"[FLIP] {ticker}: red star gone or window ending -- resting {FLIP_STAR_REST_PRICE*100:.0f}c bid cancelled, nothing filled.")
 
 
+_pause_note_at = 0.0
+
+
 def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, log_trade, ensure_shard_funds):
     """Open 4-share flip-star positions where the dashboard says so. Called once per scan loop."""
     global _halt_note_at
@@ -463,6 +508,12 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
     if _resting:
         _check_resting(client, state, state_lock, log_trade, b)
     if not b:
+        return
+    if in_pause():
+        global _pause_note_at
+        if time.time() - _pause_note_at > 600:
+            _pause_note_at = time.time()
+            print("[FLIP] 2:50-4:10 pm Central pause -- no new bets (stock-market close).")
         return
     for ticker, n in b.items():
         if not entry_signal(n):
@@ -528,8 +579,9 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
 
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
         why = "RED STAR" if n["lock"] else (f"To flip GREEN {n['zs']:.1f} sigma" if n["zs"] >= 2 else f"To flip YELLOW 1 (bid zone) {n['zs']:.1f} sigma")
+        want, boosted = shares_for(n["coin"])
         print(f"[FLIP] ENTRY {ticker} ({n['coin']}): {why}, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "
-              f"{'DRY-RUN ' if dry_run else ''}buying {FLIP_SHARES} {n['side'].upper()} up to ${limit_side_price:.2f}")
+              f"{'DRY-RUN ' if dry_run else ''}buying {want} {n['side'].upper()} up to ${limit_side_price:.2f}")
         if dry_run:
             with state_lock:
                 state[ticker] = {"count": FLIP_SHARES, "entry_price": cost, "side": side, "dry_run": True,
@@ -542,11 +594,11 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                 print(f"[FLIP] {ticker}: skipping -- already {_open} Pulse bets open (max {FLIP_MAX_OPEN}).")
                 continue
             _cash = float(client.get_balance_cached().get("balance", 0)) / 100
-            n_sh = min(FLIP_SHARES, int((FLIP_MAX_BET_FRACTION * _cash) // max(limit_side_price, 0.01)))
+            n_sh = min(want, int((FLIP_MAX_BET_FRACTION * _cash) // max(limit_side_price, 0.01)))
             if n_sh < 1:
                 print(f"[FLIP] {ticker}: skipping -- {FLIP_MAX_BET_FRACTION*100:.0f}% of the ${_cash:.2f} cash is less than one share at ${limit_side_price:.2f}.")
                 continue
-            if n_sh < FLIP_SHARES:
+            if n_sh < want:
                 print(f"[FLIP] {ticker}: sizing down to {n_sh} shares ({FLIP_MAX_BET_FRACTION*100:.0f}% of ${_cash:.2f} cash).")
             ensure_shard_funds(client, ticker, limit_side_price * n_sh)
             # Pre-order re-check: a Kalshi IOC order only caps the MAX price, it cannot set a minimum fill price.
@@ -601,7 +653,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
-                             "flip_star": True, "force_exit": below_floor, "entry_win": n.get("p"), "entry_zs": n.get("zs")}
+                             "flip_star": True, "force_exit": below_floor, "entry_win": n.get("p"), "entry_zs": n.get("zs"),
+                             "boosted": boosted}
         if below_floor:
             print(f"[FLIP] FILLED {ticker}: {count:g} {n['side'].upper()} @ ${entry_price:.2f} -- UNDER the {floor*100:.0f}c floor "
                   f"(price dropped between the check and the fill) -- selling right away.")
