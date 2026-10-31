@@ -101,7 +101,7 @@ except Exception:
 
 # 28 Oct 19:24 CT (Matthew: "implement everything you analyzed") -- from 1,120 Pulse bets, 18-28 Oct:
 # (3) PAUSE 2:50-4:10 pm Central: the 3 pm hour lost 15% of its bets (-$18.93) -- the US stock close shakes crypto.
-PAUSE_CT = ((14, 50), (16, 10))
+PAUSE_CT = PAUSE_CT = ((0, 0), (0, 0))
 # (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
 NO_SIDE_NEEDS_STAR = True
 NO_SIDE_MIN_WIN = 0.98
