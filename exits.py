@@ -2,14 +2,14 @@
 Early-exit logic for open positions, separate from entry logic on purpose.
 
 ONE stop-loss rule for every position, both sides:
-    exit when the position's value falls to 80% of what was paid or lower
-    (a 20% loss). A $10 bet exits no later than $8.00.
+    exit when the position's value falls to 85% of what was paid or lower
+    (a 15% loss). A $10 bet exits no later than $8.50.
 
 "Value" is always the price of the side we HOLD:
     bid (YES) position -> value = market_price (the YES price)
     NO position        -> value = 1 - market_price
 
-So the same 80% / 20% rule protects YES and NO. In YES-price terms, a NO
+So the same 85% / 15% rule protects YES and NO. In YES-price terms, a NO
 position exits when the YES price rises; the math below handles that.
 """
 import time
@@ -21,8 +21,8 @@ STOP_LOSS_ENABLED = True
 
 # Stop levels. LOSS_PCT is the max loss; EXIT_FRACTION is the same thing
 # expressed as "exit when value <= this share of what was paid".
-STOP_LOSS_PCT = 0.20                               # was 0.14 (86%) until 18 Oct
-STOP_EXIT_FRACTION = 0.82                          # 0.80
+STOP_LOSS_PCT = 0.84                               # was 0.14 (86%) until 18 Oct
+STOP_EXIT_FRACTION = 0.86                          # 0.80
 
 # Separate knobs per side, both default to the same 80% exit.
 YES_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION       # YES / bid positions
@@ -42,8 +42,8 @@ CRASH_STOP_FRACTION = 0.50
 
 # HARD STOP (18 Oct 19:21 CT): sell IMMEDIATELY -- no wait, no win-% check -- once the position is worth 70% or less
 # of what was paid, or the side we hold is priced at 70c or less (the other side at 30c or more).
-HARD_STOP_FRACTION = 0.70
-HARD_STOP_HELD = 0.70
+HARD_STOP_FRACTION = 0.85
+HARD_STOP_HELD = 0.85
 
 # INSTANT STOP: sell at the next price check, no hold / confirmation, once the held side is worth 86% or less of entry.
 INSTANT_STOP_FRACTION = 0.86
