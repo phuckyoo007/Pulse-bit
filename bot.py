@@ -956,6 +956,16 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                                       f"held side {_hv*100:.0f}c -- selling now)")
                     else:
                         decision = ExitDecision(False, "")
+                        # 1 Nov 16:27 CT (Matt): collect profit on manual bets -- once the held side is above what was
+                        # paid, track its high; the second it stops growing (ticks down from that high) while still in
+                        # profit, sell.
+                        _pk = position.get("manual_peak")
+                        if _hv > position["entry_price"] + 1e-9:
+                            if _pk is None or _hv > _pk + 1e-9:
+                                position["manual_peak"] = _hv
+                            elif _hv < _pk - 1e-9:
+                                decision = ExitDecision(True, f"manual_take_profit (peaked {_pk*100:.0f}c, now {_hv*100:.0f}c, "
+                                                              f"entry {position['entry_price']*100:.0f}c -- stopped growing, cashing out)")
                 elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
