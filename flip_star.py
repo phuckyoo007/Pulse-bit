@@ -12,7 +12,9 @@ bot does matches what you see on the top coin boxes:
 If the board can't be reached (or its data is stale) the bot opens nothing new, and any flip-star position it holds
 falls back to Pulse's normal stop-loss until fresh numbers come back. Pulse's hard backstop (72%) still applies.
 """
+import math
 import os
+import re
 import time
 import uuid
 
@@ -284,6 +286,42 @@ def _side_numbers(m: dict, age: float, coins: dict = None):
             "mid_chg_1m": m.get("mid_chg_1m")}
 
 
+_mom = {}   # coin -> smoothed momentum, same math as the edge board's MOMENTUM meter
+
+
+def _update_momentum(coins: dict) -> None:
+    """1 Nov (Matt): mirror the edge board's momentum meter. m in [-1, 1]: + = coin rising, - = falling.
+    Board: sm = vol/sqrt(525600); z1 = chg_1m/sm; z5 = chg_5m/(sm*sqrt(5)); m = clamp((0.4*z1 + 0.6*z5)/2), then
+    smoothed m = prev*0.85 + m*0.15."""
+    for k, st in coins.items():
+        try:
+            v = st.get("ann_vol_30m") or st.get("ann_vol_24h")
+            c1, c5 = st.get("chg_1m"), st.get("chg_5m")
+            if not v or c1 is None or c5 is None:
+                continue
+            sm = float(v) / math.sqrt(525600)
+            z1, z5 = float(c1) / sm, float(c5) / (sm * math.sqrt(5))
+            m = max(-1.0, min(1.0, (0.4 * z1 + 0.6 * z5) / 2))
+            p = _mom.get(k)
+            _mom[k] = m if p is None else p * 0.85 + m * 0.15
+        except Exception:
+            continue
+
+
+def momentum_against(ticker: str, held_side: str):
+    """How hard the momentum meter is pushing AGAINST the side we hold (0..1; <= 0 = with us / flat), or None.
+    On the board the meter fill turns RED once this reaches 0.08."""
+    if time.time() - _board["ok_at"] > FLIP_STALE_SECONDS:
+        return None
+    ser = ticker.split("-")[0].upper()
+    coin = re.sub(r"^KX", "", ser)
+    coin = re.sub(r"(15M|D)$", "", coin)
+    m = _mom.get(coin)
+    if m is None:
+        return None
+    return -m if held_side == "yes" else m
+
+
 def board(force: bool = False) -> dict:
     """ticker -> numbers for every live 15-minute window on the dashboard (cached ~1s). {} when unavailable/stale."""
     now = time.time()
@@ -308,6 +346,7 @@ def board(force: bool = False) -> dict:
             if n and n["ticker"]:
                 out[n["ticker"]] = n
         _board["data"], _board["ok_at"] = out, now
+        _update_momentum(st.get("coins") or {})
     except Exception as e:
         print(f"[FLIP] couldn't read the dashboard ({e}) -- no new flip-star entries until it's back.")
     return _board["data"] if now - _board["ok_at"] <= FLIP_STALE_SECONDS else {}
