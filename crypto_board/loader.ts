@@ -179,22 +179,50 @@ patch(".st.fa{border-color:var(--green)}",
 @media (min-width:700px){.gs{max-width:110px}.gn{font-size:24px;line-height:26px}.gp{font-size:14px;line-height:17px}.gx{font-size:16px;line-height:22px;margin:4px 6px 0}}
 .st.fa{border-color:var(--green)}`);
 patch("function __err(w,e){",
-  `function __gauge(m,side,sdir,dd){
+  `function __sigcls(m,side,sdir,p){
+  if(m==null||side==="none")return "";
+  var g=side==="no"?-m:m;
+  if(g<=-0.08||sdir<0)return " ssell";
+  if(p!=null&&p>0.5&&g>=0.08&&sdir>0)return " sbuy";
+  return "";
+}
+function __gauge(m,side,sdir,dd,p,k){
   var g=m==null?null:(side==="no"?-m:m);
   if(g==null)return '<div class="gv"><div class="gn">–</div><div class="gx n">NO DATA</div></div>';
   function pt(a,r){var q=a*Math.PI/180;return [(30+r*Math.sin(q)).toFixed(1),(32-r*Math.cos(q)).toFixed(1)];}
   function arc(a0,a1,col){var p0=pt(a0,26),p1=pt(a1,26);return '<path d="M'+p0[0]+','+p0[1]+' A26,26 0 0 1 '+p1[0]+','+p1[1]+'" stroke="'+col+'" stroke-width="6" fill="none"/>';}
   var ang=Math.max(-1,Math.min(1,g))*90,np=pt(ang,22),red=g<=-0.08;
-  var v=red?"SELL":(sdir<0?"EASING":"HOLD"),vc=red?"s":(sdir<0?"e":"h");
+  var tr=__trend(k,__mom[k]);tr=side==="no"?-tr:tr;
+  var buy=p!=null&&p>0.5&&g>=0.08&&sdir>0,sell=red||sdir<0;
+  var v=buy?"$ BUY":(sell?"SELL":"HOLD"),vc=buy?"b":(sell?"s":"h");
+  var ol=red?"▼ REVERSING":(g<0.08?"■ STALLED":(tr<-0.04?"◆ SLOWING":"▲ CONTINUING")),oc=red?"d":(g<0.08||tr<-0.04?"a":"u");
   dd=dd||0;var pv=(dd>=0?"+":"−")+Math.abs(dd*100).toFixed(1)+"¢";
-  return '<div class="gv"><svg viewBox="0 0 60 36" class="gs">'+arc(-90,-7.2,"#ff3b3b")+arc(-7.2,7.2,"#ffb020")+arc(7.2,90,"#3fb950")
+  return (buy?'<div class="dl">$</div>':'')+'<div class="gv"><svg viewBox="0 0 60 36" class="gs">'+arc(-90,-7.2,"#ff3b3b")+arc(-7.2,7.2,"#ffb020")+arc(7.2,90,"#3fb950")
     +'<line x1="30" y1="32" x2="'+np[0]+'" y2="'+np[1]+'" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="30" cy="32" r="3" fill="#fff"/></svg>'
     +'<div class="gn '+(g>=0.08?"u":(red?"d":""))+'">'+(g>=0?"+":"−")+Math.round(Math.abs(g)*100)+'</div>'
     +'<div class="gp '+(dd>0.00049?"u":(dd<-0.00049?"d":""))+'">'+pv+'</div>'
+    +'<div class="go '+oc+'">'+ol+'</div>'
     +'<div class="gx '+vc+'">'+v+'</div></div>';
 }
 function __err(w,e){`);
-patch(`<div class="sp">'+prt+'</div>`, `<div class="sp">'+prt+'</div>'+__gauge(m,side,sdir,(typeof dd==="number"?dd:0))+'`);
+patch(`<div class="sp">'+prt+'</div>`, `<div class="sp">'+prt+'</div>'+__gauge(m,side,sdir,(typeof dd==="number"?dd:0),p,k)+'`);
+// 1 Nov 16:56 CT (Matt): BUY / SELL signals on the top boxes.
+//   BUY  ($ badge + pulsing green glow): pick more likely than not (>50%), momentum green for the pick, price rising.
+//   SELL (flashing red border): momentum turned against the pick, or the price stopped growing and is falling.
+//   Outlook line: CONTINUING (momentum with the pick and holding), SLOWING (with it but losing steam),
+//   STALLED (flat), REVERSING (rolling the other way).
+patch(`html+='<div class="'+cls+'" style=`, `html+='<div class="'+cls+__sigcls(m,side,sdir,p)+'" style=`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .dl{position:absolute;top:0;right:3px;font-size:17px;font-weight:900;line-height:18px;color:#39d353;text-shadow:0 0 6px #39d353;z-index:4;animation:tblink .7s step-end infinite}
+.st.sbuy{border-color:#39d353 !important;animation:bpulse 1s ease-in-out infinite !important}
+@keyframes bpulse{0%,100%{box-shadow:0 0 0 0 rgba(57,211,83,.85)}50%{box-shadow:0 0 12px 4px rgba(57,211,83,.85)}}
+.st.ssell{border:3px solid #ff2d2d !important;animation:sflash .5s step-end infinite !important}
+@keyframes sflash{50%{border-color:rgba(255,45,45,.12);box-shadow:none}0%{box-shadow:0 0 10px 2px rgba(255,45,45,.8)}}
+.go{font-size:7.5px;font-weight:900;line-height:10px;letter-spacing:-.1px;white-space:nowrap}
+.go.u{color:#39d353}.go.a{color:#ffb020}.go.d{color:#ff5b52}
+.gx.b{background:#39d353;color:#0d1117;animation:tblink 1s step-end infinite}
+@media (min-width:700px){.st .dl{font-size:30px;line-height:30px;right:6px}.go{font-size:13px;line-height:17px}}
+.st.fa{border-color:var(--green)}`);
 // 1 Nov 16:35 CT (Matt): price to 2 decimals ($.93 -- the third was always 0), and digital readouts on both meters:
 // PRICE = cents moved in the last ~5s, MOMENTUM = -100..+100 (coin falling .. rising), in place of the RISING/FALLING words.
 patch('("$"+Number(sd.ask).toFixed(3)).replace("$0.","$.")', '("$"+Number(sd.ask).toFixed(2)).replace("$0.","$.")');
