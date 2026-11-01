@@ -321,6 +321,9 @@ RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the m
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
+MANUAL_RED_SIGMA = 0.50   # 1 Nov (Matt): manual bets sell the instant their side turns red (RED 1 starts at 0.50)
+
+
 def _held_sigma_now(ticker: str, position: dict):
     """Board 'To flip' sigma for the side this position holds (None if the board has no fresh numbers)."""
     return flip_star.held_sigma(ticker, "yes" if position.get("side") == "bid" else "no")
@@ -946,6 +949,11 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if _hv <= position["entry_price"] * flip_star.MANUAL_STOP_FRACTION + 1e-9:
                         decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
                                                       f"of entry ${position['entry_price']:.2f})")
+                    elif _zr is not None and _zr <= MANUAL_RED_SIGMA + 1e-9:
+                        # 1 Nov 16:26 CT (Matt): manual bets sell the MOMENT To flip for our side turns red
+                        # (first red zone, <= 0.50 sigma) -- no wait, no confirmation.
+                        decision = ExitDecision(True, f"manual_stop (To flip turned red: {_zr:.2f} sigma <= {MANUAL_RED_SIGMA:g}, "
+                                                      f"held side {_hv*100:.0f}c -- selling now)")
                     else:
                         decision = ExitDecision(False, "")
                 elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
