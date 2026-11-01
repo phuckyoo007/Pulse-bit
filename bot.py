@@ -321,6 +321,9 @@ RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the m
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
+MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
+MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
+MANUAL_CRASH_CENTS = 0.20           # ...and immediately when down 20c
 MANUAL_MOMENTUM_RED = 0.08   # 1 Nov (Matt): edge board momentum meter fill turns red at 0.08 against our side
 MANUAL_RED_SIGMA = 0.50   # 1 Nov (Matt): manual bets sell the instant their side turns red (RED 1 starts at 0.50)
 
@@ -670,6 +673,8 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
             _pos0 = state.get(ticker) or {}
+            if _pos0.get("manually_adopted"):
+                continue   # 1 Nov (Matt): manual bets only exit on their 12c / 20c drops (main exit loop)
             if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
                 # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
                 if not (current_value <= real_entry_price * STOP_FRACTION_OF_ENTRY + 1e-9
@@ -945,40 +950,24 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
                 elif position.get("manually_adopted"):
-                    # 25 Oct 13:49 CT (Matthew): manual bets get ONLY their 85%-of-cost stop. The absolute 75c line was
-                    # selling manual bets bought under 75c the second they were adopted (BTC manual @73c sold at 74c).
-                    if _hv <= position["entry_price"] * flip_star.MANUAL_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {flip_star.MANUAL_STOP_FRACTION*100:.0f}% "
-                                                      f"of entry ${position['entry_price']:.2f})")
-                    elif (_mag := flip_star.momentum_against(ticker, "yes" if position.get("side") == "bid" else "no")) is not None \
-                            and _mag >= MANUAL_MOMENTUM_RED - 1e-9:
-                        # 1 Nov 16:26 CT (Matt): manual bets sell the MOMENT the edge board's momentum meter turns red
-                        # (momentum moving against our side) -- no wait, no confirmation.
-                        decision = ExitDecision(True, f"manual_stop (momentum meter turned red: {_mag:.2f} against our side, "
-                                                      f"held side {_hv*100:.0f}c -- selling now)")
-                    elif _zr is not None and _zr <= MANUAL_RED_SIGMA + 1e-9:
-                        # ...and also if To flip for our side turns red (<= 0.50 sigma).
-                        decision = ExitDecision(True, f"manual_stop (To flip turned red: {_zr:.2f} sigma <= {MANUAL_RED_SIGMA:g}, "
-                                                      f"held side {_hv*100:.0f}c -- selling now)")
+                    # 1 Nov 16:32 CT (Matt): manual bets have ONLY two exits, measured from what was paid:
+                    #   down 12c (e.g. bought 60c -> 48c): sell once it holds MANUAL_DROP_CONFIRM_SECONDS
+                    #   down 20c (e.g. bought 60c -> 40c): sell immediately
+                    # Nothing else sells a manual bet (no %, sigma, momentum, profit or last-45s rules, no backstop).
+                    _drop = position["entry_price"] - _hv
+                    if _drop >= MANUAL_CRASH_CENTS - 1e-9:
+                        decision = ExitDecision(True, f"manual_stop_20c (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
+                                                      f"{position['entry_price']*100:.0f}c -- selling immediately)")
+                    elif _drop >= MANUAL_DROP_CENTS - 1e-9:
+                        _ms = position.setdefault("manual_drop_since", time.time())
+                        if time.time() - _ms >= MANUAL_DROP_CONFIRM_SECONDS:
+                            decision = ExitDecision(True, f"manual_stop_12c (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
+                                                          f"{position['entry_price']*100:.0f}c for {time.time()-_ms:.0f}s -- selling)")
+                        else:
+                            decision = ExitDecision(False, "")
                     else:
+                        position.pop("manual_drop_since", None)
                         decision = ExitDecision(False, "")
-                        # 1 Nov 16:27 CT (Matt): collect profit on manual bets -- once the held side is above what was
-                        # paid, track its high; the second it stops growing (ticks down from that high) while still in
-                        # profit, sell.
-                        # Same as the board's PRICE meter: compare to the price ~5s ago, or to the high so far.
-                        _ph = position.setdefault("manual_px", [])
-                        _tn = time.time()
-                        _ph.append((_tn, _hv))
-                        while _ph and _tn - _ph[0][0] > 30:
-                            _ph.pop(0)
-                        _ref = None
-                        for _t0, _v0 in _ph:
-                            if _tn - _t0 >= 5:
-                                _ref = _v0
-                        _pk = max(v for _, v in _ph)
-                        if _hv > position["entry_price"] + 1e-9 and (_hv < _pk - 1e-9 or (_ref is not None and _hv < _ref - 1e-9)):
-                            decision = ExitDecision(True, f"manual_take_profit (price meter falling: now {_hv*100:.1f}c, high {_pk*100:.1f}c, "
-                                                          f"entry {position['entry_price']*100:.1f}c -- stopped growing, cashing out)")
                 elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
