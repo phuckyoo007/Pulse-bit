@@ -1060,7 +1060,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _cnt = float(position.get("count", 0))
                 _peak_d = position.get("peak_gain_per_contract", 0.0) * _cnt
                 _now_d = (current_position_value(position, result.market_price) - position["entry_price"]) * _cnt
-                if _peak_d > 1e-9 and _peak_d - _now_d > TRAIL_GIVEBACK_DOLLARS + 1e-9:
+                if _peak_d > 1e-9 and _peak_d - _now_d >= TRAIL_GIVEBACK_DOLLARS - 1e-9:   # 2 Nov 15:12: $1.00 back = sell ($5 -> $7 -> sells at $6)
                     decision = ExitDecision(True, f"trailing_profit_stop (was up ${_peak_d:.2f}, now ${_now_d:+.2f} -- gave back "
                                                   f"${_peak_d - _now_d:.2f} > ${TRAIL_GIVEBACK_DOLLARS:.2f}, cashing out)")
             # PROFIT FLOOR (25 Oct 13:29 CT, Matthew): once a Pulse bet has been up $0.50 or more, sell as soon as the gain
