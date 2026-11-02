@@ -295,6 +295,31 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .bdir.u{background:#39d353}.st.bigc .bdir.d{background:#ff6b62}
 @media (min-width:700px){.bigrow .bdv{flex-basis:8px;margin:0 6px}.hdiv{height:12px;margin:12px 0 16px}.st.bigc .bdir{font-size:20px;line-height:34px;margin:0 6px 8px;border-radius:10px}}
 .st.fa{border-color:var(--green)}`);
+// 2 Nov 15:10 CT (Matt): count how many times each 15-minute round's pick changed sides (server-side, so it is the
+// same for everyone and does not depend on when the page was opened), shown on every card as "⇄ N flips".
+patch("windowExtras(r); rows.push(r);", "windowExtras(r); __flipTrack(r); rows.push(r);");
+patch("function sigmaFor(st: any, tSec: number) {",
+  `const __flips = new Map<string, { side: string; n: number; seen: number }>();
+function __flipTrack(r: any) {
+  const t = r && r.ticker, s = r && r.best_side;
+  if (!t) return;
+  let f = __flips.get(t);
+  if (!f) { f = { side: s || "", n: 0, seen: Date.now() }; __flips.set(t, f); }
+  if (s && f.side && s !== f.side) f.n++;
+  if (s) f.side = s;
+  f.seen = Date.now();
+  r.flips = f.n;
+  if (__flips.size > 400) for (const [k, v] of __flips) if (Date.now() - v.seen > 3_600_000) __flips.delete(k);
+}
+function sigmaFor(st: any, tSec: number) {`);
+patch(`<div class="sw">'+win+'</div>`,
+  `<div class="sw">'+win+'</div><div class="fl '+(mk&&mk.flips!=null?(mk.flips===0?"z":(mk.flips<=2?"a":"r")):"")+'">⇄ '+(mk&&mk.flips!=null?mk.flips+(mk.flips===1?" flip":" flips"):"–")+'</div>`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .fl{font-size:8px;font-weight:900;line-height:11px;color:var(--dim);white-space:nowrap}
+.st .fl.z{color:#39d353}.st .fl.a{color:#ffb020}.st .fl.r{color:#ff5b52}
+.st.bigc .fl{font-size:11px;line-height:15px}
+@media (min-width:700px){.st .fl{font-size:12px;line-height:15px}.st.bigc .fl{font-size:17px;line-height:22px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
