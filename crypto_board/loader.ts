@@ -263,6 +263,27 @@ patch(".st.fa{border-color:var(--green)}",
 .st .dl2{font-style:normal;font-size:15px;font-weight:900;color:#39d353;text-shadow:0 0 6px #39d353;margin-right:3px;animation:tblink .7s step-end infinite}
 @media (min-width:700px){.st .dl2{font-size:24px;margin-right:5px}}
 .st.fa{border-color:var(--green)}`);
+// 2 Nov 10:17 CT (Matt): BTC / XRP / SOL / BNB as four big playing-card style cards across the top, above the other
+// small boxes (which no longer repeat those four). Same contents and BUY / SELL signals, just bigger.
+patch("var hu=[],hd=[];", 'var hu=[],hd=[],bg={};');
+patch('var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);',
+  'if(__BIG.indexOf(k)>=0){bg[k]=html.replace(\'<div class="st\',\'<div class="st bigc\').slice(0,-6)+\'<div class="cnr">\'+k+\'</div></div>\';return;}\n    var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);');
+patch(`el.innerHTML='<div class="sh up">`, `el.innerHTML='<div class="bigrow">'+__BIG.map(function(c){return bg[c]||'';}).join('')+'</div>'+'<div class="sh up">`);
+patch("function __err(w,e){", 'var __BIG=["BTC","XRP","SOL","BNB"];\nfunction __err(w,e){');
+patch(".st.fa{border-color:var(--green)}",
+  `#strip{flex-wrap:wrap}
+.bigrow{flex:0 0 100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 4px}
+.st.bigc{min-height:230px;border-width:3px;border-radius:14px;padding-top:7px;padding-bottom:16px;background:linear-gradient(160deg,#1c2330,#0d1117)}
+.st.bigc .sy{font-size:16px;line-height:20px}.st.bigc .sy b{font-size:17px}.st.bigc .dl2{font-size:19px}
+.st.bigc .sw{font-size:12px;line-height:15px}.st.bigc .sp{font-size:22px;line-height:26px}
+.st.bigc .gs{max-width:100%}.st.bigc .gn{font-size:21px;line-height:23px}.st.bigc .gp{font-size:12px;line-height:15px}
+.st.bigc .go{font-size:8px;line-height:13px;letter-spacing:-.4px}.st.bigc .gx{font-size:13px;line-height:20px}
+.st.bigc .cnr{position:absolute;right:15px;bottom:2px;font-size:10px;font-weight:900;color:var(--dim);transform:rotate(180deg);letter-spacing:.04em}
+@media (min-width:700px){.bigrow{gap:14px;margin-bottom:8px}.st.bigc{aspect-ratio:5/7;min-height:0;max-height:440px;padding-top:14px;padding-bottom:26px;border-radius:20px}
+.st.bigc .sy{font-size:28px;line-height:34px}.st.bigc .sy b{font-size:30px}.st.bigc .dl2{font-size:34px}.st.bigc .sw{font-size:18px;line-height:22px}
+.st.bigc .sp{font-size:44px;line-height:50px}.st.bigc .gs{max-width:200px}.st.bigc .gn{font-size:38px;line-height:42px}.st.bigc .gp{font-size:20px;line-height:24px}
+.st.bigc .go{font-size:16px !important;line-height:22px}.st.bigc .gx{font-size:22px;line-height:32px;margin:6px 12px 0}.st.bigc .cnr{font-size:16px;right:30px;bottom:6px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
