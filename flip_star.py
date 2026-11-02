@@ -191,7 +191,7 @@ FLIP_CRASH_FRACTION = 0.87        # (was 0.50) instant sell when the position is
 # 24 Oct 13:53 CT (per Matthew): manually entered bets (bot.py "manually_adopted") also get an instant stop at 85% of what
 # was paid, all round long incl. the last 45s. The 75c line and 70% crash stops above still apply to them too.
 MANUAL_STOP_FRACTION = 0.85
-FLIP_PAUSED = False                # set to True to pause new bets (open bets keep their stops)
+FLIP_PAUSED = True                 # 2 Nov 15:07 CT (Matt): TEMPORARILY off while the STEADY trial runs (open bets keep their stops). Old settings: git tag settings-before-steady-2026-11-02
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
 

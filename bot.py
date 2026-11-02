@@ -22,6 +22,7 @@ from priority import RankedCandidate, potential_points, rank_candidates, size_sc
 from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
+import steady
 import pulse_v2
 import markets_paper
 import ride
@@ -1287,6 +1288,10 @@ def run():
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            steady.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 2 Nov (Matt): 2-share STEADY trial
+        except Exception as e:
+            print(f"[STEADY] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             ride.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
