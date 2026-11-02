@@ -27,7 +27,7 @@ import requests
 import strategy
 
 MK_ENABLED = True
-MK_NEW_BETS = True    # 27 Oct 13:03 CT (Matthew): add the 15-minute interest-rate markets -- back on, RATES ONLY (see MK_RATES_ONLY)
+MK_NEW_BETS = False   # 2 Nov 17:13 CT (Matt): coins only -- no new commodity / currency / rate bets (open ones keep their stops)
 MK_RATES_ONLY = True  # currencies + commodities stay off; only Treasury-yield (5Y/10Y/30Y...) 15-minute markets are bid on
 # (was) MK_NEW_BETS = False   # 27 Oct 08:43 CT (Matthew: "turn off everything that's losing") -- Pulse Markets was -$11.20 over 33 bets; no new bets, open ones still managed to the end
 MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
