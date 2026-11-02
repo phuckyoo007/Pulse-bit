@@ -16,7 +16,7 @@ import flip_star
 
 STEADY_ENABLED = True
 STEADY_SHARES = 2
-STEADY_WATCH_UNTIL = 240        # the "first 11 minutes" end when 4:00 is left
+STEADY_WATCH_UNTIL = 300        # 2 Nov 16:02 CT (Matt): watch the first 10 minutes, bid in the last 5 (was 4)
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
 STEADY_MIN_WIN = 0.90           # buy once the pick is at 90%+
 STEADY_MIN_PRICE = 0.90        # 2 Nov 15:11 CT (Matt): only buy at 90-97c, cheapest (closest to 90c) first
