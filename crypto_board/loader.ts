@@ -320,6 +320,31 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .fl{font-size:13px;line-height:18px}
 @media (min-width:700px){.st .fl{font-size:12px;line-height:15px}.st.bigc .fl{font-size:17px;line-height:22px}}
 .st.fa{border-color:var(--green)}`);
+// 2 Nov 15:22 CT (Matt): a round whose pick has flipped even once is not eligible for a bid -- grey those cards out with
+// a "FLIPPED - NO BID" band, and move them out of GOING UP / GOING DOWN into their own section underneath.
+patch(`html+='<div class="'+cls+__sigcls(m,side,sdir,p)+'" style=`, `html+='<div class="'+cls+__sigcls(m,side,sdir,p)+(mk&&mk.flips>0?' flp':'')+'" style=`);
+patch("var hu=[],hd=[],bg={};", "var hu=[],hd=[],bg={},hf=[];");
+patch('var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);',
+  'if(mk&&mk.flips>0){hf.push(html);return;}\n    var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);');
+patch(`(hd.join("")||'<div class="se">none</div>')+'</div></div>'`,
+  `(hd.join("")||'<div class="se">none</div>')+'</div></div>'+(hf.length?'<div class="hdiv2"></div><div class="sh fx"><div class="shd">⇄ FLIPPED THIS ROUND · NO BID <span>'+hf.length+'</span></div><div class="sg">'+hf.join("")+'</div></div>':'')`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st.flp{opacity:.6;filter:grayscale(.3);border-color:#484f58 !important;animation:none !important;box-shadow:none !important}
+.st.flp::after{content:"✕ FLIPPED · NO BID";position:absolute;left:-10%;right:-10%;top:44%;background:rgba(220,40,40,.9);color:#fff;font-weight:900;font-size:9px;line-height:16px;letter-spacing:.03em;text-align:center;transform:rotate(-14deg);z-index:6;pointer-events:none}
+.st.flp .dl2,.st.flp .gx.b{display:none}
+.hdiv2{flex:0 0 100%;height:4px;border-radius:2px;background:#484f58;margin:10px 0}
+#strip .sh.fx{flex:0 0 100%}#strip .fx .shd{color:#c9d1d9;background:rgba(139,148,158,.18)}
+@media (min-width:700px){.st.flp::after{font-size:15px;line-height:26px}}
+.st.fa{border-color:var(--green)}`);
+// ...and a flipped BTC / XRP / SOL / BNB leaves the big top row too (it shows only in the FLIPPED section).
+patch("if(__BIG.indexOf(k)>=0){", "if(__BIG.indexOf(k)>=0&&!(mk&&mk.flips>0)){");
+// 2 Nov 15:23 CT (Matt): every coin's name in its own color so cards are recognisable at a glance
+// (blue = BTC, red = XRP, ...). Same color on the upside-down corner name of the big cards.
+patch("function __err(w,e){", 'var __CC={BTC:"#3d8bff",XRP:"#ff3b3b",SOL:"#b06cff",BNB:"#ffd60a",ETH:"#a3b1ff",DOGE:"#ff8c1a",HYPE:"#20e3c2",ZEC:"#ff5fd2",LTC:"#d0d7de",ADA:"#a8ff60",AVAX:"#c97b4a",LINK:"#f5f0c8",SUI:"#9be7ff"};\nfunction __err(w,e){');
+patch(`'<i class="dl2">$</i>':'')+k+' <b class=`, `'<i class="dl2">$</i>':'')+'<span class="cnm" style="color:'+(__CC[k]||"#e6edf3")+'">'+k+'</span> <b class=`);
+patch(`'<div class="cnr">'+k+'</div></div>'`, `'<div class="cnr" style="color:'+(__CC[k]||"#8b949e")+'">'+k+'</div></div>'`);
+patch(".st.fa{border-color:var(--green)}", `.st .cnm{text-shadow:0 0 6px rgba(0,0,0,.6)}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
