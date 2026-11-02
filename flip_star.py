@@ -191,7 +191,7 @@ FLIP_CRASH_FRACTION = 0.87        # (was 0.50) instant sell when the position is
 # 24 Oct 13:53 CT (per Matthew): manually entered bets (bot.py "manually_adopted") also get an instant stop at 85% of what
 # was paid, all round long incl. the last 45s. The 75c line and 70% crash stops above still apply to them too.
 MANUAL_STOP_FRACTION = 0.85
-FLIP_PAUSED = False                # 2 Nov 16:06 CT (Matt): Flip Star back on at 2 shares, alongside Steady
+FLIP_PAUSED = True                 # 2 Nov 16:32 CT (Matt): paused again (open bets keep their stops); Steady keeps running
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
 
@@ -283,7 +283,7 @@ def _side_numbers(m: dict, age: float, coins: dict = None):
             "title": m.get("title", m.get("ticker")),
             "chg_1m": ((coins or {}).get(m.get("coin")) or {}).get("chg_1m"),
             "chg_5m": ((coins or {}).get(m.get("coin")) or {}).get("chg_5m"),
-            "mid_chg_1m": m.get("mid_chg_1m")}
+            "mid_chg_1m": m.get("mid_chg_1m"), "flips": m.get("flips")}
 
 
 _mom = {}   # coin -> smoothed momentum, same math as the edge board's MOMENTUM meter

@@ -46,7 +46,12 @@ def _track(b: dict) -> None:
         if r is None:
             r = _rounds[ticker] = {"side": n["side"], "ok": True, "first_tl": n["tl"], "why": "", "seen": now}
             if n["tl"] < STEADY_MUST_SEE_FROM:
-                r["ok"], r["why"] = False, f"only seen from {int(n['tl'])}s left"
+                # 2 Nov 16:32: after a bot restart mid-round, trust the edge board's own flip counter (it has watched
+                # the whole round) -- 0 flips so far and still above 49% = still qualifies.
+                if n.get("flips") == 0 and n["p"] > STEADY_DQ_WIN + 1e-9:
+                    _log_once(ticker, f"[STEADY] {ticker} ({n['coin']}): joined mid-round -- board shows 0 flips, still tracking.")
+                else:
+                    r["ok"], r["why"] = False, f"only seen from {int(n['tl'])}s left (board flips: {n.get('flips')})"
         r["seen"] = now
         if not r["ok"]:
             continue
