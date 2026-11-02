@@ -255,6 +255,14 @@ patch(".st.fa{border-color:var(--green)}",
 .st .bw.dg.u{color:#39d353}.st .bw.dg.d{color:#ff5b52}
 @media (min-width:700px){.st .bw.dg{font-size:16px;line-height:19px;height:19px;padding:0 4px}}
 .st.fa{border-color:var(--green)}`);
+// 2 Nov 09:53 CT (Matt): the $ BUY badge sat on top of the up/down arrow -- move it to the LEFT of the coin name
+// (inline in the title, like an element card's corner number) and drop the old top-right badge.
+patch(`<div class="sy">'+k+' <b class=`, `<div class="sy">'+(__sigcls(m,side,sdir,p)===" sbuy"?'<i class="dl2">$</i>':'')+k+' <b class=`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .dl{display:none !important}
+.st .dl2{font-style:normal;font-size:15px;font-weight:900;color:#39d353;text-shadow:0 0 6px #39d353;margin-right:3px;animation:tblink .7s step-end infinite}
+@media (min-width:700px){.st .dl2{font-size:24px;margin-right:5px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
