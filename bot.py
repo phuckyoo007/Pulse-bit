@@ -324,6 +324,7 @@ RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the m
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
+MANUAL_STOP_PCT = 0.90             # 2 Nov 15:12 CT (Matt): manual bets also sell at 90% of what was paid (held 3s)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
 MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
 MANUAL_CRASH_CENTS = 0.20           # ...and immediately when down 20c
@@ -961,10 +962,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if _drop >= MANUAL_CRASH_CENTS - 1e-9:
                         decision = ExitDecision(True, f"manual_stop_20c (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
                                                       f"{position['entry_price']*100:.0f}c -- selling immediately)")
-                    elif _drop >= MANUAL_DROP_CENTS - 1e-9:
+                    elif _drop >= MANUAL_DROP_CENTS - 1e-9 or _hv <= position["entry_price"] * MANUAL_STOP_PCT + 1e-9:
                         _ms = position.setdefault("manual_drop_since", time.time())
                         if time.time() - _ms >= MANUAL_DROP_CONFIRM_SECONDS:
-                            decision = ExitDecision(True, f"manual_stop_12c (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
+                            decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
                                                           f"{position['entry_price']*100:.0f}c for {time.time()-_ms:.0f}s -- selling)")
                         else:
                             decision = ExitDecision(False, "")
