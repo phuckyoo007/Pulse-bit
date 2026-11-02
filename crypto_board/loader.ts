@@ -267,8 +267,8 @@ patch(".st.fa{border-color:var(--green)}",
 // small boxes (which no longer repeat those four). Same contents and BUY / SELL signals, just bigger.
 patch("var hu=[],hd=[];", 'var hu=[],hd=[],bg={};');
 patch('var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);',
-  'if(__BIG.indexOf(k)>=0){bg[k]=html.replace(\'<div class="st\',\'<div class="st bigc\').slice(0,-6)+\'<div class="cnr">\'+k+\'</div></div>\';return;}\n    var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);');
-patch(`el.innerHTML='<div class="sh up">`, `el.innerHTML='<div class="bigrow">'+__BIG.map(function(c){return bg[c]||'';}).join('')+'</div>'+'<div class="sh up">`);
+  'if(__BIG.indexOf(k)>=0){bg[k]=html.replace(\'<div class="st\',\'<div class="st bigc\').slice(0,-6)+\'<div class="cnr">\'+k+\'</div></div>\';var __gu=(side==="yes"||(side==="none"&&m!=null&&m>=0));bg[k]=[bg[k].replace(\'<div class="sy">\',\'<div class="bdir \'+(__gu?\'u\':\'d\')+\'">\'+(__gu?\'▲ UP\':\'▼ DOWN\')+\'</div><div class="sy">\'),__gu];}\n    var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);');
+patch(`el.innerHTML='<div class="sh up">`, `el.innerHTML='<div class="bigrow">'+__BIG.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'<div class="bdv"></div>'+__BIG.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'</div><div class="hdiv"></div>'+'<div class="sh up">`);
 patch("function __err(w,e){", 'var __BIG=["BTC","XRP","SOL","BNB"];\nfunction __err(w,e){');
 patch(".st.fa{border-color:var(--green)}",
   `#strip{flex-wrap:wrap}
@@ -283,6 +283,17 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .sy{font-size:28px;line-height:34px}.st.bigc .sy b{font-size:30px}.st.bigc .dl2{font-size:34px}.st.bigc .sw{font-size:18px;line-height:22px}
 .st.bigc .sp{font-size:44px;line-height:50px}.st.bigc .gs{max-width:200px}.st.bigc .gn{font-size:38px;line-height:42px}.st.bigc .gp{font-size:20px;line-height:24px}
 .st.bigc .go{font-size:16px !important;line-height:22px}.st.bigc .gx{font-size:22px;line-height:32px;margin:6px 12px 0}.st.bigc .cnr{font-size:16px;right:30px;bottom:6px}}
+.st.fa{border-color:var(--green)}`);
+// 2 Nov 12:02 CT (Matt): the four big cards stay in the small groups too; on top they sit LEFT if going up, RIGHT if
+// going down (vertical divider between), each with a big GOING UP / GOING DOWN banner; thick divider under the row.
+patch(".st.fa{border-color:var(--green)}",
+  `.bigrow{display:flex !important;align-items:stretch;min-width:0;max-width:100%}
+.bigrow .st.bigc{flex:1 1 0;min-width:0}
+.bigrow .bdv{flex:0 0 5px;border-radius:3px;background:linear-gradient(var(--green),#ff7b72);margin:0 2px}
+.hdiv{flex:0 0 100%;height:8px;border-radius:4px;margin:8px 0 12px;background:linear-gradient(90deg,var(--green) 0%,var(--green) 49%,#ff7b72 51%,#ff7b72 100%);box-shadow:0 0 10px rgba(201,209,217,.25)}
+.st.bigc .bdir{font-size:10px;font-weight:900;letter-spacing:-.3px;overflow:hidden;line-height:16px;border-radius:6px;margin:0 0 3px;white-space:nowrap;color:#0d1117}
+.st.bigc .bdir.u{background:#39d353}.st.bigc .bdir.d{background:#ff6b62}
+@media (min-width:700px){.bigrow .bdv{flex-basis:8px;margin:0 6px}.hdiv{height:12px;margin:12px 0 16px}.st.bigc .bdir{font-size:20px;line-height:34px;margin:0 6px 8px;border-radius:10px}}
 .st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
