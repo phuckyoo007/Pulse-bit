@@ -24,6 +24,7 @@ STEADY_MAX_PRICE = 0.97
 STEADY_DQ_WIN = 0.49            # pick at 49% or lower -> no longer qualifies
 STEADY_MIN_SECONDS_LEFT = 15    # too close to the end to bother
 STEADY_MAX_ATTEMPTS = 2
+STEADY_MAX_OPEN = 5             # 2 Nov 15:14 CT (Matt): at most 5 Steady bets open at once
 
 _rounds = {}      # ticker -> {"side", "ok", "first_tl", "why"}
 _attempts = {}
@@ -112,6 +113,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     # 2 Nov 15:11 CT (Matt): cheapest first -- the closer to 90c, the more each share pays.
     cands.sort(key=lambda c: c[0])
     for cost, ticker, n, side, limit, tl in cands:
+        _open = sum(1 for _p in list(state.values()) if isinstance(_p, dict) and _p.get("steady"))
+        if _open >= STEADY_MAX_OPEN:
+            _log_once("maxopen", f"[STEADY] {_open} Steady bets already open (max {STEADY_MAX_OPEN}) -- waiting for one to close.")
+            break
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
         print(f"[STEADY] ENTRY {ticker} ({n['coin']}): {n['side'].upper()} held all round (never flipped, never <=49%), "
               f"now {n['p']*100:.0f}% with {int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {STEADY_SHARES} "
