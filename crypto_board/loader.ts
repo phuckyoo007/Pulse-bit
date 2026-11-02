@@ -45,7 +45,14 @@ patch(".pk .sd.yes{color:var(--green)}.pk .sd.no{color:#ff7b72}",
 @keyframes tblink{50%{opacity:.15}}
 .mfill.fa{background:var(--green)}.mfill.ag{background:#ff3b3b}
 .pk.gr .mfill.fa{background:#fff}.pk.gr .mfill.ag{background:#ff3b3b}
-#strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:0 0 8px}
+#strip{display:flex;align-items:stretch;gap:6px;margin:0 0 8px}
+#strip .sh{flex:1;min-width:0}
+#strip .sdv{flex:0 0 3px;border-radius:2px;background:linear-gradient(var(--green),#ff7b72)}
+#strip .shd{font-size:12px;font-weight:900;letter-spacing:.06em;text-align:center;margin-bottom:5px;padding:3px 0;border-radius:6px}
+#strip .shd span{opacity:.75;margin-left:4px}
+#strip .up .shd{color:var(--green);background:rgba(63,185,80,.14)}#strip .dn .shd{color:#ff7b72;background:rgba(255,123,114,.14)}
+#strip .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
+#strip .se{grid-column:1/-1;text-align:center;color:var(--dim);font-size:12px;padding:20px 0}
 .st{position:relative;min-width:0;min-height:112px;border:2px solid #484f58;border-radius:8px;background:var(--panel);text-align:center;padding:3px 1px 3px;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column}
 .st .sy{font-size:11px;font-weight:900;color:var(--text);line-height:13px;white-space:nowrap}.st .sy b{font-size:12px}.st .sy .yes{color:var(--green)}.st .sy .no{color:#ff7b72}.st .sy .none{color:var(--dim)}
 .st .sp{font-size:15px;font-weight:900;color:#39d353;line-height:18px;font-variant-numeric:tabular-nums;letter-spacing:-.6px;white-space:nowrap}
@@ -57,7 +64,7 @@ patch(".pk .sd.yes{color:var(--green)}.pk .sd.no{color:#ff7b72}",
 .st .sb2,.st .sb{position:relative;flex:1;min-height:30px;width:11px;margin:1px 0;border-radius:5px;background:rgba(139,148,158,.25);overflow:hidden}
 .st .bl{font-size:5.5px;font-weight:900;line-height:8px;color:var(--text);letter-spacing:-.1px;white-space:nowrap}
 .st.fa{border-color:var(--green)}.st.ag{border-color:#ffb020;animation:tflash .8s step-end infinite}.st.ag.hi{border-color:#ff2d2d}
-@media (min-width:700px){#strip{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px}.st{min-height:170px;padding:8px 4px;border-radius:12px}.st .sy{font-size:16px;line-height:19px}.st .sy b{font-size:22px}.st .sp{font-size:28px;line-height:32px;letter-spacing:-.5px}.st .sw{font-size:13px;line-height:16px}.st .bw,.st .bl{font-size:10px;line-height:12px;height:12px;letter-spacing:0}.st .sb2,.st .sb{width:16px;border-radius:8px}}`);
+@media (min-width:700px){#strip{gap:10px}#strip .sdv{flex-basis:4px}#strip .shd{font-size:16px}#strip .sg{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}.st{min-height:170px;padding:8px 4px;border-radius:12px}.st .sy{font-size:16px;line-height:19px}.st .sy b{font-size:22px}.st .sp{font-size:28px;line-height:32px;letter-spacing:-.5px}.st .sw{font-size:13px;line-height:16px}.st .bw,.st .bl{font-size:10px;line-height:12px;height:12px;letter-spacing:0}.st .sb2,.st .sb{width:16px;border-radius:8px}}`);
 patch('<div class="pickbox" id="picks"></div>', '<div id="strip"></div><div id="consensus"></div><div class="pickbox" id="picks"></div>');
 patch('<div class="sd \'+s+\'">\'+(s==="yes"?"YES ▲":"NO ▼")+\'</div>',
   '<div class="sd \'+s+\'">\'+(s==="yes"?"▲ UP":"▼ DOWN")+\'</div>');
@@ -120,7 +127,8 @@ function __strip(list){
   var el=document.getElementById("strip");if(!el||!DATA||!DATA.coins)return;
   var by={},t=performance.now()/1000;list.forEach(function(m){by[m.coin]=m;});
   var keys=Object.keys(DATA.coins).sort(function(a,b){return fixedOrder(a,b)}),html="";
-  keys.forEach(function(k){
+  var hu=[],hd=[];
+  keys.forEach(function(k){html="";
     var mk=by[k],m=__mom[k]!=null?__mom[k]:__mval(k),a=m==null?0:Math.abs(m),up=m!=null&&m>=0,flat=m==null||a<0.08;
     var side=mk&&mk.best_side?mk.best_side:"none";
     var good=side==="yes"?up:(side==="no"?!up:null),fcls=good==null?"":(good?" fa":" ag");
@@ -140,8 +148,11 @@ function __strip(list){
     var sxc=sdir>0?"u":(sdir<0?"d":"");
     var mw=flat?"FLAT":(up?"RISING":"FALLING"),mc=flat?"":(up?"u":"d"),pw=sdir===0||sp<0.05?"STEADY":(sdir>0?"RISING":"FALLING"),pc=sdir===0||sp<0.05?"":(sdir>0?"u":"d");
     html+='<div class="'+cls+'" style="animation-delay:'+(-(t%0.8)).toFixed(2)+'s"><div class="sy">'+k+' <b class="'+side+'">'+(side==="yes"?"▲":(side==="no"?"▼":"–"))+'</b></div><div class="sw">'+win+'</div><div class="sp">'+prt+'</div><div class="bz"><div class="bc"><div class="bw '+pc+'">'+pw+'</div><div class="sb2">'+sfill+'<b class="mmid"></b></div><div class="bl">PRICE</div></div><div class="bc"><div class="bw '+mc+'">'+mw+'</div><div class="sb">'+fill+'<b class="mmid"></b></div><div class="bl">MOMENTUM</div></div></div></div>';
+    var goUp=side==="yes"||(side==="none"&&m!=null&&m>=0);(goUp?hu:hd).push(html);
   });
-  el.innerHTML=html;
+  el.innerHTML='<div class="sh up"><div class="shd">▲ GOING UP <span>'+hu.length+'</span></div><div class="sg">'+(hu.join("")||'<div class="se">none</div>')+'</div></div>'
+    +'<div class="sdv"></div>'
+    +'<div class="sh dn"><div class="shd">▼ GOING DOWN <span>'+hd.length+'</span></div><div class="sg">'+(hd.join("")||'<div class="se">none</div>')+'</div></div>';
 }
 function __err(w,e){try{var el=document.getElementById("strip");if(el)el.innerHTML='<div style="grid-column:1/-1;color:#ff7b72;font-size:12px;padding:6px">Boxes error ('+w+'): '+String(e&&e.message||e)+'</div>';}catch(x){}}
 function renderPicks(list,crit){try{__consensus(list);}catch(e){__err("banner",e);}
