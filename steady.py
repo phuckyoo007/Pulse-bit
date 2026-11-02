@@ -19,6 +19,8 @@ STEADY_SHARES = 2
 STEADY_WATCH_UNTIL = 240        # the "first 11 minutes" end when 4:00 is left
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
 STEADY_MIN_WIN = 0.90           # buy once the pick is at 90%+
+STEADY_MIN_PRICE = 0.90        # 2 Nov 15:11 CT (Matt): only buy at 90-97c, cheapest (closest to 90c) first
+STEADY_MAX_PRICE = 0.97
 STEADY_DQ_WIN = 0.49            # pick at 49% or lower -> no longer qualifies
 STEADY_MIN_SECONDS_LEFT = 15    # too close to the end to bother
 STEADY_MAX_ATTEMPTS = 2
@@ -68,6 +70,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     _track(b)
     if flip_star.in_pause():
         return
+    cands = []
     for ticker, n in b.items():
         r = _rounds.get(ticker)
         if not r or not r["ok"] or n["side"] != r["side"]:
@@ -97,12 +100,18 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb
-            if cost <= 0 or cost > flip_star.FLIP_FILL_CAP + 1e-9:
+            if cost < STEADY_MIN_PRICE - 1e-9 or cost > STEADY_MAX_PRICE + 1e-9:
+                _log_once(ticker + ":px", f"[STEADY] {ticker} ({n['coin']}): qualifies at {n['p']*100:.0f}% but price "
+                                          f"{cost*100:.0f}c is outside {STEADY_MIN_PRICE*100:.0f}-{STEADY_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
-            limit = min(flip_star.FLIP_FILL_CAP, round(cost + flip_star.FLIP_SLIPPAGE, 2))
+            limit = min(STEADY_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[STEADY] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
+        cands.append((cost, ticker, n, side, limit, tl))
+    # 2 Nov 15:11 CT (Matt): cheapest first -- the closer to 90c, the more each share pays.
+    cands.sort(key=lambda c: c[0])
+    for cost, ticker, n, side, limit, tl in cands:
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
         print(f"[STEADY] ENTRY {ticker} ({n['coin']}): {n['side'].upper()} held all round (never flipped, never <=49%), "
               f"now {n['p']*100:.0f}% with {int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {STEADY_SHARES} "
