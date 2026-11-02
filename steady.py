@@ -15,7 +15,7 @@ import uuid
 import flip_star
 
 STEADY_ENABLED = True
-STEADY_SHARES = 2
+STEADY_SHARES = 5               # 2 Nov 17:46 CT (Matt): 5 shares per bet (was 2)
 STEADY_WATCH_UNTIL = 300        # 2 Nov 16:02 CT (Matt): watch the first 10 minutes, bid in the last 5 (was 4)
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
 STEADY_MIN_WIN = 0.78           # 2 Nov 17:45 CT (Matt): buy once the pick is at 78%+ (was 85)
