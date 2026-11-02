@@ -51,7 +51,7 @@ patch(".pk .sd.yes{color:var(--green)}.pk .sd.no{color:#ff7b72}",
 #strip .shd{font-size:12px;font-weight:900;letter-spacing:.06em;text-align:center;margin-bottom:5px;padding:3px 0;border-radius:6px}
 #strip .shd span{opacity:.75;margin-left:4px}
 #strip .up .shd{color:var(--green);background:rgba(63,185,80,.14)}#strip .dn .shd{color:#ff7b72;background:rgba(255,123,114,.14)}
-#strip .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px}
+#strip .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:5px}
 #strip .se{grid-column:1/-1;text-align:center;color:var(--dim);font-size:12px;padding:20px 0}
 .st{position:relative;min-width:0;min-height:112px;border:2px solid #484f58;border-radius:8px;background:var(--panel);text-align:center;padding:3px 1px 3px;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column}
 .st .sy{font-size:11px;font-weight:900;color:var(--text);line-height:13px;white-space:nowrap}.st .sy b{font-size:12px}.st .sy .yes{color:var(--green)}.st .sy .no{color:#ff7b72}.st .sy .none{color:var(--dim)}
@@ -64,6 +64,15 @@ patch(".pk .sd.yes{color:var(--green)}.pk .sd.no{color:#ff7b72}",
 .st .sb2,.st .sb{position:relative;flex:1;min-height:30px;width:11px;margin:1px 0;border-radius:5px;background:rgba(139,148,158,.25);overflow:hidden}
 .st .bl{font-size:5.5px;font-weight:900;line-height:8px;color:var(--text);letter-spacing:-.1px;white-space:nowrap}
 .st.fa{border-color:var(--green)}.st.ag{border-color:#ffb020;animation:tflash .8s step-end infinite}.st.ag.hi{border-color:#ff2d2d}
+/* 1 Nov 19:18: PRICE meter runs the full height on the box's left edge, MOMENTUM the full height on the right edge */
+.st{position:relative;padding-left:13px !important;padding-right:13px !important;overflow:hidden}
+.st .bz{position:absolute;top:4px;bottom:4px;left:2px;right:2px;margin:0;display:flex;justify-content:space-between;pointer-events:none;z-index:2}
+.st .bc{flex:0 0 auto;width:8px}
+.st .sb2,.st .sb{width:8px !important;border-radius:4px !important}
+.st .bc .bw,.st .bc .bl{display:none}
+.st .sb2,.st .sb{flex:1;min-height:0;margin:0;height:100%}
+.st .dl{right:13px !important}
+@media (min-width:700px){.st{padding-left:24px !important;padding-right:24px !important}.st .bz{top:6px;bottom:6px;left:4px;right:4px}.st .bc{width:16px}.st .sb2,.st .sb{width:16px !important;border-radius:8px !important}.st .dl{right:24px !important}.st .go{font-size:11px !important;letter-spacing:-.3px}}
 @media (min-width:700px){#strip{gap:10px}#strip .sdv{flex-basis:4px}#strip .shd{font-size:16px}#strip .sg{grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px}.st{min-height:170px;padding:8px 4px;border-radius:12px}.st .sy{font-size:16px;line-height:19px}.st .sy b{font-size:22px}.st .sp{font-size:28px;line-height:32px;letter-spacing:-.5px}.st .sw{font-size:13px;line-height:16px}.st .bw,.st .bl{font-size:10px;line-height:12px;height:12px;letter-spacing:0}.st .sb2,.st .sb{width:16px;border-radius:8px}}`);
 patch('<div class="pickbox" id="picks"></div>', '<div id="strip"></div><div id="consensus"></div><div class="pickbox" id="picks"></div>');
 patch('<div class="sd \'+s+\'">\'+(s==="yes"?"YES ▲":"NO ▼")+\'</div>',
