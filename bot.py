@@ -324,6 +324,7 @@ RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the m
 CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
 
 
+STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
 STEADY_STOP_DOLLARS = 1.00   # 2 Nov 15:29 CT (Matt): a Steady bet's only stop -- cash out once the bet is worth $1.00 or less
 MANUAL_STOP_PCT = 0.90             # 2 Nov 15:12 CT (Matt): manual bets also sell at 90% of what was paid (held 3s)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
@@ -970,6 +971,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     _val = _hv * float(position.get("count", 0))
                     if _val <= STEADY_STOP_DOLLARS + 1e-9:
                         decision = ExitDecision(True, f"steady_stop (bet worth ${_val:.2f} <= ${STEADY_STOP_DOLLARS:.2f} -- cashing out)")
+                    elif _hv >= STEADY_TAKE_PROFIT_PRICE - 1e-9:
+                        # 2 Nov 15:29 CT (Matt): capture the profit at 99c instead of waiting there for it to slip.
+                        decision = ExitDecision(True, f"steady_take_profit (held side {_hv*100:.0f}c >= {STEADY_TAKE_PROFIT_PRICE*100:.0f}c -- cashing in)")
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("manually_adopted"):
