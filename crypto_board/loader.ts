@@ -315,9 +315,9 @@ function sigmaFor(st: any, tSec: number) {`);
 patch(`<div class="sw">'+win+'</div>`,
   `<div class="sw">'+win+'</div><div class="fl '+(mk&&mk.flips!=null?(mk.flips===0?"z":(mk.flips<=2?"a":"r")):"")+'">⇄ '+(mk&&mk.flips!=null?mk.flips+(mk.flips===1?" flip":" flips"):"–")+'</div>`);
 patch(".st.fa{border-color:var(--green)}",
-  `.st .fl{font-size:8px;font-weight:900;line-height:11px;color:var(--dim);white-space:nowrap}
+  `.st .fl{font-size:10px;font-weight:900;line-height:13px;color:#c9d1d9;white-space:nowrap;background:#000;border-radius:4px;margin:1px 2px}
 .st .fl.z{color:#39d353}.st .fl.a{color:#ffb020}.st .fl.r{color:#ff5b52}
-.st.bigc .fl{font-size:11px;line-height:15px}
+.st.bigc .fl{font-size:13px;line-height:18px}
 @media (min-width:700px){.st .fl{font-size:12px;line-height:15px}.st.bigc .fl{font-size:17px;line-height:22px}}
 .st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
