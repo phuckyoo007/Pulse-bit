@@ -106,7 +106,7 @@ except Exception:
 PAUSE_CT = PAUSE_CT = ((0, 0), (0, 0))
 # (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
 NO_SIDE_NEEDS_STAR = True
-NO_SIDE_MIN_WIN = 0.98
+NO_SIDE_MIN_WIN = 0.90   # 3 Nov 16:43 CT (Matt): was 0.98
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 2 Nov 16:06 CT (Matt): every coin exactly 2 shares during the trial (was BTC/XRP 1.5x, DOGE/BNB 0.5x)
@@ -148,8 +148,8 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.96}   # 28 Oct 19:24 CT: floor 96c (fills at 94-95c lost 21-25% of the time)
-LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.96}
+LOOSE_STRICT = {"win": 0.90, "sigma": 1.8, "floor": 0.90}   # 3 Nov 16:43 CT (Matt): Flip Star at 90% win / 90c floor, 5 shares
+LOOSE_VALUES = {"win": 0.90, "sigma": 1.6, "floor": 0.90}
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
 

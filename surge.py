@@ -15,7 +15,7 @@ import requests
 
 import flip_star
 
-SURGE_ENABLED = True
+SURGE_ENABLED = False   # 3 Nov 16:43 CT (Matt): off -- Flip Star only for now (open Surge bets keep their exits)
 SURGE_MARKETS_ON = True       # 3 Nov 13:17 CT (Matt): also commodities + interest rates (Markets / Rates boards)
 SURGE_BET_DOLLARS = 5.00     # 3 Nov 15:20 CT (Matt): $5 max per bet (was $8)
 SURGE_TAKE_PROFIT = 0.20     # 3 Nov 15:20 CT (Matt): cash out once the bet would net +$0.20 if sold now (was $0.25)

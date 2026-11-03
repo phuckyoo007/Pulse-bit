@@ -14,7 +14,7 @@ import uuid
 
 import flip_star
 
-STEADY_ENABLED = True
+STEADY_ENABLED = False   # 3 Nov 16:43 CT (Matt): off -- Flip Star only for now
 STEADY_SHARES = 5               # 2 Nov 18:45 CT (Matt): 5 shares per bet (was 4)
 STEADY_WATCH_UNTIL = 165        # 2 Nov 18:45 CT (Matt): bid in the last 2:45; first 12:15 must hold one side
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
