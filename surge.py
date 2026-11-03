@@ -182,7 +182,18 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[SURGE] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
-        _sh = max(1, int(SURGE_BET_DOLLARS // limit))
+        _bet = SURGE_BET_DOLLARS
+        try:
+            _cash = float(client.get_balance_cached().get("balance", 0)) / 100
+            if _cash < _bet:
+                _bet = _cash * 0.97   # not enough cash for the full bet -- use what's there
+        except Exception:
+            pass
+        _sh = int(_bet // limit)
+        if _sh < 1:
+            _log_once("cash", f"[SURGE] not enough cash for even 1 share (${_bet:.2f}) -- skipping until the balance is back up.")
+            _done.pop(ticker, None)
+            continue
         print(f"[SURGE] ENTRY {ticker} ({n['coin']}): momentum meter at {abs(up)*100:.0f} and climbing {'UP' if up > 0 else 'DOWN'}, "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {_sh} {side_name.upper()} (${SURGE_BET_DOLLARS:.0f}) up to ${limit:.2f}")
         if dry_run:
