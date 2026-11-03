@@ -14,7 +14,8 @@ import flip_star
 
 SURGE_ENABLED = True
 SURGE_SHARES = 5
-SURGE_ENTRY = 0.995          # meter shows 100 (99.5+ rounds to 100)
+SURGE_ENTRY = 0.845          # 3 Nov 11:21 CT (Matt): buy from 85 up to 100 on the meter, while it is still climbing
+SURGE_RISE_SECONDS = 3       # "climbing" = higher than ~3 seconds ago
 SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops under 25 our way (was 90)
 SURGE_MIN_PRICE = 0.48       # 3 Nov 10:43 CT (Matt): only buy when our side's price is $.48-$.85
 SURGE_MAX_PRICE = 0.85
@@ -22,6 +23,7 @@ SURGE_MIN_SECONDS_LEFT = 20
 
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
 _tries = {}     # ticker -> entry attempts (max 3)
+_mhist = {}     # ticker -> [(time, momentum)] for the rising check
 _note = {}
 
 
@@ -56,7 +58,20 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if tl is None or tl < SURGE_MIN_SECONDS_LEFT:
             continue
         up = momentum_for(ticker, "yes")
-        if up is None or abs(up) < SURGE_ENTRY:
+        if up is None:
+            continue
+        hist = _mhist.setdefault(ticker, [])
+        hist.append((now, up))
+        while hist and now - hist[0][0] > 30:
+            hist.pop(0)
+        ref = None
+        for t0, v0 in hist:
+            if now - t0 >= SURGE_RISE_SECONDS:
+                ref = v0
+        if abs(up) < SURGE_ENTRY:
+            continue
+        # 3 Nov 11:21 CT (Matt): only while it is ESCALATING -- the meter must be higher (our way) than a few seconds ago.
+        if ref is None or abs(up) <= abs(ref) + 1e-6 or (ref * up) < 0:
             continue
         side_name = "yes" if up > 0 else "no"
         side = "bid" if side_name == "yes" else "ask"
@@ -81,7 +96,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[SURGE] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
-        print(f"[SURGE] ENTRY {ticker} ({n['coin']}): momentum meter at 100 {'UP' if up > 0 else 'DOWN'}, "
+        print(f"[SURGE] ENTRY {ticker} ({n['coin']}): momentum meter at {abs(up)*100:.0f} and climbing {'UP' if up > 0 else 'DOWN'}, "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {SURGE_SHARES} {side_name.upper()} up to ${limit:.2f}")
         if dry_run:
             continue
@@ -116,4 +131,4 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n["coin"],
                              "flip_star": True, "surge": True}
-        print(f"[SURGE] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- sells when momentum drops under 90.")
+        print(f"[SURGE] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- sells when momentum drops under {SURGE_EXIT*100:.0f}.")
