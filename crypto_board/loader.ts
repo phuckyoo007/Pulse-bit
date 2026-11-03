@@ -396,6 +396,23 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .hl{font-size:11px;line-height:15px}
 @media (min-width:700px){.st .hl{font-size:13px;line-height:17px}.st.bigc .hl{font-size:18px;line-height:24px}}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 11:00 CT (Matt): the cards below the boxes show the SHARE price (1c-99c, what it costs to buy the card's side
+// right now) big in the middle, with this round's high and low share price in parentheses -- and no more coin dollar
+// amounts (coin price "Now $..", "Target $..", "+$.. above").
+patch(`'%</div>'+(m.spot!=null&&m.strike?`, `'%</div>'+__pkpx(m,s)+(m.spot!=null&&m.strike?`);
+patch(`<div class="vsd '+(up?'up':'dn')+'">'+(up?'+':'−')+'$'+fmtD(Math.abs(d))+' <span>('+(up?'+':'')+(m.dist_pct||0).toFixed(2)+'%)</span></div><div class="tgt">Now <b>$'+fmtD(m.spot)+'</b></div><div class="tgt">Target <b>$'+fmtD(m.strike)+'</b></div>'`, `'`);
+patch("function __err(w,e){", `function __pkpx(m,s){
+  var sd=m[s];if(!sd||sd.ask==null)return '';
+  function f(v){return ("$"+Number(v).toFixed(2)).replace("$0.","$.");}
+  var h=s==="yes"?m.yhi:m.nhi,l=s==="yes"?m.ylo:m.nlo;
+  return '<div class="pkpx">'+f(sd.ask)+'</div>'+(h!=null&&l!=null?'<div class="pkhl">(<b class="h">'+f(h)+'</b> · <b class="l">'+f(l)+'</b>)</div>':'');
+}
+function __err(w,e){`);
+patch(".st.fa{border-color:var(--green)}",
+  `.pk .pkpx{font-size:34px;font-weight:900;line-height:38px;color:#39d353;font-variant-numeric:tabular-nums;margin:4px 0 0}
+.pk .pkhl{font-size:14px;font-weight:800;line-height:18px;color:var(--dim);margin-bottom:4px}
+.pk .pkhl .h{color:#39d353}.pk .pkhl .l{color:#ff6b62}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
