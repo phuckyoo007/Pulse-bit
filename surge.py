@@ -15,7 +15,7 @@ import flip_star
 SURGE_ENABLED = True
 SURGE_SHARES = 5
 SURGE_ENTRY = 0.995          # meter shows 100 (99.5+ rounds to 100)
-SURGE_EXIT = 0.895           # meter shows under 90 -> sell (bot.py)
+SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops under 25 our way (was 90)
 SURGE_MIN_PRICE = 0.48       # 3 Nov 10:43 CT (Matt): only buy when our side's price is $.48-$.85
 SURGE_MAX_PRICE = 0.85
 SURGE_MIN_SECONDS_LEFT = 20
