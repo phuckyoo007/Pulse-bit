@@ -24,8 +24,8 @@ SURGE_MAX_PER_ROUND = 10     # 3 Nov 12:47 CT (Matt): up to 10 Surge bets per 15
 SURGE_ENTRY = 0.795          # 3 Nov 13:51 CT (Matt): buy at 80-100 on the meter while it is still climbing
 SURGE_RISE_SECONDS = 3       # "climbing" = higher than ~3 seconds ago
 SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops under 25 our way (was 90)
-SURGE_MIN_PRICE = 0.62       # 3 Nov 13:27 CT (Matt): only buy when our side's price is $.62-$.90
-SURGE_MAX_PRICE = 0.90
+SURGE_MIN_PRICE = 0.60       # 3 Nov 14:25 CT (Matt): only buy when our side's price is $.60-$.80
+SURGE_MAX_PRICE = 0.80
 SURGE_MIN_SECONDS_LEFT = 120   # 3 Nov 14:15 CT (Matt): no new Surge buys in the last 2 minutes (was 20s)
 SURGE_PRICE_METER_MIN = 0.0   # 3 Nov 13:50 CT (Matt): price meter just has to be going UP -- any rise, no minimum
 
