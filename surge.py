@@ -106,8 +106,8 @@ def momentum_for(ticker: str, side: str):
 
 
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
-    if not SURGE_ENABLED:
-        return
+    if not SURGE_ENABLED or flip_star.in_pause():
+        return   # (in_pause also covers the $4 daily loss limit)
     b = dict(flip_star.board())
     if SURGE_MARKETS_ON:
         b.update(_extra_board())

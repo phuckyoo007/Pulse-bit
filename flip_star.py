@@ -114,7 +114,12 @@ _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
 
+LOSS_HALT = [False]   # 3 Nov 15:18 CT (Matt): bot.py sets this once the account is down $4 for the day
+
+
 def in_pause():
+    if LOSS_HALT[0]:
+        return True   # daily $4 loss limit hit -- no new bets from any strategy
     from datetime import datetime as _dt, timedelta as _td, timezone as _tz
     now = _dt.now(_tz(_td(hours=-5)))
     m = now.hour * 60 + now.minute

@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import threading
+from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 from types import SimpleNamespace
 import uuid
@@ -761,6 +762,54 @@ PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", 
 PROCESS_START_TIME = time.time()
 
 
+DAILY_LOSS_LIMIT = 4.00   # 3 Nov 15:18 CT (Matt): once the account is down $4.00 for the day, stop placing new bets
+_loss_state = {"day": None, "base": None, "checked": 0.0, "hit": False, "noted": 0.0}
+
+
+def _account_value(client, state) -> float:
+    """Cash + what every open position is worth right now (at the mid price)."""
+    cash = float(client.get_balance_cached().get("balance", 0)) / 100
+    val = 0.0
+    for t, pos in list(state.items()):
+        if not isinstance(pos, dict) or pos.get("dry_run"):
+            continue
+        try:
+            m = get_market_cached(client, t)
+            ya, yb = float(m.get("yes_ask_dollars")), float(m.get("yes_bid_dollars"))
+            mid = (ya + yb) / 2
+            val += float(pos.get("count", 0)) * (mid if pos.get("side") == "bid" else 1 - mid)
+        except Exception:
+            val += float(pos.get("count", 0)) * float(pos.get("entry_price", 0))
+    return cash + val
+
+
+def _loss_limit_hit(client, state) -> bool:
+    """True once the account value has fallen DAILY_LOSS_LIMIT below where it started the day (Central time).
+    The day's starting value is taken the first time the bot sees each new day -- after a restart it starts again
+    from the value at the restart."""
+    now = time.time()
+    if now - _loss_state["checked"] < 10:
+        return _loss_state["hit"]
+    _loss_state["checked"] = now
+    try:
+        day = datetime.now(ZoneInfo("America/Chicago")).strftime("%Y-%m-%d")
+        v = _account_value(client, state)
+    except Exception as e:
+        print(f"[LOSS LIMIT] couldn't value the account ({e}) -- not blocking bets this pass.")
+        return _loss_state["hit"]
+    if _loss_state["day"] != day:
+        _loss_state.update(day=day, base=v, hit=False)
+        print(f"[LOSS LIMIT] {day}: starting value ${v:.2f} -- new bets stop if it falls to ${v - DAILY_LOSS_LIMIT:.2f}.")
+    if not _loss_state["hit"] and v <= _loss_state["base"] - DAILY_LOSS_LIMIT + 1e-9:
+        _loss_state["hit"] = True
+        print(f"[LOSS LIMIT] account ${v:.2f} is down ${_loss_state['base'] - v:.2f} today (limit ${DAILY_LOSS_LIMIT:.2f}) -- "
+              f"NO NEW BETS for the rest of the day. Open bets keep their exits.")
+    elif _loss_state["hit"] and now - _loss_state["noted"] > 600:
+        _loss_state["noted"] = now
+        print(f"[LOSS LIMIT] still stopped for today (account ${v:.2f}, started ${_loss_state['base']:.2f}).")
+    return _loss_state["hit"]
+
+
 def _net_if_sold_now(position: dict, market: dict):
     """3 Nov 15:15 CT (Matt): profit in dollars if the position were sold RIGHT NOW at the bid for our side, after
     Kalshi's fee -- not at the mid price (the mid overstated XRP's +$0.31 that really netted $0.08)."""
@@ -1342,6 +1391,7 @@ def run():
         with STATE_LOCK:
             adopt_manual_positions(client, state)
 
+        flip_star.LOSS_HALT[0] = _loss_limit_hit(client, state)   # 3 Nov 15:18 CT (Matt): down $4 today -> in_pause() blocks every new entry
         try:
             flip_star.external_owned[0] = pulse_v2.owned   # live V2's markets are off-limits to Pulse
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
