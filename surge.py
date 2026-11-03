@@ -27,7 +27,7 @@ SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops 
 SURGE_MIN_PRICE = 0.62       # 3 Nov 13:27 CT (Matt): only buy when our side's price is $.62-$.90
 SURGE_MAX_PRICE = 0.90
 SURGE_MIN_SECONDS_LEFT = 20
-SURGE_PRICE_METER_MIN = 0.75  # 3 Nov 13:31 CT (Matt): price meter rising at 75%+ (our side up 3.75c+ in ~5s)
+SURGE_PRICE_METER_MIN = 0.05  # 3 Nov 13:50 CT (Matt): price meter just has to be RISING (board shows RISING from 5% of scale = +0.25c in ~5s)
 
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
 _tries = {}     # ticker -> entry attempts (max 3)
