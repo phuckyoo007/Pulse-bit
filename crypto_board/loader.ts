@@ -420,6 +420,21 @@ patch(".st.fa{border-color:var(--green)}",
 .st.flp::after{content:"✕ FLIPPED · NO BID" !important;left:auto !important;top:auto !important;right:12px !important;bottom:2px !important;transform:none !important;font-size:6.5px !important;line-height:10px !important;padding:0 3px !important;border-radius:4px !important;letter-spacing:0 !important}
 @media (min-width:700px){.st.flp::after{font-size:10px !important;line-height:15px !important;right:26px !important;bottom:4px !important;padding:0 6px !important}}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 11:37 CT (Matt): "To flip" sigma for the card's side on every card -- how far the coin would have to move
+// (in its own volatility) to flip this round. Green 2.0+, yellow 1.0-2.0, amber 0.5-1.0, red under 0.5.
+patch("function __err(w,e){", `function __sig(mk,side){
+  if(!mk||mk.z==null||(side!=="yes"&&side!=="no"))return '';
+  var z=mk.z*(side==="yes"?1:-1),c=z>=2?"g":(z>=1?"y":(z>=0.5?"a":"r"));
+  return '<div class="sgm '+c+'">σ '+(z>=0?'':'−')+Math.abs(z).toFixed(1)+' to flip</div>';
+}
+function __err(w,e){`);
+patch(`'+__stab(mk)+'<div class="sp">`, `'+__stab(mk)+__sig(mk,side)+'<div class="sp">`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .sgm{font-size:9px;font-weight:900;line-height:12px;white-space:nowrap;letter-spacing:-.2px}
+.st .sgm.g{color:#39d353}.st .sgm.y{color:#e3d33a}.st .sgm.a{color:#ffb020}.st .sgm.r{color:#ff5b52}
+.st.bigc .sgm{font-size:12px;line-height:16px}
+@media (min-width:700px){.st .sgm{font-size:13px;line-height:17px}.st.bigc .sgm{font-size:19px;line-height:25px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
