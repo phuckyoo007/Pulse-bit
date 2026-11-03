@@ -23,6 +23,7 @@ from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
 import steady
+import surge
 import pulse_v2
 import markets_paper
 import ride
@@ -679,7 +680,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
             _pos0 = state.get(ticker) or {}
-            if _pos0.get("manually_adopted") or _pos0.get("steady"):
+            if _pos0.get("manually_adopted") or _pos0.get("steady") or _pos0.get("surge"):
                 continue   # 1 Nov (Matt): manual bets only exit on their 12c / 20c drops (main exit loop)
             if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
                 # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
@@ -758,10 +759,10 @@ PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", 
 PROCESS_START_TIME = time.time()
 
 
-def _placed_by_steady(client: KalshiClient, ticker: str) -> bool:
+def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-steady-") -> bool:
     try:
         resp = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 100})
-        return any(str(o.get("client_order_id", "")).startswith("pulse-steady-") for o in (resp.get("orders", []) or []))
+        return any(str(o.get("client_order_id", "")).startswith(prefix) for o in (resp.get("orders", []) or []))
     except Exception:
         return False
 
@@ -867,6 +868,8 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                           "flip_star": not is_manual}
         if not is_manual and _placed_by_steady(client, ticker):
             state[ticker]["steady"] = True   # 2 Nov: a Steady bet re-adopted after a restart keeps its $1.00-only stop
+        elif not is_manual and _placed_by_steady(client, ticker, "pulse-surge-"):
+            state[ticker]["surge"] = True    # 3 Nov: a Surge bet re-adopted after a restart keeps its momentum exit
         origin = ("MANUAL (no Pulse order in its history) -- 85%-of-cost stop only" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
         print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
@@ -965,6 +968,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("surge"):
+                    # 3 Nov 10:41 CT (Matt): Surge bets sell the second the momentum meter drops under 90 our way.
+                    _mm = surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")
+                    if _mm is not None and _mm < surge.SURGE_EXIT:
+                        decision = ExitDecision(True, f"surge_exit (momentum {_mm*100:+.0f} < {surge.SURGE_EXIT*100:.0f} -- selling)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("steady"):
                     # 2 Nov 15:29 CT (Matt): Steady bets have ONE stop -- hold until the whole bet is worth $1.00 or less
                     # (2 shares bought ~$1.90), then cash out. Nothing else sells them; otherwise they ride to settlement.
@@ -1031,7 +1041,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     position.pop("crash_since", None)
                     decision = ExitDecision(False, "")
             _secs = getattr(result, "seconds_remaining", None)
-            if _secs is not None and _secs <= LAST_WINDOW_SECONDS and not position.get("manually_adopted") and not position.get("steady"):
+            if _secs is not None and _secs <= LAST_WINDOW_SECONDS and not position.get("manually_adopted") and not position.get("steady") and not position.get("surge"):
                 _held_val = current_position_value(position, result.market_price)
                 if _held_val <= position["entry_price"] * HARD_BACKSTOP_CRASH_FRACTION + 1e-9:
                     decision = ExitDecision(True, f"crash_stop ({_held_val*100:.0f}c held side <= 50% of entry with {_secs:.0f}s left -- instant)")
@@ -1058,7 +1068,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             # block it. No hold/confirm. If another exit already fired this cycle, that one is kept (single sell).
             if not decision.should_exit:
                 # 25 Oct 13:27 CT (Matthew): the 86% stop also waits CRASH_CONFIRM_SECONDS (same timer as the 87% stop).
-                _isd = (ExitDecision(False, "") if (position.get("manually_adopted") or position.get("steady") or not PULSE_PCT_STOPS_ENABLED)
+                _isd = (ExitDecision(False, "") if (position.get("manually_adopted") or position.get("steady") or position.get("surge") or not PULSE_PCT_STOPS_ENABLED)
                         else instant_stop_decision(position, result.market_price))
                 if _isd.should_exit:
                     _cs = position.setdefault("crash_since", time.time())
@@ -1082,7 +1092,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             # TRAILING PROFIT STOP (2 Nov 14:48 CT, Matt): once a bot bet is in profit, it may give back up to $1.00 from
             # its best point; the moment it has given back MORE than $1.00, cash out with what's left. E.g. $20 bet climbs
             # to $23: $22.02 holds, $21.99 sells (still +$1.99). Manual bets keep only their 12c / 20c exits.
-            if (not decision.should_exit and not position.get("manually_adopted") and not position.get("ride") and not position.get("steady")):
+            if (not decision.should_exit and not position.get("manually_adopted") and not position.get("ride") and not position.get("steady") and not position.get("surge")):
                 _cnt = float(position.get("count", 0))
                 _peak_d = position.get("peak_gain_per_contract", 0.0) * _cnt
                 _now_d = (current_position_value(position, result.market_price) - position["entry_price"]) * _cnt
@@ -1318,6 +1328,10 @@ def run():
             steady.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 2 Nov (Matt): 2-share STEADY trial
         except Exception as e:
             print(f"[STEADY] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            surge.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 3 Nov (Matt): momentum-100 rides
+        except Exception as e:
+            print(f"[SURGE] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             ride.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
