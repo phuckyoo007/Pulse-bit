@@ -413,6 +413,13 @@ patch(".st.fa{border-color:var(--green)}",
 .pk .pkhl{font-size:14px;font-weight:800;line-height:18px;color:var(--dim);margin-bottom:4px}
 .pk .pkhl .h{color:#39d353}.pk .pkhl .l{color:#ff6b62}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 11:08 CT (Matt): the FLIPPED · NO BID label moves to a small tag in the card's bottom-right corner (no band over
+// the card), and flipped cards are only lightly dimmed, so their numbers stay readable.
+patch(".st.fa{border-color:var(--green)}",
+  `.st.flp{opacity:.85 !important;filter:grayscale(.15) !important}
+.st.flp::after{content:"✕ FLIPPED · NO BID" !important;left:auto !important;top:auto !important;right:12px !important;bottom:2px !important;transform:none !important;font-size:6.5px !important;line-height:10px !important;padding:0 3px !important;border-radius:4px !important;letter-spacing:0 !important}
+@media (min-width:700px){.st.flp::after{font-size:10px !important;line-height:15px !important;right:26px !important;bottom:4px !important;padding:0 6px !important}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
