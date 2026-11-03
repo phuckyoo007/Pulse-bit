@@ -327,6 +327,7 @@ CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; 
 
 STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
 STEADY_MAX_LOSS_DOLLARS = 1.00   # 2 Nov 18:46 CT (Matt): a Steady bet is sold the moment it is down $1.00 (replaces the $2.50 floor)
+MANUAL_MOMENTUM_EXIT = 0.245        # 3 Nov 12:07 CT (Matt): manual bets sell when the momentum meter drops under 25 our way
 MANUAL_TAKE_PROFIT_DOLLARS = 0.50   # 3 Nov 12:04 CT (Matt): manual bets cash out once up $0.50
 MANUAL_STOP_PCT = 0.75             # 3 Nov 12:06 CT (Matt): manual bets' only stop -- 75% of what was paid
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
@@ -1011,6 +1012,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         # 3 Nov 12:06 CT (Matt): manual bets have ONE stop -- 75% of what was paid (no 90% / 12c / 20c).
                         decision = ExitDecision(True, f"manual_stop (held side {_hv*100:.0f}c <= {MANUAL_STOP_PCT*100:.0f}% of "
                                                       f"{position['entry_price']*100:.0f}c -- selling)")
+                    elif (_mmm := surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")) is not None \
+                            and _mmm < MANUAL_MOMENTUM_EXIT:
+                        # 3 Nov 12:07 CT (Matt): manual bets also sell when the momentum meter drops under 25 our way.
+                        decision = ExitDecision(True, f"manual_momentum_exit (momentum {_mmm*100:+.0f} < {MANUAL_MOMENTUM_EXIT*100:.0f} -- selling)")
                     else:
                         decision = ExitDecision(False, "")
                 elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
