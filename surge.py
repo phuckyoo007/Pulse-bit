@@ -17,8 +17,8 @@ import flip_star
 
 SURGE_ENABLED = True
 SURGE_MARKETS_ON = True       # 3 Nov 13:17 CT (Matt): also commodities + interest rates (Markets / Rates boards)
-SURGE_BET_DOLLARS = 8.00     # 3 Nov 13:43 CT (Matt): $8 per bet so it reaches the $0.50 take-profit sooner (shares = $8 / price)
-SURGE_TAKE_PROFIT = 0.25     # 3 Nov 14:52 CT (Matt): cash out once the bet is up $0.25 (was $0.50)
+SURGE_BET_DOLLARS = 5.00     # 3 Nov 15:20 CT (Matt): $5 max per bet (was $8)
+SURGE_TAKE_PROFIT = 0.20     # 3 Nov 15:20 CT (Matt): cash out once the bet would net +$0.20 if sold now (was $0.25)
 SURGE_STOP_FRACTION = 0.75   # 3 Nov 11:53 CT (Matt): sell if the bet falls to 75% of what was paid
 SURGE_MAX_PER_ROUND = 10     # 3 Nov 12:47 CT (Matt): up to 10 Surge bets per 15-minute round (was 5)
 SURGE_ENTRY = 0.795          # 3 Nov 13:51 CT (Matt): buy at 80-100 on the meter while it is still climbing
