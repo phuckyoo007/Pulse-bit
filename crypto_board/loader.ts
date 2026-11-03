@@ -345,6 +345,33 @@ patch(`'<i class="dl2">$</i>':'')+k+' <b class=`, `'<i class="dl2">$</i>':'')+'<
 patch(`'<div class="cnr">'+k+'</div></div>'`, `'<div class="cnr" style="color:'+(__CC[k]||"#8b949e")+'">'+k+'</div></div>'`);
 patch(".st.fa{border-color:var(--green)}", `.st .cnm{text-shadow:0 0 6px rgba(0,0,0,.6)}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 06:24 CT (Matt): stability box on every card -- how calm this 15-minute round has been so far.
+//   STABLE            : pick never flipped and the UP chance has stayed within a 25-point band
+//   SLIGHTLY UNSTABLE : flipped once, or the UP chance has swung 25+ points
+//   ERRATIC           : flipped 2+ times, or swung 45+ points
+patch("  r.flips = f.n;", `  r.flips = f.n;
+  const ff: any = f;
+  if (typeof r.model_p === "number") {
+    ff.lo = ff.lo == null ? r.model_p : Math.min(ff.lo, r.model_p);
+    ff.hi = ff.hi == null ? r.model_p : Math.max(ff.hi, r.model_p);
+  }
+  r.swing = ff.lo == null ? null : ff.hi - ff.lo;
+  r.stab = (f.n >= 2 || (r.swing ?? 0) >= 0.45) ? 2 : ((f.n === 1 || (r.swing ?? 0) >= 0.25) ? 1 : 0);`);
+patch("function __err(w,e){", `function __stab(mk){
+  if(!mk||mk.stab==null)return '';
+  var L=["● STABLE","≈ SLIGHTLY UNSTABLE","✖ ERRATIC"];
+  return '<div class="stb s'+mk.stab+'" title="swing '+(mk.swing==null?'?':Math.round(mk.swing*100))+' pts, '+(mk.flips||0)+' flips">'+L[mk.stab]+'</div>';
+}
+function __err(w,e){`);
+patch(`<div class="sp">'+prt+'</div>'+__gauge(`, `'+__stab(mk)+'<div class="sp">'+prt+'</div>'+__gauge(`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .stb{font-size:8px;font-weight:900;line-height:10px;padding:1px 0;letter-spacing:-.2px;white-space:normal;border-radius:4px;margin:2px 2px 1px;border:1.5px solid}
+.st .stb.s0{color:#39d353;border-color:#39d353;background:rgba(57,211,83,.12)}
+.st .stb.s1{color:#ffb020;border-color:#ffb020;background:rgba(255,176,32,.12)}
+.st .stb.s2{color:#ff5b52;border-color:#ff5b52;background:rgba(255,91,82,.15);animation:tflash .9s step-end infinite}
+.st.bigc .stb{font-size:11px;line-height:18px;border-width:2px}
+@media (min-width:700px){.st .stb{font-size:12px;line-height:18px}.st.bigc .stb{font-size:17px;line-height:26px;margin:4px 8px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
