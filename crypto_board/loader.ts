@@ -386,12 +386,12 @@ patch("function __err(w,e){", `function __hl(mk,side){
   var h=side==="yes"?mk.yhi:mk.nhi,l=side==="yes"?mk.ylo:mk.nlo;
   if(h==null||l==null)return '';
   function f(v){return ("$"+Number(v).toFixed(2)).replace("$0.","$.");}
-  return '<div class="hl">(<b class="h">H '+f(h)+'</b> · <b class="l">L '+f(l)+'</b>)</div>';
+  return '<div class="hl">(<b class="h">'+f(h)+'</b> · <b class="l">'+f(l)+'</b>)</div>';
 }
 function __err(w,e){`);
 patch(`<div class="sp">'+prt+'</div>'+__gauge(`, `<div class="sp">'+prt+'</div>'+__hl(mk,side)+__gauge(`);
 patch(".st.fa{border-color:var(--green)}",
-  `.st .hl{font-size:7.5px;font-weight:800;line-height:10px;color:var(--dim);white-space:nowrap;letter-spacing:-.5px}
+  `.st .hl{font-size:9px;font-weight:800;line-height:11px;color:var(--dim);white-space:nowrap;letter-spacing:-.3px}
 .st .hl .h{color:#39d353}.st .hl .l{color:#ff6b62}
 .st.bigc .hl{font-size:11px;line-height:15px}
 @media (min-width:700px){.st .hl{font-size:13px;line-height:17px}.st.bigc .hl{font-size:18px;line-height:24px}}
