@@ -13,7 +13,8 @@ import uuid
 import flip_star
 
 SURGE_ENABLED = True
-SURGE_SHARES = 5
+SURGE_SHARES = 1             # 3 Nov 11:36 CT (Matt): 1 share per bet while we see if it works
+SURGE_MAX_PER_ROUND = 5      # ...and at most 5 bets (5 different coins) per 15-minute round
 SURGE_ENTRY = 0.845          # 3 Nov 11:21 CT (Matt): buy from 85 up to 100 on the meter, while it is still climbing
 SURGE_RISE_SECONDS = 3       # "climbing" = higher than ~3 seconds ago
 SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops under 25 our way (was 90)
@@ -56,6 +57,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         tl = n.get("tl")
         if tl is None or tl < SURGE_MIN_SECONDS_LEFT:
+            continue
+        _rk = ticker.split("-")[1] if "-" in ticker else ""
+        if sum(1 for t in _done if t.split("-")[1:2] == [_rk]) >= SURGE_MAX_PER_ROUND:
             continue
         up = momentum_for(ticker, "yes")
         if up is None:
