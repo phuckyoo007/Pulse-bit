@@ -15,10 +15,10 @@ import uuid
 import flip_star
 
 STEADY_ENABLED = True
-STEADY_SHARES = 5               # 2 Nov 17:46 CT (Matt): 5 shares per bet (was 2)
-STEADY_WATCH_UNTIL = 370        # 2 Nov 17:47 CT (Matt): bid in the last 6:10 (was 5:00); first 8:50 must hold one side
+STEADY_SHARES = 4               # 2 Nov 18:26 CT (Matt): 4 shares per bet (was 5)
+STEADY_WATCH_UNTIL = 240        # 2 Nov 18:26 CT (Matt): back to the last 4 minutes; first 11 must hold one side
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
-STEADY_MIN_WIN = 0.78           # 2 Nov 17:45 CT (Matt): buy once the pick is at 78%+ (was 85)
+STEADY_MIN_WIN = 0.83           # 2 Nov 18:26 CT (Matt): 83%+ win chance (was 78)
 STEADY_MIN_PRICE = 0.83        # 2 Nov 17:46 CT (Matt): buy at 83-97c (was 84), cheapest first
 STEADY_MAX_PRICE = 0.97
 STEADY_DQ_WIN = 0.49            # pick at 49% or lower -> no longer qualifies
