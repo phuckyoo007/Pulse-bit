@@ -327,6 +327,7 @@ CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; 
 
 STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
 STEADY_MAX_LOSS_DOLLARS = 1.00   # 2 Nov 18:46 CT (Matt): a Steady bet is sold the moment it is down $1.00 (replaces the $2.50 floor)
+MANUAL_TAKE_PROFIT_DOLLARS = 0.50   # 3 Nov 12:04 CT (Matt): manual bets cash out once up $0.50
 MANUAL_STOP_PCT = 0.90             # 2 Nov 15:12 CT (Matt): manual bets also sell at 90% of what was paid (held 3s)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
 MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
@@ -1002,7 +1003,11 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     #   down 20c (e.g. bought 60c -> 40c): sell immediately
                     # Nothing else sells a manual bet (no %, sigma, momentum, profit or last-45s rules, no backstop).
                     _drop = position["entry_price"] - _hv
-                    if _drop >= MANUAL_CRASH_CENTS - 1e-9:
+                    _mgain = (_hv - position["entry_price"]) * float(position.get("count", 0))
+                    if _mgain >= MANUAL_TAKE_PROFIT_DOLLARS - 1e-9:
+                        # 3 Nov 12:04 CT (Matt): manual bets also cash out once they're up $0.50.
+                        decision = ExitDecision(True, f"manual_take_profit (up ${_mgain:.2f} -- cashing in)")
+                    elif _drop >= MANUAL_CRASH_CENTS - 1e-9:
                         decision = ExitDecision(True, f"manual_stop_20c (held side {_hv*100:.0f}c, down {_drop*100:.0f}c from "
                                                       f"{position['entry_price']*100:.0f}c -- selling immediately)")
                     elif _drop >= MANUAL_DROP_CENTS - 1e-9 or _hv <= position["entry_price"] * MANUAL_STOP_PCT + 1e-9:
