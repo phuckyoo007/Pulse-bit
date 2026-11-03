@@ -44,7 +44,7 @@ def _log_once(key, msg):
 
 # 3 Nov 13:17 CT (Matt): Surge also rides commodities and interest rates, read from the Markets and Rates edge boards
 # (same /api/state format and the same momentum math as the crypto board).
-SURGE_EXTRA_BOARDS = ["https://markets-board-production.up.railway.app/api/state",
+SURGE_EXTRA_BOARDS = [  # 3 Nov 14:09 CT (Matt): commodities off -- interest rates only
                       "https://rates-board-production.up.railway.app/api/state"]
 _xb = {"data": {}, "mom": {}, "coin_of": {}, "fetched": 0.0, "ok_at": 0.0}
 
