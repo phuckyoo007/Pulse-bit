@@ -16,9 +16,8 @@ SURGE_ENABLED = True
 SURGE_SHARES = 5
 SURGE_ENTRY = 0.995          # meter shows 100 (99.5+ rounds to 100)
 SURGE_EXIT = 0.895           # meter shows under 90 -> sell (bot.py)
-SURGE_MAX_PRICE = 0.97
-SURGE_MIN_WIN = 0.48         # 3 Nov 10:42 CT (Matt): only buy when our side's win chance is 48-85%
-SURGE_MAX_WIN = 0.85
+SURGE_MIN_PRICE = 0.48       # 3 Nov 10:43 CT (Matt): only buy when our side's price is $.48-$.85
+SURGE_MAX_PRICE = 0.85
 SURGE_MIN_SECONDS_LEFT = 20
 
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
@@ -61,11 +60,6 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         side_name = "yes" if up > 0 else "no"
         side = "bid" if side_name == "yes" else "ask"
-        win = n["p"] if n["side"] == side_name else 1 - n["p"]
-        if win < SURGE_MIN_WIN - 1e-9 or win > SURGE_MAX_WIN + 1e-9:
-            _log_once(ticker + ":w", f"[SURGE] {ticker} ({n['coin']}): momentum 100 {side_name.upper()} but win chance "
-                                     f"{win*100:.0f}% is outside {SURGE_MIN_WIN*100:.0f}-{SURGE_MAX_WIN*100:.0f}% -- skipping.")
-            continue
         try:
             held, _ = flip_star._held_count(client, ticker)
             if held != 0:
@@ -78,9 +72,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb
-            if cost <= 0 or cost > SURGE_MAX_PRICE + 1e-9:
+            if cost < SURGE_MIN_PRICE - 1e-9 or cost > SURGE_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[SURGE] {ticker} ({n['coin']}): momentum 100 {'UP' if up > 0 else 'DOWN'} but price "
-                                  f"{cost*100:.0f}c is over {SURGE_MAX_PRICE*100:.0f}c -- skipping.")
+                                  f"{cost*100:.0f}c is outside {SURGE_MIN_PRICE*100:.0f}-{SURGE_MAX_PRICE*100:.0f}c -- skipping.")
                 continue
             limit = min(SURGE_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
