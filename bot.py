@@ -975,6 +975,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if _sg >= surge.SURGE_TAKE_PROFIT - 1e-9:
                         # 3 Nov 11:50 CT (Matt): capture the profit once a Surge bet is up $1.00.
                         decision = ExitDecision(True, f"surge_take_profit (up ${_sg:.2f} -- cashing in)")
+                    elif _hv <= position["entry_price"] * surge.SURGE_STOP_FRACTION + 1e-9:
+                        # 3 Nov 11:53 CT (Matt): if the bet falls to 75% of what was paid, get out and keep the three quarters.
+                        decision = ExitDecision(True, f"surge_stop (held side {_hv*100:.0f}c <= {surge.SURGE_STOP_FRACTION*100:.0f}% "
+                                                      f"of entry {position['entry_price']*100:.0f}c -- selling)")
                     elif _mm is not None and _mm < surge.SURGE_EXIT:
                         decision = ExitDecision(True, f"surge_exit (momentum {_mm*100:+.0f} < {surge.SURGE_EXIT*100:.0f} -- selling)")
                     else:
