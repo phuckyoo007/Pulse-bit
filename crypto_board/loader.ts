@@ -372,6 +372,30 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .stb{font-size:11px;line-height:18px;border-width:2px}
 @media (min-width:700px){.st .stb{font-size:12px;line-height:18px}.st.bigc .stb{font-size:17px;line-height:26px;margin:4px 8px}}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 08:41 CT (Matt): under each card's price, this round's highest and lowest price for that card's side, e.g. (H $.95 · L $.71).
+patch("  r.swing = ff.lo == null ? null : ff.hi - ff.lo;", `  r.swing = ff.lo == null ? null : ff.hi - ff.lo;
+  for (const [k, v] of [["y", r.yes_ask], ["n", r.no_ask]] as [string, any][]) {
+    if (typeof v === "number" && v > 0 && v < 1) {
+      ff[k + "h"] = ff[k + "h"] == null ? v : Math.max(ff[k + "h"], v);
+      ff[k + "l"] = ff[k + "l"] == null ? v : Math.min(ff[k + "l"], v);
+    }
+  }
+  r.yhi = ff.yh ?? null; r.ylo = ff.yl ?? null; r.nhi = ff.nh ?? null; r.nlo = ff.nl ?? null;`);
+patch("function __err(w,e){", `function __hl(mk,side){
+  if(!mk||(side!=="yes"&&side!=="no"))return '';
+  var h=side==="yes"?mk.yhi:mk.nhi,l=side==="yes"?mk.ylo:mk.nlo;
+  if(h==null||l==null)return '';
+  function f(v){return ("$"+Number(v).toFixed(2)).replace("$0.","$.");}
+  return '<div class="hl">(<b class="h">H '+f(h)+'</b> · <b class="l">L '+f(l)+'</b>)</div>';
+}
+function __err(w,e){`);
+patch(`<div class="sp">'+prt+'</div>'+__gauge(`, `<div class="sp">'+prt+'</div>'+__hl(mk,side)+__gauge(`);
+patch(".st.fa{border-color:var(--green)}",
+  `.st .hl{font-size:7.5px;font-weight:800;line-height:10px;color:var(--dim);white-space:nowrap;letter-spacing:-.5px}
+.st .hl .h{color:#39d353}.st .hl .l{color:#ff6b62}
+.st.bigc .hl{font-size:11px;line-height:15px}
+@media (min-width:700px){.st .hl{font-size:13px;line-height:17px}.st.bigc .hl{font-size:18px;line-height:24px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
