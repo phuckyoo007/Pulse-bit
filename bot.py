@@ -325,7 +325,7 @@ CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; 
 
 
 STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
-STEADY_STOP_DOLLARS = 2.00   # 2 Nov 18:27 CT (Matt): 4-share bets -- cash out once the bet is worth $2.00 or less (was $1.00 for 2 shares)
+STEADY_STOP_DOLLARS = 2.50   # 2 Nov 18:45 CT (Matt): 5-share bets -- cash out once the bet is worth $2.50 or less
 MANUAL_STOP_PCT = 0.90             # 2 Nov 15:12 CT (Matt): manual bets also sell at 90% of what was paid (held 3s)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
 MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
