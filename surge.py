@@ -7,12 +7,16 @@ SURGE strategy (3 Nov 10:40 CT, Matt) -- momentum rides, using the edge board's 
   * Never pays more than 97c (a 98-99c share can't pay for itself).
 Momentum = flip_star's mirror of the board meter (same formula, smoothed the same way).
 """
+import math
 import time
 import uuid
+
+import requests
 
 import flip_star
 
 SURGE_ENABLED = True
+SURGE_MARKETS_ON = True       # 3 Nov 13:17 CT (Matt): also commodities + interest rates (Markets / Rates boards)
 SURGE_BET_DOLLARS = 5.00     # 3 Nov 11:50 CT (Matt): $5 per bet (shares = $5 / price)
 SURGE_TAKE_PROFIT = 0.50     # 3 Nov 11:55 CT (Matt): cash out once the bet is up $0.50 (was $1.00)
 SURGE_STOP_FRACTION = 0.75   # 3 Nov 11:53 CT (Matt): sell if the bet falls to 75% of what was paid
@@ -36,8 +40,65 @@ def _log_once(key, msg):
         print(msg)
 
 
+# 3 Nov 13:17 CT (Matt): Surge also rides commodities and interest rates, read from the Markets and Rates edge boards
+# (same /api/state format and the same momentum math as the crypto board).
+SURGE_EXTRA_BOARDS = ["https://markets-board-production.up.railway.app/api/state",
+                      "https://rates-board-production.up.railway.app/api/state"]
+_xb = {"data": {}, "mom": {}, "coin_of": {}, "fetched": 0.0, "ok_at": 0.0}
+
+
+def _extra_board():
+    """ticker -> board numbers for the commodity / rate 15-minute markets (cached ~1s)."""
+    now = time.time()
+    if now - _xb["fetched"] < 1.0:
+        return _xb["data"] if now - _xb["ok_at"] <= flip_star.FLIP_STALE_SECONDS else {}
+    _xb["fetched"] = now
+    out, ok = {}, False
+    for url in SURGE_EXTRA_BOARDS:
+        try:
+            r = requests.get(url, timeout=4, headers={"Cache-Control": "no-store"})
+            r.raise_for_status()
+            st = r.json()
+            age = max(0.0, now - float(st.get("now", now)))
+            if age > flip_star.FLIP_STALE_SECONDS:
+                continue
+            ok = True
+            coins = st.get("coins") or {}
+            for k, c in coins.items():
+                try:
+                    v = c.get("ann_vol_30m") or c.get("ann_vol_24h")
+                    c1, c5 = c.get("chg_1m"), c.get("chg_5m")
+                    if not v or c1 is None or c5 is None:
+                        continue
+                    sm = float(v) / math.sqrt(525600)
+                    z1, z5 = float(c1) / sm, float(c5) / (sm * math.sqrt(5))
+                    m = max(-1.0, min(1.0, (0.4 * z1 + 0.6 * z5) / 2))
+                    pm = _xb["mom"].get(k)
+                    _xb["mom"][k] = m if pm is None else pm * 0.85 + m * 0.15
+                except Exception:
+                    continue
+            for m in st.get("markets", []):
+                if m.get("kind") != "15m":
+                    continue
+                n = flip_star._side_numbers(m, age, coins)
+                if n and n["ticker"]:
+                    out[n["ticker"]] = n
+                    _xb["coin_of"][n["ticker"]] = n["coin"]
+        except Exception as e:
+            _log_once("xb:" + url, f"[SURGE] couldn't read {url.split('//')[1].split('.')[0]} ({e}).")
+    if ok:
+        _xb["data"], _xb["ok_at"] = out, now
+    return _xb["data"] if now - _xb["ok_at"] <= flip_star.FLIP_STALE_SECONDS else {}
+
+
 def momentum_for(ticker: str, side: str):
     """Meter reading for OUR side (+1 = full strength our way), or None without fresh data."""
+    coin = _xb["coin_of"].get(ticker)
+    if coin is not None:
+        if time.time() - _xb["ok_at"] > flip_star.FLIP_STALE_SECONDS:
+            return None
+        m = _xb["mom"].get(coin)
+        return None if m is None else (m if side == "yes" else -m)
     ag = flip_star.momentum_against(ticker, side)
     return None if ag is None else -ag
 
@@ -45,7 +106,9 @@ def momentum_for(ticker: str, side: str):
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
     if not SURGE_ENABLED:
         return
-    b = flip_star.board()
+    b = dict(flip_star.board())
+    if SURGE_MARKETS_ON:
+        b.update(_extra_board())
     if not b:
         return
     now = time.time()
