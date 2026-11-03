@@ -27,7 +27,7 @@ SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops 
 SURGE_MIN_PRICE = 0.62       # 3 Nov 13:27 CT (Matt): only buy when our side's price is $.62-$.90
 SURGE_MAX_PRICE = 0.90
 SURGE_MIN_SECONDS_LEFT = 20
-SURGE_PRICE_METER_MIN = 0.05  # 3 Nov 13:50 CT (Matt): price meter just has to be RISING (board shows RISING from 5% of scale = +0.25c in ~5s)
+SURGE_PRICE_METER_MIN = 0.0   # 3 Nov 13:50 CT (Matt): price meter just has to be going UP -- any rise, no minimum
 
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
 _tries = {}     # ticker -> entry attempts (max 3)
@@ -159,7 +159,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if now - _row[0] >= 5 and _row[_ix] is not None:
                 _pref = _row[_ix]
         _pnow = ph[-1][_ix] if ph else None
-        if _pref is None or _pnow is None or (float(_pnow) - float(_pref)) < SURGE_PRICE_METER_MIN * 0.05 - 1e-9:
+        if _pref is None or _pnow is None or (float(_pnow) - float(_pref)) <= SURGE_PRICE_METER_MIN * 0.05 + 1e-9:
             continue
         try:
             held, _ = flip_star._held_count(client, ticker)
