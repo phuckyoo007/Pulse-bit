@@ -14,7 +14,7 @@ import flip_star
 
 SURGE_ENABLED = True
 SURGE_BET_DOLLARS = 5.00     # 3 Nov 11:50 CT (Matt): $5 per bet (shares = $5 / price)
-SURGE_TAKE_PROFIT = 1.00     # ...and cash out once the bet is up $1.00
+SURGE_TAKE_PROFIT = 0.50     # 3 Nov 11:55 CT (Matt): cash out once the bet is up $0.50 (was $1.00)
 SURGE_STOP_FRACTION = 0.75   # 3 Nov 11:53 CT (Matt): sell if the bet falls to 75% of what was paid
 SURGE_MAX_PER_ROUND = 5      # ...and at most 5 bets (5 different coins) per 15-minute round
 SURGE_ENTRY = 0.845          # 3 Nov 11:21 CT (Matt): buy from 85 up to 100 on the meter, while it is still climbing
