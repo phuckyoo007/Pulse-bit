@@ -761,6 +761,22 @@ PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", 
 PROCESS_START_TIME = time.time()
 
 
+def _net_if_sold_now(position: dict, market: dict):
+    """3 Nov 15:15 CT (Matt): profit in dollars if the position were sold RIGHT NOW at the bid for our side, after
+    Kalshi's fee -- not at the mid price (the mid overstated XRP's +$0.31 that really netted $0.08)."""
+    try:
+        yb, ya = market.get("yes_bid_dollars"), market.get("yes_ask_dollars")
+        if yb is None or ya is None:
+            return None
+        bid = float(yb) if position.get("side") == "bid" else 1 - float(ya)
+        cnt = float(position.get("count", 0))
+        if bid <= 0 or cnt <= 0:
+            return None
+        return (bid - position["entry_price"]) * cnt - flip_star._order_fee(cnt, bid)
+    except Exception:
+        return None
+
+
 def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-steady-") -> bool:
     try:
         resp = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 100})
@@ -973,10 +989,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 elif position.get("surge"):
                     # 3 Nov 10:41 CT (Matt): Surge bets sell the second the momentum meter drops under 90 our way.
                     _mm = surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")
-                    _sg = (_hv - position["entry_price"]) * float(position.get("count", 0))
-                    if _sg >= surge.SURGE_TAKE_PROFIT - 1e-9:
-                        # 3 Nov 11:50 CT (Matt): capture the profit once a Surge bet is up $1.00.
-                        decision = ExitDecision(True, f"surge_take_profit (up ${_sg:.2f} -- cashing in)")
+                    _sg = _net_if_sold_now(position, market)
+                    if _sg is not None and _sg >= surge.SURGE_TAKE_PROFIT - 1e-9:
+                        # 3 Nov 15:15 CT (Matt): profit measured at the price we can actually SELL at, after the fee.
+                        decision = ExitDecision(True, f"surge_take_profit (net +${_sg:.2f} if sold now -- cashing in)")
                     elif _hv <= position["entry_price"] * surge.SURGE_STOP_FRACTION + 1e-9:
                         # 3 Nov 11:53 CT (Matt): if the bet falls to 75% of what was paid, get out and keep the three quarters.
                         decision = ExitDecision(True, f"surge_stop (held side {_hv*100:.0f}c <= {surge.SURGE_STOP_FRACTION*100:.0f}% "
@@ -1004,8 +1020,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     #   down 20c (e.g. bought 60c -> 40c): sell immediately
                     # Nothing else sells a manual bet (no %, sigma, momentum, profit or last-45s rules, no backstop).
                     _drop = position["entry_price"] - _hv
-                    _mgain = (_hv - position["entry_price"]) * float(position.get("count", 0))
-                    if _mgain >= MANUAL_TAKE_PROFIT_DOLLARS - 1e-9:
+                    _mgain = _net_if_sold_now(position, market)
+                    if _mgain is not None and _mgain >= MANUAL_TAKE_PROFIT_DOLLARS - 1e-9:
                         # 3 Nov 12:04 CT (Matt): manual bets also cash out once they're up $0.50.
                         decision = ExitDecision(True, f"manual_take_profit (up ${_mgain:.2f} -- cashing in)")
                     elif _hv <= position["entry_price"] * MANUAL_STOP_PCT + 1e-9:
