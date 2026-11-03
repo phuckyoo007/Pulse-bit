@@ -325,7 +325,7 @@ CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; 
 
 
 STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
-STEADY_STOP_DOLLARS = 2.50   # 2 Nov 18:45 CT (Matt): 5-share bets -- cash out once the bet is worth $2.50 or less
+STEADY_MAX_LOSS_DOLLARS = 1.00   # 2 Nov 18:46 CT (Matt): a Steady bet is sold the moment it is down $1.00 (replaces the $2.50 floor)
 MANUAL_STOP_PCT = 0.90             # 2 Nov 15:12 CT (Matt): manual bets also sell at 90% of what was paid (held 3s)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
 MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
@@ -969,8 +969,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 2 Nov 15:29 CT (Matt): Steady bets have ONE stop -- hold until the whole bet is worth $1.00 or less
                     # (2 shares bought ~$1.90), then cash out. Nothing else sells them; otherwise they ride to settlement.
                     _val = _hv * float(position.get("count", 0))
-                    if _val <= STEADY_STOP_DOLLARS + 1e-9:
-                        decision = ExitDecision(True, f"steady_stop (bet worth ${_val:.2f} <= ${STEADY_STOP_DOLLARS:.2f} -- cashing out)")
+                    _loss = (position["entry_price"] - _hv) * float(position.get("count", 0))
+                    if _loss >= STEADY_MAX_LOSS_DOLLARS - 1e-9:
+                        # 2 Nov 18:46 CT (Matt): cash out as soon as the bet is down $1.00.
+                        decision = ExitDecision(True, f"steady_stop (down ${_loss:.2f}, bet worth ${_val:.2f} -- cashing out)")
                     elif _hv >= STEADY_TAKE_PROFIT_PRICE - 1e-9:
                         # 2 Nov 15:29 CT (Matt): capture the profit at 99c instead of waiting there for it to slip.
                         decision = ExitDecision(True, f"steady_take_profit (held side {_hv*100:.0f}c >= {STEADY_TAKE_PROFIT_PRICE*100:.0f}c -- cashing in)")
