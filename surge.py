@@ -27,10 +27,12 @@ SURGE_EXIT = 0.245           # 3 Nov 11:19 CT (Matt): sell when the meter drops 
 SURGE_MIN_PRICE = 0.62       # 3 Nov 13:27 CT (Matt): only buy when our side's price is $.62-$.90
 SURGE_MAX_PRICE = 0.90
 SURGE_MIN_SECONDS_LEFT = 20
+SURGE_PRICE_METER_MIN = 0.75  # 3 Nov 13:31 CT (Matt): price meter rising at 75%+ (our side up 3.75c+ in ~5s)
 
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
 _tries = {}     # ticker -> entry attempts (max 3)
 _mhist = {}     # ticker -> [(time, momentum)] for the rising check
+_phist = {}     # ticker -> [(time, yes_ask, no_ask)] for the price-meter check
 _note = {}
 
 
@@ -137,6 +139,11 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         for t0, v0 in hist:
             if now - t0 >= SURGE_RISE_SECONDS:
                 ref = v0
+        # price meter: our side's buy price now vs ~5s ago (same as the board's PRICE meter)
+        ph = _phist.setdefault(ticker, [])
+        ph.append((now, n.get("yes_ask"), n.get("no_ask")))
+        while ph and now - ph[0][0] > 30:
+            ph.pop(0)
         if abs(up) < SURGE_ENTRY:
             continue
         # 3 Nov 11:21 CT (Matt): only while it is ESCALATING -- the meter must be higher (our way) than a few seconds ago.
@@ -144,6 +151,16 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         side_name = "yes" if up > 0 else "no"
         side = "bid" if side_name == "yes" else "ask"
+        # 3 Nov 13:31 CT (Matt): the PRICE meter must also be rising at 75%+ of its scale (board: full scale = 5c in ~5s,
+        # so 75% = our side's price up 3.75c+ over the last ~5 seconds).
+        _ix = 1 if side_name == "yes" else 2
+        _pref = None
+        for _row in ph:
+            if now - _row[0] >= 5 and _row[_ix] is not None:
+                _pref = _row[_ix]
+        _pnow = ph[-1][_ix] if ph else None
+        if _pref is None or _pnow is None or (float(_pnow) - float(_pref)) < SURGE_PRICE_METER_MIN * 0.05 - 1e-9:
+            continue
         try:
             held, _ = flip_star._held_count(client, ticker)
             if held != 0:
