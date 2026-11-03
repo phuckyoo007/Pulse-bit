@@ -24,7 +24,7 @@ FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = set()   # 3 Nov 12:48 CT (Matt): NEAR and ETH back on (were off since 26 Oct)
-FLIP_SHARES = 2                    # 2 Nov 16:06 CT (Matt): temporary 2-share trial (was 30) -- old settings: git tag settings-before-steady-2026-11-02
+FLIP_SHARES = 4                    # 3 Nov 14:19 CT (Matt): 4 shares per bet (old settings: git tag settings-before-steady-2026-11-02)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
@@ -191,7 +191,7 @@ FLIP_CRASH_FRACTION = 0.87        # (was 0.50) instant sell when the position is
 # 24 Oct 13:53 CT (per Matthew): manually entered bets (bot.py "manually_adopted") also get an instant stop at 85% of what
 # was paid, all round long incl. the last 45s. The 75c line and 70% crash stops above still apply to them too.
 MANUAL_STOP_FRACTION = 0.85
-FLIP_PAUSED = True                 # 2 Nov 16:32 CT (Matt): paused again (open bets keep their stops); Steady keeps running
+FLIP_PAUSED = False                # 3 Nov 14:19 CT (Matt): Flip Star back on, 4 shares per bet
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
 
