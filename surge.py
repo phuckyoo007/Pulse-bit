@@ -13,7 +13,8 @@ import uuid
 import flip_star
 
 SURGE_ENABLED = True
-SURGE_SHARES = 1             # 3 Nov 11:36 CT (Matt): 1 share per bet while we see if it works
+SURGE_BET_DOLLARS = 5.00     # 3 Nov 11:50 CT (Matt): $5 per bet (shares = $5 / price)
+SURGE_TAKE_PROFIT = 1.00     # ...and cash out once the bet is up $1.00
 SURGE_MAX_PER_ROUND = 5      # ...and at most 5 bets (5 different coins) per 15-minute round
 SURGE_ENTRY = 0.845          # 3 Nov 11:21 CT (Matt): buy from 85 up to 100 on the meter, while it is still climbing
 SURGE_RISE_SECONDS = 3       # "climbing" = higher than ~3 seconds ago
@@ -100,15 +101,16 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[SURGE] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        _sh = max(1, int(SURGE_BET_DOLLARS // limit))
         print(f"[SURGE] ENTRY {ticker} ({n['coin']}): momentum meter at {abs(up)*100:.0f} and climbing {'UP' if up > 0 else 'DOWN'}, "
-              f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {SURGE_SHARES} {side_name.upper()} up to ${limit:.2f}")
+              f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {_sh} {side_name.upper()} (${SURGE_BET_DOLLARS:.0f}) up to ${limit:.2f}")
         if dry_run:
             continue
         try:
-            ensure_shard_funds(client, ticker, limit * SURGE_SHARES)
+            ensure_shard_funds(client, ticker, limit * _sh)
             yes_price = limit if side == "bid" else round(1 - limit, 2)
             client.create_order(ticker=ticker, client_order_id=f"pulse-surge-{uuid.uuid4()}", side=side,
-                                count=str(SURGE_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+                                count=str(_sh), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
         except Exception as e:
             print(f"[SURGE] {ticker}: entry order failed ({e}).")
             if "market_closed" in str(e) or "market_not_found" in str(e):

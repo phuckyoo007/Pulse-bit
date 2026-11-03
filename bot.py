@@ -971,7 +971,11 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 elif position.get("surge"):
                     # 3 Nov 10:41 CT (Matt): Surge bets sell the second the momentum meter drops under 90 our way.
                     _mm = surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")
-                    if _mm is not None and _mm < surge.SURGE_EXIT:
+                    _sg = (_hv - position["entry_price"]) * float(position.get("count", 0))
+                    if _sg >= surge.SURGE_TAKE_PROFIT - 1e-9:
+                        # 3 Nov 11:50 CT (Matt): capture the profit once a Surge bet is up $1.00.
+                        decision = ExitDecision(True, f"surge_take_profit (up ${_sg:.2f} -- cashing in)")
+                    elif _mm is not None and _mm < surge.SURGE_EXIT:
                         decision = ExitDecision(True, f"surge_exit (momentum {_mm*100:+.0f} < {surge.SURGE_EXIT*100:.0f} -- selling)")
                     else:
                         decision = ExitDecision(False, "")
