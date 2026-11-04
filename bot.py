@@ -762,7 +762,7 @@ PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", 
 PROCESS_START_TIME = time.time()
 
 
-DAILY_LOSS_LIMIT = 10.00   # 3 Nov 22:33 CT (Matt): stop new bets once the account is down $10 for the day
+DAILY_LOSS_LIMIT = 0   # 4 Nov 00:39 CT (Matt): loss limit OFF (was $10)
 _loss_state = {"day": None, "base": None, "checked": 0.0, "hit": False, "noted": 0.0}
 
 
