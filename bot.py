@@ -762,7 +762,7 @@ PULSE_SERIES |= {f"KX{c}D" for c in ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", 
 PROCESS_START_TIME = time.time()
 
 
-DAILY_LOSS_LIMIT = 4.00   # 3 Nov 15:18 CT (Matt): once the account is down $4.00 for the day, stop placing new bets
+DAILY_LOSS_LIMIT = None   # 3 Nov 22:30 CT (Matt): daily loss limit OFF (was $4.00) -- set a dollar amount to turn it back on
 _loss_state = {"day": None, "base": None, "checked": 0.0, "hit": False, "noted": 0.0}
 
 
@@ -787,6 +787,8 @@ def _loss_limit_hit(client, state) -> bool:
     """True once the account value has fallen DAILY_LOSS_LIMIT below where it started the day (Central time).
     The day's starting value is taken the first time the bot sees each new day -- after a restart it starts again
     from the value at the restart."""
+    if not DAILY_LOSS_LIMIT:
+        return False
     now = time.time()
     if now - _loss_state["checked"] < 10:
         return _loss_state["hit"]
