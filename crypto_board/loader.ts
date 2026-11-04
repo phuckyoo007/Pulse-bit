@@ -444,6 +444,22 @@ patch(".st.fa{border-color:var(--green)}", `#strip .sg{gap:9px !important}.bigro
 .st.flp::after{white-space:nowrap !important;font-size:6px !important;padding:0 2px !important;right:11px !important}
 @media (min-width:700px){#strip .sg{gap:14px !important}.bigrow{gap:18px !important}}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 19:00 CT (Matt): bigger small cards -- GOING UP and GOING DOWN each get the full width (stacked), so the
+// cards can be wider (3 across on a phone) with larger text.
+patch(".st.fa{border-color:var(--green)}", `#strip .sh{flex:0 0 100% !important;max-width:100% !important}#strip .sdv{display:none !important}
+#strip .sg{grid-template-columns:repeat(auto-fill,minmax(112px,1fr)) !important}
+#strip .sg .st{min-height:150px}
+#strip .sg .st .sy{font-size:14px;line-height:17px}#strip .sg .st .sy b{font-size:15px}
+#strip .sg .st .sw{font-size:11px;line-height:14px}#strip .sg .st .fl{font-size:11px;line-height:14px}
+#strip .sg .st .stb{font-size:10px;line-height:13px}#strip .sg .st .sgm{font-size:11px;line-height:14px}
+#strip .sg .st .sp{font-size:20px;line-height:24px}#strip .sg .st .hl{font-size:10.5px;line-height:13px;letter-spacing:-.2px}
+#strip .sg .st .gs{max-width:84px}#strip .sg .st .gn{font-size:18px;line-height:20px}#strip .sg .st .gp{font-size:11px;line-height:13px}
+#strip .sg .st .go{font-size:9.5px;line-height:13px}#strip .sg .st .gx{font-size:12px;line-height:18px}
+#strip .sg .st .bw{font-size:8px;line-height:10px;height:10px}
+@media (min-width:700px){#strip .sg{grid-template-columns:repeat(auto-fill,minmax(170px,1fr)) !important}
+#strip .sg .st .sy{font-size:20px;line-height:24px}#strip .sg .st .sp{font-size:32px;line-height:36px}#strip .sg .st .gn{font-size:28px;line-height:30px}
+#strip .sg .st .gs{max-width:130px}#strip .sg .st .hl{font-size:15px;line-height:19px}#strip .sg .st .stb,#strip .sg .st .sgm,#strip .sg .st .fl{font-size:14px;line-height:18px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
