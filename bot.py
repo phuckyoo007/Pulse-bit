@@ -899,6 +899,21 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                 pass
         if ticker in _settled_tickers:
             continue   # 26 Oct: already settled -- Kalshi still lists it until payout; don't re-adopt & re-count it
+        if ticker and ticker in state and isinstance(state[ticker], dict) and state[ticker].get("manually_adopted"):
+            # 3 Nov 18:57 CT (Matt): you ADDED to a manual bet after the bot picked it up -- keep the share count and
+            # average price in step with Kalshi, so the profit / stop math uses the whole bet (e.g. 8 -> 21 shares).
+            try:
+                _fp = float(p.get("position_fp", p.get("position", 0)) or 0)
+                _ex = float(p.get("market_exposure_dollars", 0) or 0)
+                _pos = state[ticker]
+                if _fp != 0 and abs(abs(_fp) - float(_pos.get("count", 0))) > 1e-9 and _ex > 0:
+                    _new_entry = _ex / abs(_fp)
+                    if 0.01 <= _new_entry <= 1.0 and (_fp > 0) == (_pos.get("side") == "bid"):
+                        print(f"  MANUAL BET RESIZED: {ticker} {_pos.get('count'):g} -> {abs(_fp):g} shares, "
+                              f"avg ${_pos.get('entry_price', 0):.2f} -> ${_new_entry:.2f} (you added to it).")
+                        _pos["count"], _pos["entry_price"] = abs(_fp), _new_entry   # (caller already holds STATE_LOCK)
+            except Exception as _e:
+                print(f"  couldn't resync manual bet {ticker} ({_e})")
         if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in pulse_v2.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
