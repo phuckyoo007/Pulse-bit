@@ -435,6 +435,15 @@ patch(".st.fa{border-color:var(--green)}",
 .st.bigc .sgm{font-size:12px;line-height:16px}
 @media (min-width:700px){.st .sgm{font-size:13px;line-height:17px}.st.bigc .sgm{font-size:19px;line-height:25px}}
 .st.fa{border-color:var(--green)}`);
+// 3 Nov 18:59 CT (Matt): flipped cards STAY in their UP / DOWN group and in the big top row (still with the small
+// red "FLIPPED · NO BID" corner tag, so you can still use them for manual bets) -- no separate flipped section.
+// And a bit more space between the cards.
+src = src.replace("if(mk&&mk.flips>0){hf.push(html);return;}", () => "");
+src = src.replace("if(__BIG.indexOf(k)>=0&&!(mk&&mk.flips>0)){", () => "if(__BIG.indexOf(k)>=0){");
+patch(".st.fa{border-color:var(--green)}", `#strip .sg{gap:9px !important}.bigrow{gap:10px !important}
+.st.flp::after{white-space:nowrap !important;font-size:6px !important;padding:0 2px !important;right:11px !important}
+@media (min-width:700px){#strip .sg{gap:14px !important}.bigrow{gap:18px !important}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
