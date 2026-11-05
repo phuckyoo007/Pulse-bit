@@ -855,7 +855,8 @@ def placed_by_pulse(client: KalshiClient, ticker: str):
             return True
         return False
     except Exception as e:
-        print(f"  Couldn't read order history for {ticker} ({e}) -- treating its origin as unknown.")
+        print(f"  Couldn't read order history for {ticker} ({e}) -- will check again next pass.")
+        placed_by_pulse._last_error = True
         return None
 
 
@@ -938,6 +939,15 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         # A bot-placed position that was merely forgotten across a restart keeps the normal stop; if the origin can't be
         # determined, it also gets the normal stop (safer than selling something the bot itself bought).
         by_bot = placed_by_pulse(client, ticker)
+        if by_bot is None:
+            # 4 Nov 18:40 CT (Matt): Kalshi's order history often hasn't caught up the moment a hand-placed bet fills, so
+            # "no orders found" was treated as bot-placed and Flip Star's exits sold manual bets within seconds (BNB 93c,
+            # BTC 52c, ETH 74c on 4 Nov). Every bet the bot places is recorded the instant it fills, so a position the
+            # bot has no record of is MANUAL. (If the lookup itself errored, wait and try again next pass.)
+            if getattr(placed_by_pulse, "_last_error", False):
+                placed_by_pulse._last_error = False
+                continue
+            by_bot = False
         # 25 Oct 18:35 CT: Pulse only ever bets on the crypto 15-minute coins. Anything else (natural gas etc.) is manual.
         _series = ticker.split("-")[0]
         if by_bot is not True and _series not in PULSE_SERIES:
