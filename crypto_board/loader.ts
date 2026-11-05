@@ -460,6 +460,20 @@ patch(".st.fa{border-color:var(--green)}", `#strip .sh{flex:0 0 100% !important;
 #strip .sg .st .sy{font-size:20px;line-height:24px}#strip .sg .st .sp{font-size:32px;line-height:36px}#strip .sg .st .gn{font-size:28px;line-height:30px}
 #strip .sg .st .gs{max-width:130px}#strip .sg .st .hl{font-size:15px;line-height:19px}#strip .sg .st .stb,#strip .sg .st .sgm,#strip .sg .st .fl{font-size:14px;line-height:18px}}
 .st.fa{border-color:var(--green)}`);
+// 4 Nov 21:32 CT (Matt): ALL nine coins as the big playing cards (same size as the old top four) -- UP coins in one
+// block, DOWN coins in the block under it (4 across), with the small duplicate cards below removed.
+src = src.replace("if(__BIG.indexOf(k)>=0){bg[k]=", () => "if(true){bg[k]=");
+patch(`el.innerHTML='<div class="bigrow">'+__BIG.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'<div class="bdv"></div>'+__BIG.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'</div><div class="hdiv"></div>'+'<div class="sh up">`,
+  `el.innerHTML=__bigAll(bg)+'<div class="sh up">`);
+patch("var __BIG=[", `function __bigAll(bg){var o=["BTC","XRP","SOL","BNB","ETH","DOGE","HYPE","NEAR","ZEC"];Object.keys(bg).forEach(function(c){if(o.indexOf(c)<0)o.push(c);});var u=o.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join("");var d=o.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join("");return '<div class="bigall">'+(u?'<div class="bgrid">'+u+'</div>':'')+(u&&d?'<div class="bhd"></div>':'')+(d?'<div class="bgrid">'+d+'</div>':'')+'</div>';}
+var __BIG=[`);
+patch(".st.fa{border-color:var(--green)}", `.bigall{flex:0 0 100%;max-width:100%;min-width:0}
+.bigall .bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.bigall .bgrid .st.bigc{min-width:0}
+.bigall .bhd{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--green),#ff7b72);margin:12px 0}
+#strip .sh,#strip .sdv,#strip .hdiv{display:none !important}
+@media (min-width:700px){.bigall .bgrid{gap:18px}.bigall .bhd{height:8px;margin:18px 0}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
