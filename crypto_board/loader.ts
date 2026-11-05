@@ -503,6 +503,87 @@ patch(".st.fa{border-color:var(--green)}", `.topbox{flex:0 0 100%;max-width:100%
 .topbox .tbv{flex:0 0 4px;border-radius:2px;background:linear-gradient(var(--green),#ff7b72)}
 @media (min-width:700px){.topbox{padding:12px;border-radius:16px;margin-bottom:16px}.topbox .tbh{font-size:18px;margin-bottom:10px}.topbox .tbg,.topbox .tbs{gap:12px}.topbox .tbv{flex-basis:6px}}
 .st.fa{border-color:var(--green)}`);
+// 5 Nov 12:25 CT (Matt): LIVE Kalshi price stream for the board (same feed the bot now uses). Prices update the instant
+// Kalshi changes them instead of once a second; falls back to the 1-second lookups if the stream is down.
+patch("function slimMarket(m: any, s: Series) {\n  return {", "function slimMarket(m: any, s: Series) {\n  return __wsApply({");
+patch("close_time: m.close_time, status: m.status,\n    };\n}", "close_time: m.close_time, status: m.status,\n    });\n}");
+src += String.raw`
+import { createPrivateKey as __cpk, sign as __csign, constants as __ccst } from "node:crypto";
+const __wsq = new Map<string, any>();
+const __ws: any = { sock: null, up: false, last: 0, sid: null, subbed: new Set<string>(), id: 1, logged: false };
+function __wsOk() { return __ws.up && Date.now() - __ws.last < 25000; }
+function __wsApply(o: any) {
+  const q = __wsq.get(o.ticker);
+  if (!q || !__wsOk()) return o;
+  if (Date.now() - q.at > 5000 && o.yes_bid != null && o.yes_ask != null &&
+      (Math.abs(q.yb - o.yes_bid) > 0.005 || Math.abs(q.ya - o.yes_ask) > 0.005)) { __wsq.delete(o.ticker); return o; }
+  if (Date.now() - q.at > 5000) q.at = Date.now();
+  o.yes_bid = q.yb; o.yes_ask = q.ya; o.no_bid = Math.round((1 - q.ya) * 10000) / 10000; o.no_ask = Math.round((1 - q.yb) * 10000) / 10000;
+  return o;
+}
+function __wsSend(o: any) { try { o.id = __ws.id++; __ws.sock.send(JSON.stringify(o)); return true; } catch (e) { return false; } }
+function __wsSync() {
+  if (!__wsOk() || !__ws.sock) return;
+  const now = Date.now();
+  const want = new Set<string>();
+  for (const m of markets.values()) if (m.kind === "15m" && Date.parse(m.close_time) > now) want.add(m.ticker);
+  const add = [...want].filter((t) => !__ws.subbed.has(t));
+  const drop = [...__ws.subbed].filter((t: any) => !want.has(t));
+  if (add.length) {
+    const ok = __ws.sid == null ? __wsSend({ cmd: "subscribe", params: { channels: ["ticker"], market_tickers: add } })
+      : __wsSend({ cmd: "update_subscription", params: { sids: [__ws.sid], market_tickers: add, action: "add_markets" } });
+    if (ok) for (const t of add) __ws.subbed.add(t);
+  }
+  if (drop.length && __ws.sid != null) {
+    if (__wsSend({ cmd: "update_subscription", params: { sids: [__ws.sid], market_tickers: drop, action: "delete_markets" } }))
+      for (const t of drop) { __ws.subbed.delete(t); __wsq.delete(t); }
+  }
+}
+function __wsNum(v: any) { if (v === undefined || v === null || v === "") return null; const n = Number(v); return isFinite(n) ? n : null; }
+function __wsConnect() {
+  const key = (process.env.KALSHI_API_KEY_ID || "").trim();
+  let pem = (process.env.KALSHI_PRIVATE_KEY || "").trim();
+  if (!key || !pem) { console.log("[LIVE FEED] no Kalshi key set -- board keeps 1-second lookups."); return; }
+  if ((pem.startsWith('"') && pem.endsWith('"')) || (pem.startsWith("'") && pem.endsWith("'"))) pem = pem.slice(1, -1);
+  pem = pem.split("\\n").join("\n");
+  let pk: any;
+  try { pk = __cpk(pem); } catch (e) { console.log("[LIVE FEED] bad private key: " + e); return; }
+  let backoff = 2000;
+  const open = () => {
+    try {
+      const ts = String(Date.now());
+      const sig = __csign("sha256", Buffer.from(ts + "GET/trade-api/ws/v2"), { key: pk, padding: __ccst.RSA_PKCS1_PSS_PADDING, saltLength: 32 }).toString("base64");
+      const s: any = new (WebSocket as any)("wss://api.elections.kalshi.com/trade-api/ws/v2",
+        { headers: { "KALSHI-ACCESS-KEY": key, "KALSHI-ACCESS-TIMESTAMP": ts, "KALSHI-ACCESS-SIGNATURE": sig } });
+      __ws.sock = s;
+      s.onopen = () => { __ws.up = true; __ws.last = Date.now(); __ws.sid = null; __ws.subbed.clear(); __wsq.clear(); backoff = 2000; console.log("[LIVE FEED] connected."); __wsSync(); };
+      s.onmessage = (ev: any) => {
+        __ws.last = Date.now();
+        let d: any; try { d = JSON.parse(String(ev.data)); } catch (e) { return; }
+        if (d.type === "subscribed") { if (__ws.sid == null && d.msg && d.msg.sid != null) { __ws.sid = d.msg.sid; console.log("[LIVE FEED] subscribed (sid " + d.msg.sid + ")."); } return; }
+        if (d.type === "error") { console.log("[LIVE FEED] Kalshi error: " + JSON.stringify(d.msg)); return; }
+        if (d.type !== "ticker" || !d.msg || !d.msg.market_ticker) return;
+        const t = d.msg.market_ticker;
+        if (!__ws.logged) { __ws.logged = true; console.log("[LIVE FEED] first price update (" + t + "): " + Object.keys(d.msg).sort().join(",")); }
+        let yb = __wsNum(d.msg.yes_bid_dollars), ya = __wsNum(d.msg.yes_ask_dollars);
+        const q = __wsq.get(t) || {};
+        if (yb !== null) q.yb = yb;
+        if (ya !== null) q.ya = ya;
+        if (q.yb == null || q.ya == null) { __wsq.set(t, q); return; }
+        q.at = Date.now(); __wsq.set(t, q);
+        const m = markets.get(t);
+        if (m) __wsApply(m);
+      };
+      s.onclose = () => { if (__ws.up) console.log("[LIVE FEED] disconnected -- 1-second lookups until it reconnects."); __ws.up = false; __ws.sock = null; setTimeout(open, backoff); backoff = Math.min(backoff * 2, 60000); };
+      s.onerror = () => { };
+    } catch (e) { console.log("[LIVE FEED] couldn't connect: " + e); setTimeout(open, backoff); backoff = Math.min(backoff * 2, 60000); }
+  };
+  open();
+  setInterval(__wsSync, 2000);
+  setInterval(() => { try { if (__ws.sock && __ws.up) __ws.sock.ping(); } catch (e) { } }, 20000);
+}
+__wsConnect();
+`;
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
