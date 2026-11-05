@@ -29,7 +29,7 @@ FLIP_SHARES = 8                    # 4 Nov 12:55 CT (Matt): 8 shares per bet (wa
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 18                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once
-FLIP_MAX_SECONDS_LEFT = 270        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)
+FLIP_MAX_SECONDS_LEFT = 150        # 5 Nov 13:17 CT (Matt): only the last 150 seconds (was 270)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma

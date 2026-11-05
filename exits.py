@@ -46,7 +46,7 @@ HARD_STOP_FRACTION = 0.85
 HARD_STOP_HELD = 0.85
 
 # INSTANT STOP: sell at the next price check, no hold / confirmation, once the held side is worth 86% or less of entry.
-INSTANT_STOP_FRACTION = 0.80   # 2 Nov 16:32 CT (Matt): was 0.86
+INSTANT_STOP_FRACTION = 0.72   # 5 Nov 13:17 CT (Matt): was 0.80
 
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
