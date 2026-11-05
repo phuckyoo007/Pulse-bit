@@ -21,8 +21,8 @@ STOP_LOSS_ENABLED = True
 
 # Stop levels. LOSS_PCT is the max loss; EXIT_FRACTION is the same thing
 # expressed as "exit when value <= this share of what was paid".
-STOP_LOSS_PCT = 0.84                               # was 0.14 (86%) until 18 Oct
-STOP_EXIT_FRACTION = 0.86                          # 0.80
+STOP_LOSS_PCT = 0.20                               # was 0.14 (86%) until 18 Oct   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+STOP_EXIT_FRACTION = 0.82                          # 0.80   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 
 # Separate knobs per side, both default to the same 80% exit.
 YES_STOP_EXIT_FRACTION = STOP_EXIT_FRACTION       # YES / bid positions
@@ -42,11 +42,11 @@ CRASH_STOP_FRACTION = 0.50
 
 # HARD STOP (18 Oct 19:21 CT): sell IMMEDIATELY -- no wait, no win-% check -- once the position is worth 70% or less
 # of what was paid, or the side we hold is priced at 70c or less (the other side at 30c or more).
-HARD_STOP_FRACTION = 0.85
-HARD_STOP_HELD = 0.85
+HARD_STOP_FRACTION = 0.70   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+HARD_STOP_HELD = 0.70   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 
 # INSTANT STOP: sell at the next price check, no hold / confirmation, once the held side is worth 86% or less of entry.
-INSTANT_STOP_FRACTION = 0.72   # 5 Nov 13:17 CT (Matt): was 0.80
+INSTANT_STOP_FRACTION = 0.86   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 
 TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this

@@ -23,33 +23,33 @@ import requests
 FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
-FLIP_EXCLUDED_COINS = {"NEAR", "ZEC", "DOGE"}   # 5 Nov 11:36 CT (Matt): NEAR, ZEC, DOGE off temporarily
-FLIP_SHARES = 8                    # 4 Nov 12:55 CT (Matt): 8 shares per bet (was 14)
+FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_SHARES = 15                   # 29 Oct 02:48 CT (Matt): back to 15 shares per entry (ceiling; cash cap can size down)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
-FLIP_MAX_OPEN = 18                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once
-FLIP_MAX_SECONDS_LEFT = 150        # 5 Nov 13:17 CT (Matt): only the last 150 seconds (was 270)
+FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA_STRICT = 2.0     # 5 Nov 13:18 CT (Matt): GREEN only (2.0+ sigma to flip) -- was 1.8
+FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get more bets ...
 FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT  # 28 Oct 01:48 CT: back to 1.8 (the 1.5 trial is over)
                                             # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
 _SIGMA_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_sigma_breaker.json")
 FLIP_EXIT_SIGMA = 0.33              # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly. Zones: RED 1 0.50-0.33, RED 2 0.33-0.17, RED 3 <0.17
-FLIP_EXIT_CONFIRM_SECONDS = 1      # sell immediately on red
+FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_EXIT_MAX_WIN = 1.01           # 20 Oct 15:32 CT: red alone sells (no win-% check)
-FLIP_EXIT_PANIC_WIN = 0.78         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting
-FLIP_STOP_CONFIRM_SECONDS = 1      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip
+FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_STOP_CONFIRM_SECONDS = 4      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips that came back). Stops now: To-flip red <0.2 sigma, 70/30 hard stop, 60/40 last 45s
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
-FLIP_NONSTAR_MIN_PRICE = 0.90      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)
-FLIP_NONSTAR_MIN_WIN = 0.965        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)
-FLIP_MIN_WIN_ALL = 0.965            # 28 Oct 01:48 CT: back to 98% minimum win
-FLIP_STAR_MIN_PRICE = 0.90         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it
+FLIP_NONSTAR_MIN_PRICE = 0.94      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_NONSTAR_MIN_WIN = 0.98        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_MIN_WIN_ALL = 0.98            # 28 Oct 01:48 CT: back to 98% minimum win   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_STAR_MIN_PRICE = 0.94         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -70,7 +70,7 @@ def _order_fee(count, price):
     return math.ceil(0.07 * count * price * (1 - price) * 100 - 1e-9) / 100
 
 
-FLIP_STAR_SAFE_MIN_PRICE = 0.95
+FLIP_STAR_SAFE_MIN_PRICE = 0.95   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 _BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_floor_breaker.json")
 try:
     if os.path.exists(_BREAKER_FILE):
@@ -82,7 +82,7 @@ except Exception:
 
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.98   # 28 Oct 01:48 CT: 98%
+FLIP_WIN_SAFE_MIN = 0.98   # 28 Oct 01:48 CT: 98%   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
@@ -106,10 +106,10 @@ except Exception:
 PAUSE_CT = PAUSE_CT = ((0, 0), (0, 0))
 # (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
 NO_SIDE_NEEDS_STAR = True
-NO_SIDE_MIN_WIN = 0.90   # 3 Nov 16:43 CT (Matt): was 0.98
+NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
-COIN_SHARE_MULT = {}   # 2 Nov 16:06 CT (Matt): every coin exactly 2 shares during the trial (was BTC/XRP 1.5x, DOGE/BNB 0.5x)
+COIN_SHARE_MULT = {"BTC": 1.5, "XRP": 1.5, "DOGE": 0.5, "BNB": 0.5}   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
@@ -148,8 +148,8 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.90, "sigma": 2.0, "floor": 0.90}   # 5 Nov 13:18 CT (Matt): green only   # 3 Nov 16:43 CT (Matt): Flip Star at 90% win / 90c floor, 5 shares
-LOOSE_VALUES = {"win": 0.90, "sigma": 2.0, "floor": 0.90}
+LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.96}   # 28 Oct 19:24 CT: floor 96c (fills at 94-95c lost 21-25% of the time)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.96}   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
 
@@ -394,8 +394,6 @@ def entry_signal(n: dict) -> bool:
         return False
     if NO_SIDE_NEEDS_STAR and n.get("side") == "no" and not (n["lock"] and n["p"] >= NO_SIDE_MIN_WIN - 1e-9):
         return False   # 28 Oct: NO bets only on a red star at 98%+
-    if n["zs"] < FLIP_ENTRY_SIGMA - 1e-9:
-        return False   # 5 Nov 13:18 CT (Matt): GREEN only (2.0+ sigma to flip), red stars included
     if n["lock"]:
         return True
     if FLIP_RED_STAR_ONLY:
