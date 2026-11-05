@@ -23,6 +23,7 @@ from priority import RankedCandidate, potential_points, rank_candidates, size_sc
 from risk import RiskParams, CircuitBreaker, kelly_size
 from exits import check_exit, current_position_value, ExitDecision, instant_stop_decision, INSTANT_STOP_FRACTION
 import flip_star
+import kalshi_ws   # 5 Nov 12:25 CT (Matt): live streamed prices for the stop / take-profit checks
 import steady
 import surge
 import pulse_v2
@@ -613,9 +614,11 @@ def get_market_cached(client: KalshiClient, ticker: str) -> dict:
     separately (3 lookups per open position per pass); now they share one if it is under a second old."""
     cached = _market_cache.get(ticker)
     if cached and (time.time() - cached[1]) < _MARKET_CACHE_TTL:
-        return cached[0]
+        return kalshi_ws.overlay(ticker, cached[0])   # live bid/ask from the stream when it has one
     market = client.get_market(ticker).get("market", {})
     _market_cache[ticker] = (market, time.time())
+    kalshi_ws.reconcile(ticker, market)
+    market = kalshi_ws.overlay(ticker, market)
     if len(_market_cache) > 500:
         for k in [k for k, v in _market_cache.items() if time.time() - v[1] > 60]:
             _market_cache.pop(k, None)
@@ -624,7 +627,7 @@ def get_market_cached(client: KalshiClient, ticker: str) -> dict:
 
 def prefetch_markets(client: KalshiClient, tickers: list) -> None:
     """Fetch several markets at the same time (instead of one after another) and fill the cache."""
-    tickers = [t for t in tickers if t]
+    tickers = [t for t in tickers if t and not (_market_cache.get(t) and time.time() - _market_cache[t][1] < _MARKET_CACHE_TTL)]
     if len(tickers) < 2:
         return
     from concurrent.futures import ThreadPoolExecutor
@@ -971,11 +974,12 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
 
 
 STATE_LOCK = threading.Lock()
-EXIT_CHECK_POLL_SECONDS = 0.5
+EXIT_CHECK_POLL_SECONDS = 0.1   # 5 Nov 12:25 CT (Matt): 10 checks a second, on live streamed prices (was 0.5)
+EXIT_SLOW_PASS_SECONDS = 0.5    # adoption / settlement / backstop / REST prefetch stay at 2x a second
 
 
 def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> list:
-    settlements = load_json(SETTLEMENTS_FILE, [])
+    settlements = None   # 5 Nov: only read the (large) settlements file when something actually exits -- 10 passes a second
     realized_pnl = []
     stop_loss_occurred_this_cycle = False
     for ticker in list(state.keys()):
@@ -1244,6 +1248,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             if isinstance(exit_resp, dict) and exit_resp.get("_real_exit_px") is not None:
                 exit_value = exit_resp["_real_exit_px"]   # what Kalshi really paid, not the screen price
             pnl = (exit_value - position["entry_price"]) * position["count"]
+            if settlements is None:
+                settlements = load_json(SETTLEMENTS_FILE, [])
             settlements.append({
                 "ticker": ticker, "title": result.title, "result": "early_exit",
                 "side": position["side"], "count": position["count"], "entry_price": position["entry_price"],
@@ -1271,7 +1277,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
     if stop_loss_occurred_this_cycle:
         _stop_loss_count[0] += 1
         print(f"Stop-loss count this session: {_stop_loss_count[0]}")
-    if realized_pnl:
+    if realized_pnl and settlements is not None:
         save_json(SETTLEMENTS_FILE, settlements)
     # Circuit-breaker shutdown removed: sys.exit() inside the exit thread only killed that
     # thread, leaving the bot trading with NO stop-loss and NO settlement tracking.
@@ -1323,8 +1329,16 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
 def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: set,
                           bankroll_and_breaker: dict, stop_event: threading.Event):
     last_adopt = 0.0
+    last_slow = 0.0
     while not stop_event.is_set():
         try:
+            try:
+                kalshi_ws.watch(list(state.keys()))
+            except Exception:
+                pass
+            slow = time.time() - last_slow >= EXIT_SLOW_PASS_SECONDS
+            if slow:
+                last_slow = time.time()
             with STATE_LOCK:
                 # Pick up any position Kalshi shows that we aren't tracking (e.g. one entered by another copy of the bot
                 # or before a restart) every ~2 seconds, so the primary stop-loss protects it almost immediately instead
@@ -1335,8 +1349,9 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
                     adopt_manual_positions(client, state)
                     if set(state) != before:
                         save_json(STATE_FILE, state)
-                prefetch_markets(client, list(state.keys()))
-                settled_pnls = check_settlements(client, state)
+                if slow:
+                    prefetch_markets(client, list(state.keys()))
+                settled_pnls = check_settlements(client, state) if slow else []
                 for pnl in settled_pnls:
                     bankroll_and_breaker["bankroll"] += pnl
                     bankroll_and_breaker["breaker"].record_pnl(pnl)
@@ -1350,7 +1365,7 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
                 if exit_pnls:
                     save_json(STATE_FILE, state)
 
-                backstop_pnls = check_hard_backstop(client, state)
+                backstop_pnls = check_hard_backstop(client, state) if slow else []
                 for pnl in backstop_pnls:
                     bankroll_and_breaker["bankroll"] += pnl
                     bankroll_and_breaker["breaker"].record_pnl(pnl)
@@ -1363,6 +1378,10 @@ def exit_protection_loop(client: KalshiClient, state: dict, excluded_tickers: se
 
 def run():
     client = KalshiClient()
+    try:
+        kalshi_ws.start(client)
+    except Exception as e:
+        print(f"[LIVE FEED] couldn't start ({e}) -- using REST prices.")
     state = load_json(STATE_FILE, {})
     # 26 Oct: remove duplicate settlement rows (KXGOLDH was booked ~100x by a re-adopt loop)
     try:
