@@ -16,11 +16,11 @@ import uuid
 import flip_star
 import surge
 
-RISE_ENABLED = False   # 5 Nov 13:03 CT (Matt): OFF -- losing money (open Rise bets keep their exits)
+RISE_ENABLED = True   # 5 Nov 13:04 CT (Matt): back on with the 80% stop
 RISE_SHARES = 2
 RISE_TOP_N = 2               # the 2 coins rising fastest
 RISE_MAX_OPEN = 2
-RISE_STOP_FRACTION = 0.90    # sell if our side falls to 90% of what we paid
+RISE_STOP_FRACTION = 0.80    # 5 Nov 13:04 CT (Matt): sell if our side falls to 80% of what we paid (was 90%)
 RISE_SLOWDOWN = 0.03         # momentum 3 points under its high since entry = "stopped climbing"
 RISE_MIN_PROFIT = 0.01       # needs at least +1c net to count as "positive P/L"
 RISE_RISE_SECONDS = 3        # entry: momentum must be higher than ~3s ago (still climbing)
