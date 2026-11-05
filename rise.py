@@ -28,6 +28,9 @@ RISE_MIN_PRICE = 0.10        # never buy a lottery ticket ...
 RISE_MAX_PRICE = 0.90        # ... or a share that can't pay for itself
 RISE_MIN_SECONDS_LEFT = 60
 
+RISE_MAX_LOSS = 2.00         # 5 Nov 13:06 CT (Matt): Rise turns itself OFF once its bets have lost $2.00 in total
+_pnl = [-0.30]               # Rise P/L so far -- starts at -$0.30 (its 4 bets earlier today, 5 Nov 12:45-12:56)
+
 _done = {}      # ticker -> time we bet it (one bet per coin per round)
 _tries = {}
 _mhist = {}     # ticker -> [(time, momentum UP)]
@@ -66,6 +69,21 @@ def _climbing(ticker, up):
         if time.time() - t0 >= RISE_RISE_SECONDS:
             ref = v0
     return ref is not None and up > ref + 1e-6
+
+
+def record(position, pnl) -> None:
+    """Called for every closed bet; tallies Rise's own P/L and shuts Rise off at -$2.00 total."""
+    global RISE_ENABLED
+    try:
+        if not isinstance(position, dict) or not position.get("rise"):
+            return
+        _pnl[0] += float(pnl)
+        print(f"[RISE] bet closed {pnl:+.2f} -- Rise total {_pnl[0]:+.2f} (turns off at -${RISE_MAX_LOSS:.2f}).")
+        if RISE_ENABLED and _pnl[0] <= -RISE_MAX_LOSS + 1e-9:
+            RISE_ENABLED = False
+            print(f"[RISE] OFF -- Rise bets have lost ${-_pnl[0]:.2f} in total (limit ${RISE_MAX_LOSS:.2f}). No new Rise bets.")
+    except Exception:
+        pass
 
 
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
