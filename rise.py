@@ -16,7 +16,7 @@ import uuid
 import flip_star
 import surge
 
-RISE_ENABLED = True
+RISE_ENABLED = False   # 5 Nov 13:03 CT (Matt): OFF -- losing money (open Rise bets keep their exits)
 RISE_SHARES = 2
 RISE_TOP_N = 2               # the 2 coins rising fastest
 RISE_MAX_OPEN = 2
