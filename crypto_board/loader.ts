@@ -465,7 +465,7 @@ patch(".st.fa{border-color:var(--green)}", `#strip .sh{flex:0 0 100% !important;
 src = src.replace("if(__BIG.indexOf(k)>=0){bg[k]=", () => "if(true){bg[k]=");
 patch(`el.innerHTML='<div class="bigrow">'+__BIG.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'<div class="bdv"></div>'+__BIG.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'</div><div class="hdiv"></div>'+'<div class="sh up">`,
   `el.innerHTML=__bigAll(bg)+'<div class="sh up">`);
-patch("var __BIG=[", `function __bigAll(bg){var o=["BTC","XRP","SOL","BNB","ETH","DOGE","HYPE","NEAR","ZEC"];Object.keys(bg).forEach(function(c){if(o.indexOf(c)<0)o.push(c);});var u=o.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join("");var d=o.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join("");return '<div class="bigall">'+(u?'<div class="bgrid">'+u+'</div>':'')+(u&&d?'<div class="bhd"></div>':'')+(d?'<div class="bgrid">'+d+'</div>':'')+'</div>';}
+patch("var __BIG=[", `function __bigAll(bg){var o=["BTC","XRP","SOL","BNB","ETH","DOGE","HYPE","NEAR","ZEC"];Object.keys(bg).forEach(function(c){if(o.indexOf(c)<0)o.push(c);});var u=o.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join("");var d=o.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join("");var sa=o.filter(function(c){return bg[c]&&bg[c][1];}).concat(o.filter(function(c){return bg[c]&&!bg[c][1];})).map(function(c){return bg[c][0].replace('class="st bigc','class="st bigc simp');}).join("");return '<div class="simrow">'+sa+'</div><div class="bhd"></div><div class="bigall">'+(u?'<div class="bgrid">'+u+'</div>':'')+(u&&d?'<div class="bhd"></div>':'')+(d?'<div class="bgrid">'+d+'</div>':'')+'</div>';}
 var __BIG=[`);
 patch(".st.fa{border-color:var(--green)}", `.bigall{flex:0 0 100%;max-width:100%;min-width:0}
 .bigall .bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
@@ -473,6 +473,25 @@ patch(".st.fa{border-color:var(--green)}", `.bigall{flex:0 0 100%;max-width:100%
 .bigall .bhd{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--green),#ff7b72);margin:12px 0}
 #strip .sh,#strip .sdv,#strip .hdiv{display:none !important}
 @media (min-width:700px){.bigall .bgrid{gap:18px}.bigall .bhd{height:8px;margin:18px 0}}
+.st.fa{border-color:var(--green)}`);
+// 4 Nov 22:01 CT (Matt): a row of all nine coins across the very top -- just the side it's expected to close on, the
+// current price, and the MOMENTUM and PRICE meters. The full cards stay underneath.
+patch(".st.fa{border-color:var(--green)}", `.simrow{flex:0 0 100%;max-width:100%;min-width:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.st.bigc.simp{min-height:0;aspect-ratio:auto;max-height:none;padding:3px 2px 4px;border-width:2px;border-radius:8px;min-width:0;overflow:hidden}
+.st.bigc.simp>*{display:none !important}
+.st.bigc.simp>.bdir,.st.bigc.simp>.sy,.st.bigc.simp>.sp,.st.bigc.simp>.bz{display:block !important}
+.st.bigc.simp>.bdir{font-size:9px;padding:0 !important;white-space:nowrap;overflow:hidden;line-height:13px;margin:0 0 2px;border-radius:4px;letter-spacing:-.4px;text-align:center}
+.st.bigc.simp>.sy{font-size:12px;line-height:15px;white-space:nowrap;overflow:hidden;text-align:center}.st.bigc.simp>.sy b{display:none}
+.st.bigc.simp>.sp{font-size:17px;line-height:20px;margin:2px 0;text-align:center;letter-spacing:-.4px}
+.st.bigc.simp>.bz{position:static !important;display:flex !important;justify-content:center !important;gap:8px;height:auto !important;width:auto !important;margin:0 !important;inset:auto !important;flex:0 0 auto !important}
+.st.bigc.simp .bz .bc{position:static !important;display:flex !important;flex-direction:column !important;align-items:center;width:auto !important;height:auto !important;flex:0 0 auto !important}
+.st.bigc.simp .bz .bw{display:block !important;position:static !important;font-size:9px !important;line-height:11px !important;height:11px !important;padding:0 !important;letter-spacing:-.3px;white-space:nowrap}
+.st.bigc.simp .bz .sb,.st.bigc.simp .bz .sb2{display:block !important;position:relative !important;width:12px !important;height:54px !important;min-height:54px !important;flex:0 0 54px !important;inset:auto !important;margin:1px 0 !important}
+.st.simp.flp::after{display:none !important}
+.st.bigc.simp .bz .bl{display:block !important;position:static !important;font-size:5px !important;line-height:8px !important;letter-spacing:-.2px;writing-mode:horizontal-tb !important;transform:none !important}
+@media (min-width:700px){.simrow{gap:10px;grid-template-columns:repeat(9,minmax(0,1fr))}.st.bigc.simp{padding:8px 6px 10px;border-radius:12px}
+.st.bigc.simp>.bdir{font-size:15px;line-height:24px}.st.bigc.simp>.sy{font-size:20px;line-height:24px}.st.bigc.simp>.sp{font-size:28px;line-height:32px}
+.st.bigc.simp>.bz{gap:14px}.st.bigc.simp .bz .bw{font-size:13px !important;line-height:16px !important;height:16px !important}.st.bigc.simp .bz .sb,.st.bigc.simp .bz .sb2{width:16px !important;height:90px !important;min-height:90px !important;flex-basis:90px !important}.st.bigc.simp .bz .bl{font-size:10px !important;line-height:13px !important}}
 .st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
