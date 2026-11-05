@@ -305,7 +305,8 @@ PROFIT_LOCK_ARM_DOLLARS = 0.25   # 21 Oct: once up this much, a Pulse bet is sol
 PROFIT_FLOOR_ARM_DOLLARS = 0.50   # 25 Oct: once up $0.50 ...
 PROFIT_FLOOR_KEEP_DOLLARS = 0.25  # ... sell when the gain falls back to $0.25
 TAKE_PROFIT_ENABLED = False   # 2 Nov (Matt): off -- the $1-giveback trailing stop below lets winners run instead
-TRAIL_GIVEBACK_DOLLARS = 1.00   # 2 Nov (Matt): once in profit, sell when it has given back more than $1.00 from its best
+TRAIL_GIVEBACK_DOLLARS = 0.50   # 5 Nov 15:50 CT (Matt): give back $0.50 (or 1/3 of the best gain if bigger) -- was $1.00
+TRAIL_ARM_DOLLARS = 0.75        # 5 Nov 15:50 CT (Matt): trailing stop only arms once the bet has been up $0.75
 TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet is up $1.00
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 # 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
@@ -1223,9 +1224,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 _cnt = float(position.get("count", 0))
                 _peak_d = position.get("peak_gain_per_contract", 0.0) * _cnt
                 _now_d = (current_position_value(position, result.market_price) - position["entry_price"]) * _cnt
-                if _peak_d > 1e-9 and _peak_d - _now_d >= TRAIL_GIVEBACK_DOLLARS - 1e-9:   # 2 Nov 15:12: $1.00 back = sell ($5 -> $7 -> sells at $6)
+                # 5 Nov 15:50 CT (Matt): only arms once the bet has been up $0.75; then it may give back $0.50, or a third
+                # of its best gain if that's bigger -- up $0.75 -> sells at +$0.25, up $1 -> +$0.50, up $3 -> +$2.00.
+                # A bet that only reached +$0.25-$0.74 is left alone (giving back $0.50 would turn it into a loss).
+                _gb = max(TRAIL_GIVEBACK_DOLLARS, _peak_d / 3.0)
+                if _peak_d >= TRAIL_ARM_DOLLARS - 1e-9 and _now_d <= _peak_d - _gb + 1e-9:
                     decision = ExitDecision(True, f"trailing_profit_stop (was up ${_peak_d:.2f}, now ${_now_d:+.2f} -- gave back "
-                                                  f"${_peak_d - _now_d:.2f} > ${TRAIL_GIVEBACK_DOLLARS:.2f}, cashing out)")
+                                                  f"${_peak_d - _now_d:.2f} >= ${_gb:.2f}, cashing out)")
             # PROFIT FLOOR (25 Oct 13:29 CT, Matthew): once a Pulse bet has been up $0.50 or more, sell as soon as the gain
             # falls back to $0.25 -- keep at least $0.25 instead of riding it back down.
             if (PROFIT_LOCK_ENABLED and not decision.should_exit and position.get("flip_star")
