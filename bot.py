@@ -28,6 +28,7 @@ import steady
 import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
+import closer   # 5 Nov 15:50 CT: data-built 'Closer' strategy -- PAPER only
 import pulse_v2
 import markets_paper
 import ride
@@ -1478,6 +1479,10 @@ def run():
             recorder.run(client)
         except Exception as e:
             print(f"[REC] snapshot failed (non-fatal): {e}")
+        try:
+            closer.run(client)
+        except Exception as e:
+            print(f"[CLOSER-PAPER] pass failed (non-fatal): {e}")
         try:
             rise.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 5 Nov (Matt): rising-fastest rides
         except Exception as e:
