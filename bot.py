@@ -26,6 +26,7 @@ import flip_star
 import kalshi_ws   # 5 Nov 12:25 CT (Matt): live streamed prices for the stop / take-profit checks
 import steady
 import surge
+import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import pulse_v2
 import markets_paper
 import ride
@@ -967,6 +968,8 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             state[ticker]["steady"] = True   # 2 Nov: a Steady bet re-adopted after a restart keeps its $1.00-only stop
         elif not is_manual and _placed_by_steady(client, ticker, "pulse-surge-"):
             state[ticker]["surge"] = True    # 3 Nov: a Surge bet re-adopted after a restart keeps its momentum exit
+            if _placed_by_steady(client, ticker, "pulse-surge-rise-"):
+                state[ticker]["rise"] = True   # 5 Nov: a Rise bet keeps its own exits after a restart
         origin = ("MANUAL (no Pulse order in its history) -- 85%-of-cost stop only" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
         print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
@@ -1066,6 +1069,23 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("rise"):
+                    # 5 Nov 12:30 CT (Matt): Rise bets -- take the profit as soon as the momentum meter stops climbing
+                    # (drops off its high since we bought) while the bet is in profit; stop at 90% of what was paid.
+                    _mm = surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")
+                    if _mm is not None:
+                        position["rise_peak"] = max(position.get("rise_peak", _mm), _mm)
+                    _pk = position.get("rise_peak")
+                    _sg = _net_if_sold_now(position, market)
+                    if _hv <= position["entry_price"] * rise.RISE_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"rise_stop (held side {_hv*100:.0f}c <= {rise.RISE_STOP_FRACTION*100:.0f}% "
+                                                      f"of entry {position['entry_price']*100:.0f}c -- selling)")
+                    elif (_sg is not None and _sg >= rise.RISE_MIN_PROFIT - 1e-9 and _mm is not None and _pk is not None
+                          and _mm <= _pk - rise.RISE_SLOWDOWN + 1e-9):
+                        decision = ExitDecision(True, f"rise_take_profit (momentum {_mm*100:+.0f}, off its high {_pk*100:+.0f} -- "
+                                                      f"ride slowing, net +${_sg:.2f} if sold now)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("surge"):
                     # 3 Nov 10:41 CT (Matt): Surge bets sell the second the momentum meter drops under 90 our way.
                     _mm = surge.momentum_for(ticker, "yes" if position.get("side") == "bid" else "no")
@@ -1453,6 +1473,10 @@ def run():
             surge.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 3 Nov (Matt): momentum-100 rides
         except Exception as e:
             print(f"[SURGE] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            rise.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 5 Nov (Matt): rising-fastest rides
+        except Exception as e:
+            print(f"[RISE] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             ride.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
