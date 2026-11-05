@@ -32,7 +32,7 @@ FLIP_MAX_OPEN = 18                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at 
 FLIP_MAX_SECONDS_LEFT = 150        # 5 Nov 13:17 CT (Matt): only the last 150 seconds (was 270)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma
+FLIP_ENTRY_SIGMA_STRICT = 2.0     # 5 Nov 13:18 CT (Matt): GREEN only (2.0+ sigma to flip) -- was 1.8
 FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get more bets ...
 FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT  # 28 Oct 01:48 CT: back to 1.8 (the 1.5 trial is over)
                                             # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
@@ -148,8 +148,8 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.90, "sigma": 1.8, "floor": 0.90}   # 3 Nov 16:43 CT (Matt): Flip Star at 90% win / 90c floor, 5 shares
-LOOSE_VALUES = {"win": 0.90, "sigma": 1.6, "floor": 0.90}
+LOOSE_STRICT = {"win": 0.90, "sigma": 2.0, "floor": 0.90}   # 5 Nov 13:18 CT (Matt): green only   # 3 Nov 16:43 CT (Matt): Flip Star at 90% win / 90c floor, 5 shares
+LOOSE_VALUES = {"win": 0.90, "sigma": 2.0, "floor": 0.90}
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
 
@@ -394,6 +394,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if NO_SIDE_NEEDS_STAR and n.get("side") == "no" and not (n["lock"] and n["p"] >= NO_SIDE_MIN_WIN - 1e-9):
         return False   # 28 Oct: NO bets only on a red star at 98%+
+    if n["zs"] < FLIP_ENTRY_SIGMA - 1e-9:
+        return False   # 5 Nov 13:18 CT (Matt): GREEN only (2.0+ sigma to flip), red stars included
     if n["lock"]:
         return True
     if FLIP_RED_STAR_ONLY:
