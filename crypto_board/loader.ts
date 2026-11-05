@@ -465,7 +465,7 @@ patch(".st.fa{border-color:var(--green)}", `#strip .sh{flex:0 0 100% !important;
 src = src.replace("if(__BIG.indexOf(k)>=0){bg[k]=", () => "if(true){bg[k]=");
 patch(`el.innerHTML='<div class="bigrow">'+__BIG.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'<div class="bdv"></div>'+__BIG.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join('')+'</div><div class="hdiv"></div>'+'<div class="sh up">`,
   `el.innerHTML=__bigAll(bg)+'<div class="sh up">`);
-patch("var __BIG=[", `function __bigAll(bg){var o=["BTC","XRP","SOL","BNB","ETH","DOGE","HYPE","NEAR","ZEC"];Object.keys(bg).forEach(function(c){if(o.indexOf(c)<0)o.push(c);});var u=o.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join("");var d=o.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join("");var sa=o.filter(function(c){return bg[c]&&bg[c][1];}).concat(o.filter(function(c){return bg[c]&&!bg[c][1];})).map(function(c){return bg[c][0].replace('class="st bigc','class="st bigc simp');}).join("");return '<div class="simrow">'+sa+'</div><div class="bhd"></div><div class="bigall">'+(u?'<div class="bgrid">'+u+'</div>':'')+(u&&d?'<div class="bhd"></div>':'')+(d?'<div class="bgrid">'+d+'</div>':'')+'</div>';}
+patch("var __BIG=[", `function __bigAll(bg){var o=["BTC","XRP","SOL","BNB","ETH","DOGE","HYPE","NEAR","ZEC"];Object.keys(bg).forEach(function(c){if(o.indexOf(c)<0)o.push(c);});var u=o.filter(function(c){return bg[c]&&bg[c][1];}).map(function(c){return bg[c][0];}).join("");var d=o.filter(function(c){return bg[c]&&!bg[c][1];}).map(function(c){return bg[c][0];}).join("");var sa=o.filter(function(c){return bg[c]&&bg[c][1];}).concat(o.filter(function(c){return bg[c]&&!bg[c][1];})).map(function(c){return bg[c][0].replace('class="st bigc','class="st bigc simp');}).join("");var __mm=function(c){return (typeof __mom!=="undefined"&&__mom[c]!=null)?__mom[c]:null;};var __sc=function(c){return bg[c][0].replace('class="st bigc','class="st bigc simp');};var __hv=o.filter(function(c){return bg[c]&&__mm(c)!=null;});var __ru=__hv.filter(function(c){return __mm(c)>0;}).sort(function(a,b){return __mm(b)-__mm(a);}).slice(0,2);var __fd=__hv.filter(function(c){return __mm(c)<0;}).sort(function(a,b){return __mm(a)-__mm(b);}).slice(0,2);var __tb=(__ru.length||__fd.length)?'<div class="topbox"><div class="tbh"><span class="u">▲ RISING FASTEST</span><span class="d">▼ FALLING FASTEST</span></div><div class="tbg"><div class="tbs u">'+__ru.map(__sc).join("")+'</div><div class="tbv"></div><div class="tbs d">'+__fd.map(__sc).join("")+'</div></div></div>':'';return __tb+'<div class="simrow">'+sa+'</div><div class="bhd"></div><div class="bigall">'+(u?'<div class="bgrid">'+u+'</div>':'')+(u&&d?'<div class="bhd"></div>':'')+(d?'<div class="bgrid">'+d+'</div>':'')+'</div>';}
 var __BIG=[`);
 patch(".st.fa{border-color:var(--green)}", `.bigall{flex:0 0 100%;max-width:100%;min-width:0}
 .bigall .bgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
@@ -492,6 +492,16 @@ patch(".st.fa{border-color:var(--green)}", `.simrow{flex:0 0 100%;max-width:100%
 @media (min-width:700px){.simrow{gap:10px;grid-template-columns:repeat(9,minmax(0,1fr))}.st.bigc.simp{padding:8px 6px 10px;border-radius:12px}
 .st.bigc.simp>.bdir{font-size:15px;line-height:24px}.st.bigc.simp>.sy{font-size:20px;line-height:24px}.st.bigc.simp>.sp{font-size:28px;line-height:32px}
 .st.bigc.simp>.bz{gap:14px}.st.bigc.simp .bz .bw{font-size:13px !important;line-height:16px !important;height:16px !important}.st.bigc.simp .bz .sb,.st.bigc.simp .bz .sb2{width:16px !important;height:90px !important;min-height:90px !important;flex-basis:90px !important}.st.bigc.simp .bz .bl{font-size:10px !important;line-height:13px !important}}
+.st.fa{border-color:var(--green)}`);
+// 4 Nov 22:51 CT (Matt): a box at the very top with the 4 strongest movers -- the 2 coins whose momentum is rising
+// fastest (left) and the 2 falling fastest (right), as the same simple cards.
+patch(".st.fa{border-color:var(--green)}", `.topbox{flex:0 0 100%;max-width:100%;min-width:0;border:2px solid #3a4456;border-radius:12px;padding:6px;margin:0 0 10px;background:#0b0f15}
+.topbox .tbh{display:flex;justify-content:space-between;font-size:11px;font-weight:900;letter-spacing:.02em;margin:0 2px 5px}
+.topbox .tbh .u{color:#39d353}.topbox .tbh .d{color:#ff6b62}
+.topbox .tbg{display:flex;align-items:stretch;gap:6px;min-width:0}
+.topbox .tbs{flex:1 1 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0}
+.topbox .tbv{flex:0 0 4px;border-radius:2px;background:linear-gradient(var(--green),#ff7b72)}
+@media (min-width:700px){.topbox{padding:12px;border-radius:16px;margin-bottom:16px}.topbox .tbh{font-size:18px;margin-bottom:10px}.topbox .tbg,.topbox .tbs{gap:12px}.topbox .tbv{flex-basis:6px}}
 .st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
