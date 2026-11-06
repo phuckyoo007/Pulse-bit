@@ -110,6 +110,7 @@ NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
+FLIP_MAX_ROUND_FLIPS = 2   # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
@@ -392,6 +393,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
         return False
+    if n.get("flips") is None or n["flips"] > FLIP_MAX_ROUND_FLIPS:
+        return False   # 6 Nov 02:15 CT (Matt): skip coins that have flipped 3+ times this round, red star or not
     if NO_SIDE_NEEDS_STAR and n.get("side") == "no" and not (n["lock"] and n["p"] >= NO_SIDE_MIN_WIN - 1e-9):
         return False   # 28 Oct: NO bets only on a red star at 98%+
     if n["zs"] < FLIP_ENTRY_SIGMA - 1e-9:
