@@ -752,7 +752,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
-            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl)
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl)
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -971,7 +971,10 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             state[ticker]["steady"] = True   # 2 Nov: a Steady bet re-adopted after a restart keeps its $1.00-only stop
         elif not is_manual and _placed_by_steady(client, ticker, "pulse-surge-"):
             state[ticker]["surge"] = True    # 3 Nov: a Surge bet re-adopted after a restart keeps its momentum exit
-            if _placed_by_steady(client, ticker, "pulse-surge-rise-"):
+            if _placed_by_steady(client, ticker, "pulse-surge-rising-"):
+                state[ticker]["rising"] = True   # 6 Nov: a live RISING bet keeps its hold-to-the-end rule after a restart
+                state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-rise-"):
                 state[ticker]["rise"] = True   # 5 Nov: a Rise bet keeps its own exits after a restart
         origin = ("MANUAL (no Pulse order in its history) -- 85%-of-cost stop only" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
@@ -1072,6 +1075,8 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("rising"):
+                    decision = ExitDecision(False, "")   # 6 Nov (Matt): live RISING bets are held to the end
                 elif position.get("rise"):
                     # 5 Nov 12:30 CT (Matt): Rise bets -- take the profit as soon as the momentum meter stops climbing
                     # (drops off its high since we bought) while the bet is in profit; stop at 90% of what was paid.
@@ -1289,7 +1294,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 pulse_v2.track_live_exit(ticker, position, exit_value)   # follow it to settlement: did the sell help?
             except Exception:
                 pass
-            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl)
+            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl)
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
             del state[ticker]
@@ -1347,7 +1352,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
         })
         newly_settled_pnl.append(pnl)
         print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
-        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl)
+        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl)
     if newly_settled_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
     return newly_settled_pnl
@@ -1485,7 +1490,7 @@ def run():
         except Exception as e:
             print(f"[REC] snapshot failed (non-fatal): {e}")
         try:
-            closer.run(client)
+            closer.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[CLOSER-PAPER] pass failed (non-fatal): {e}")
         try:

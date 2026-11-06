@@ -1,48 +1,147 @@
 """
-CLOSER paper strategies (5 Nov 23:38 CT, Matt) -- PAPER ONLY, nothing is bought.
+CLOSER strategies (6 Nov 04:37 CT, Matt).
 
-The first Closer rule (favourite at 70-95c with 3:00-1:30 left) lost on paper (38 bets, -$11.47) and is retired.
-Two rules from the recorder data (109 coin-rounds, 5 Nov) are now paper-tested side by side:
+  RISING  -- LIVE (real money). Last 2:00 -> 1:00 of a 15-minute crypto round: buy RISING_SHARES of whichever side is above
+             50c (below 97c) and has risen over the last ~20-45 seconds; hold to the end. One bet per coin per round.
+             Paper result before going live (6 Nov 00:40-04:46 CT): 60 bets, 53 won, +$4.00 at 2 shares.
+             Turns itself off for the day once its real bets have lost RISING_MAX_DAILY_LOSS ($2) in total.
+  FLIPS   -- PAPER. 3:00 -> 2:00 left: board's pick at 70-95c, flipped <= 2 times, momentum not pushing hard its way.
+  SWING   -- PAPER. Matt's "jump on, jump off": with 5:00+ left, buy a side at 55-70c right after it dropped 10c+ from its
+             high of the last minute; sell the moment it can be sold 20c higher; otherwise hold to the end. May re-enter.
+             Backtest (45 rounds, fees in): +9c/share on the half of the data not used to pick it -- thin, so paper first.
 
-  FLIPS  (3:00 -> 2:00 left): buy the board's pick at 70-95c if it has flipped 2 times or fewer this round and the
-          momentum meter is NOT pushing hard its way (below +30 for the pick). Data: 18 bets, 94% won, +10c/share.
-  RISING (2:00 -> 1:00 left): buy whichever side is above 50c (below 97c) and has risen over the last ~20-45 seconds.
-          Data: 27 bets, 93% won, +10c/share.  (Same rule at 2:30-3:00 left LOST -- it only works late.)
-
-Each rule: one paper bet per coin per round, held to the end, scored with Kalshi's real result and fee.
-Log lines: "[CLOSER-PAPER] <RULE> BUY ..." and "[CLOSER-PAPER] <RULE> RESULT ... -- <RULE> paper total ...".
+Paper log lines: "[CLOSER-PAPER] <RULE> BUY/SELL/RESULT ...". Live lines: "[RISING] ENTRY/FILLED/OFF ...".
 """
 import math
 import time
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import flip_star
 import surge
 
 CLOSER_ENABLED = True
+RISING_LIVE = True
+RISING_SHARES = 2
+RISING_MAX_DAILY_LOSS = 2.00
 RULES = {
     "FLIPS":  {"shares": 5, "from": 180, "until": 120},
     "RISING": {"shares": 2, "from": 120, "until": 60},
+    "SWING":  {"shares": 2, "from": 900, "until": 300},
 }
 FLIPS_MIN_PRICE, FLIPS_MAX_PRICE, FLIPS_MAX_FLIPS, FLIPS_MAX_MOM_WITH = 0.70, 0.95, 2, 0.30
 RISING_MIN_PRICE, RISING_MAX_PRICE = 0.50, 0.97
-RISING_LOOKBACK = (20, 45)   # compare with the price 20-45 seconds ago
+RISING_LOOKBACK = (20, 45)
+SWING_MIN_PRICE, SWING_MAX_PRICE, SWING_DIP, SWING_TAKE = 0.55, 0.70, 0.10, 0.20
 
-_hist = {}    # ticker -> [(t, yes_ask, no_ask)]
-_paper = {}   # (rule, ticker) -> bet
+_hist = {}     # ticker -> [(t, yes_ask, no_ask)]
+_paper = {}    # (rule, ticker) -> bet ; SWING may hold several per ticker over a round (key gets a counter)
 _tally = {r: {"n": 0, "w": 0, "pnl": 0.0} for r in RULES}
+_live_done = {}    # ticker -> time (one live RISING bet per coin per round)
+_live_day = {"day": None, "pnl": 0.0, "off": False}
 
 
 def _fee(p):
     return math.ceil(0.07 * p * (1 - p) * 100) / 100
 
 
-def _buy(rule, ticker, n, side, px, tl, why, now):
-    _paper[(rule, ticker)] = {"coin": n.get("coin"), "side": side, "px": float(px), "close_at": now + tl}
-    print(f"[CLOSER-PAPER] {rule} BUY {ticker} ({n.get('coin')}): {side.upper()} @ {px*100:.0f}c, {int(tl)}s left, "
-          f"{why} -- {RULES[rule]['shares']} shares (paper)")
+def _ct_day():
+    return (datetime.now(timezone.utc) - timedelta(hours=6)).date()
 
 
-def run(client) -> None:
+def record(position, pnl) -> None:
+    """bot.py calls this for every closed bet; tallies live RISING P/L and turns RISING off at -$2 for the day."""
+    try:
+        if not isinstance(position, dict) or not position.get("rising"):
+            return
+        if _live_day["day"] != _ct_day():
+            _live_day.update(day=_ct_day(), pnl=0.0, off=False)
+        _live_day["pnl"] += float(pnl)
+        print(f"[RISING] bet closed {pnl:+.2f} -- today {_live_day['pnl']:+.2f} (stops at -${RISING_MAX_DAILY_LOSS:.2f}).")
+        if not _live_day["off"] and _live_day["pnl"] <= -RISING_MAX_DAILY_LOSS + 1e-9:
+            _live_day["off"] = True
+            print(f"[RISING] OFF for today -- real RISING bets are down ${-_live_day['pnl']:.2f}.")
+    except Exception:
+        pass
+
+
+def _paper_buy(rule, key, ticker, n, side, px, tl, why, now):
+    _paper[key] = {"rule": rule, "ticker": ticker, "coin": n.get("coin"), "side": side, "px": float(px), "close_at": now + tl}
+    print(f"[CLOSER-PAPER] {rule} BUY {ticker} ({n.get('coin')}): {side.upper()} @ {px*100:.0f}c, {int(tl)}s left, {why} "
+          f"-- {RULES[rule]['shares']} shares (paper)")
+
+
+def _score(rule, bet, pnl, won, how):
+    t = _tally[rule]
+    t["n"] += 1
+    t["w"] += won
+    t["pnl"] += pnl
+    print(f"[CLOSER-PAPER] {rule} {how} {bet['ticker']} ({bet['coin']}): {'WON' if won else 'LOST'} {pnl:+.2f} -- {rule} "
+          f"paper total {t['n']} bets, {t['w']} won, {t['pnl']:+.2f}")
+
+
+def _live_rising(client, state, excluded, state_lock, dry_run, ensure_funds, ticker, n, side, px, tl, why):
+    if _live_day["day"] != _ct_day():
+        _live_day.update(day=_ct_day(), pnl=0.0, off=False)
+    if _live_day["off"] or flip_star.in_pause():
+        return
+    if ticker in _live_done or ticker in state or ticker in excluded or ticker in flip_star.pending_tickers() \
+            or ticker in flip_star.external_owned[0]():
+        return
+    _live_done[ticker] = time.time()
+    try:
+        held, _ = flip_star._held_count(client, ticker)
+        if held != 0:
+            return
+        mk = client.get_market(ticker).get("market", {})
+        ya, yb = float(mk.get("yes_ask_dollars")), float(mk.get("yes_bid_dollars"))
+        if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
+            print(f"[RISING] {ticker}: spread {(ya-yb)*100:.0f}c too wide -- skipping.")
+            return
+        cost = ya if side == "yes" else 1 - yb
+        if not (RISING_MIN_PRICE < cost < RISING_MAX_PRICE):
+            return
+        limit = min(RISING_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
+    except Exception as e:
+        print(f"[RISING] {ticker}: couldn't read the live quote ({e}).")
+        return
+    print(f"[RISING] ENTRY {ticker} ({n.get('coin')}): {side.upper()} rising ({why}), {int(tl)}s left -- "
+          f"{'DRY-RUN ' if dry_run else ''}buying {RISING_SHARES} up to ${limit:.2f}")
+    if dry_run:
+        return
+    bside = "bid" if side == "yes" else "ask"
+    try:
+        ensure_funds(client, ticker, limit * RISING_SHARES)
+        yes_price = limit if bside == "bid" else round(1 - limit, 2)
+        client.create_order(ticker=ticker, client_order_id=f"pulse-surge-rising-{uuid.uuid4()}", side=bside,
+                            count=str(RISING_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+    except Exception as e:
+        print(f"[RISING] {ticker}: entry order failed ({e}).")
+        if "market_closed" in str(e) or "market_not_found" in str(e):
+            excluded.add(ticker)
+        return
+    filled, exposure = 0.0, 0.0
+    for _ in range(4):
+        try:
+            filled, exposure = flip_star._held_count(client, ticker)
+        except Exception:
+            pass
+        if filled != 0:
+            break
+        time.sleep(0.4)
+    count = abs(filled)
+    if count < 1e-9:
+        print(f"[RISING] {ticker}: nothing filled at ${limit:.2f} (price moved).")
+        return
+    entry_price = exposure / count if exposure > 0 else cost
+    with state_lock:
+        state[ticker] = {"count": count, "entry_price": entry_price, "side": bside, "dry_run": False,
+                         "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n.get("coin"),
+                         "flip_star": False, "surge": True, "rising": True}
+    print(f"[RISING] FILLED {ticker}: {count:g} {side.upper()} @ ${entry_price:.2f} -- holding to the end.")
+
+
+def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensure_funds=None) -> None:
     if not CLOSER_ENABLED:
         return
     now = time.time()
@@ -58,7 +157,7 @@ def run(client) -> None:
         h.append((now, ya, na))
         while h and now - h[0][0] > 90:
             h.pop(0)
-        # FLIPS
+        # FLIPS (paper)
         r = RULES["FLIPS"]
         if ("FLIPS", ticker) not in _paper and r["until"] <= tl <= r["from"]:
             side = n.get("side")
@@ -69,25 +168,52 @@ def run(client) -> None:
                 m = None
             if (px is not None and FLIPS_MIN_PRICE <= px <= FLIPS_MAX_PRICE and n.get("flips") is not None
                     and n["flips"] <= FLIPS_MAX_FLIPS and m is not None and m < FLIPS_MAX_MOM_WITH):
-                _buy("FLIPS", ticker, n, side, px, tl, f"{n['flips']} flips, momentum {m*100:+.0f} for it", now)
-        # RISING
+                _paper_buy("FLIPS", ("FLIPS", ticker), ticker, n, side, px, tl, f"{n['flips']} flips, momentum {m*100:+.0f}", now)
+        # RISING (paper log + LIVE)
         r = RULES["RISING"]
         if ("RISING", ticker) not in _paper and r["until"] <= tl <= r["from"]:
             old = [x for x in h if RISING_LOOKBACK[0] <= now - x[0] <= RISING_LOOKBACK[1]]
             if old:
                 _, ya0, na0 = old[-1]
                 for side, px, px0 in (("yes", ya, ya0), ("no", na, na0)):
-                    if (px is not None and px0 is not None and RISING_MIN_PRICE < px < RISING_MAX_PRICE
-                            and px > px0 + 1e-9):
-                        _buy("RISING", ticker, n, side, px, tl, f"up from {px0*100:.0f}c ~{int(now - old[-1][0])}s ago", now)
+                    if px is not None and px0 is not None and RISING_MIN_PRICE < px < RISING_MAX_PRICE and px > px0 + 1e-9:
+                        why = f"up from {px0*100:.0f}c ~{int(now - old[-1][0])}s ago"
+                        _paper_buy("RISING", ("RISING", ticker), ticker, n, side, px, tl, why, now)
+                        if RISING_LIVE and state is not None:
+                            try:
+                                _live_rising(client, state, excluded, state_lock, dry_run, ensure_funds, ticker, n, side,
+                                             px, tl, why)
+                            except Exception as e:
+                                print(f"[RISING] {ticker}: live entry failed ({e}).")
                         break
-    # settle with Kalshi's real result
+        # SWING (paper): sell open swing bets at +20c, otherwise look for a new dip to buy
+        r = RULES["SWING"]
+        mine = [k for k, bet in _paper.items() if bet["rule"] == "SWING" and bet["ticker"] == ticker and not bet.get("done")]
+        for k in mine:
+            bet = _paper[k]
+            other = na if bet["side"] == "yes" else ya
+            bid = None if other is None else 1 - other
+            if bid is not None and bid >= bet["px"] + SWING_TAKE - 1e-9:
+                pnl = ((bid - bet["px"]) - _fee(bet["px"]) - _fee(bid)) * r["shares"]
+                bet["done"] = True
+                _score("SWING", bet, pnl, pnl > 0, f"SELL @ {bid*100:.0f}c")
+        mine = [k for k, bet in _paper.items() if bet["rule"] == "SWING" and bet["ticker"] == ticker and not bet.get("done")]
+        if not mine and r["until"] <= tl <= r["from"] and len(h) >= 2:
+            for side, ix in (("yes", 1), ("no", 2)):
+                px = ya if side == "yes" else na
+                recent = [x[ix] for x in h if now - x[0] <= 60 and x[ix] is not None]
+                if px is None or not recent or not (SWING_MIN_PRICE <= px <= SWING_MAX_PRICE):
+                    continue
+                if max(recent) - px >= SWING_DIP - 1e-9:
+                    key = ("SWING", ticker, int(now))
+                    _paper_buy("SWING", key, ticker, n, side, px, tl, f"dropped from {max(recent)*100:.0f}c in the last minute", now)
+                    break
+    # settle paper bets with Kalshi's real result
     for key, bet in list(_paper.items()):
-        rule, ticker = key
         if bet.get("done") or now < bet["close_at"] + 60:
             continue
         try:
-            res = client.get_market(ticker).get("market", {}).get("result")
+            res = client.get_market(bet["ticker"]).get("market", {}).get("result")
         except Exception:
             continue
         if res not in ("yes", "no"):
@@ -95,15 +221,12 @@ def run(client) -> None:
                 bet["done"] = True
             continue
         won = res == bet["side"]
-        pnl = ((1 - bet["px"] if won else -bet["px"]) - _fee(bet["px"])) * RULES[rule]["shares"]
-        t = _tally[rule]
-        t["n"] += 1
-        t["w"] += won
-        t["pnl"] += pnl
+        pnl = ((1 - bet["px"] if won else -bet["px"]) - _fee(bet["px"])) * RULES[bet["rule"]]["shares"]
         bet["done"] = True
-        print(f"[CLOSER-PAPER] {rule} RESULT {ticker} ({bet['coin']}): {'WON' if won else 'LOST'} {pnl:+.2f} -- {rule} "
-              f"paper total {t['n']} bets, {t['w']} won, {t['pnl']:+.2f}")
+        _score(bet["rule"], bet, pnl, won, "RESULT")
     for key in [k for k, bet in _paper.items() if bet.get("done") and now > bet["close_at"] + 3600]:
         _paper.pop(key, None)
     for t in [t for t, h in _hist.items() if h and now - h[-1][0] > 600]:
         _hist.pop(t, None)
+    for t in [t for t, at in _live_done.items() if now - at > 1800]:
+        _live_done.pop(t, None)
