@@ -24,7 +24,7 @@ FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_SHARES = 10                   # 5 Nov 13:20 CT (Matt): 10 shares per bet (BTC/XRP 1.5x, DOGE/BNB 0.5x)
+FLIP_SHARES = 5                    # 6 Nov 01:29 CT (Matt): 5 shares per bet on every coin (was 10)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
@@ -32,7 +32,7 @@ FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at m
 FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
-FLIP_ENTRY_SIGMA_STRICT = 1.8     # 25 Oct 13:34 CT (per Matthew): non-star entries at 1.8+ sigma   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_ENTRY_SIGMA_STRICT = 2.0     # 6 Nov 01:29 CT (Matt): GREEN only (2.0+ sigma to flip)
 FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get more bets ...
 FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT  # 28 Oct 01:48 CT: back to 1.8 (the 1.5 trial is over)
                                             # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
@@ -109,7 +109,7 @@ NO_SIDE_NEEDS_STAR = True
 NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
-COIN_SHARE_MULT = {"BTC": 1.5, "XRP": 1.5, "DOGE": 0.5, "BNB": 0.5}   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
@@ -148,8 +148,8 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.98, "sigma": 1.8, "floor": 0.96}   # 28 Oct 19:24 CT: floor 96c (fills at 94-95c lost 21-25% of the time)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-LOOSE_VALUES = {"win": 0.97, "sigma": 1.6, "floor": 0.96}   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+LOOSE_STRICT = {"win": 0.98, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
+LOOSE_VALUES = {"win": 0.97, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
 
@@ -394,6 +394,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if NO_SIDE_NEEDS_STAR and n.get("side") == "no" and not (n["lock"] and n["p"] >= NO_SIDE_MIN_WIN - 1e-9):
         return False   # 28 Oct: NO bets only on a red star at 98%+
+    if n["zs"] < FLIP_ENTRY_SIGMA - 1e-9:
+        return False   # 6 Nov 01:29 CT (Matt): GREEN only (2.0+ sigma to flip), red stars included
     if n["lock"]:
         return True
     if FLIP_RED_STAR_ONLY:
