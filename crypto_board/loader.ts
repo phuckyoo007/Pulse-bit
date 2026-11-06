@@ -425,7 +425,7 @@ patch(".st.fa{border-color:var(--green)}",
 patch("function __err(w,e){", `function __sig(mk,side){
   if(!mk||mk.z==null||(side!=="yes"&&side!=="no"))return '';
   var z=mk.z*(side==="yes"?1:-1),c=z>=2?"g":(z>=1?"y":(z>=0.5?"a":"r"));
-  return '<div class="sgm '+c+'">σ '+(z>=0?'':'−')+Math.abs(z).toFixed(1)+' to flip</div>';
+  return '<div class="sgm '+c+'"><span class="sgv">'+(z>=0?'':'−')+Math.abs(z).toFixed(1)+'σ</span><span class="sgl">TO FLIP</span></div>';
 }
 function __err(w,e){`);
 patch(`'+__stab(mk)+'<div class="sp">`, `'+__stab(mk)+__sig(mk,side)+'<div class="sp">`);
@@ -586,6 +586,19 @@ function __wsConnect() {
 }
 __wsConnect();
 `;
+// 5 Nov 23:32 CT (Matt): sigma-to-flip in its own boxed badge in the TOP-LEFT corner of each big card, number much
+// bigger; the UP/DOWN banner moves right to make room.
+patch(".st.fa{border-color:var(--green)}", `.st.bigc{position:relative}
+.st.bigc:not(.simp)>.sgm{position:absolute;top:4px;left:4px;z-index:4;display:flex;flex-direction:column;align-items:center;
+ padding:2px 4px 2px;border:2px solid currentColor;border-radius:8px;background:#06090e;box-shadow:0 0 0 2px #06090e;min-width:34px}
+.st.bigc:not(.simp)>.sgm .sgv{font-size:17px;line-height:18px;font-weight:900;letter-spacing:-.5px}
+.st.bigc:not(.simp)>.sgm .sgl{font-size:6px;line-height:7px;font-weight:800;letter-spacing:.2px;opacity:.85}
+.st.bigc:not(.simp)>.bdir{position:absolute !important;top:6px;right:6px;left:auto;margin:0 !important;width:auto !important;max-width:none;padding:0 4px !important;font-size:9px !important;line-height:16px !important;white-space:nowrap}
+.st.bigc:not(.simp)>.sy{margin-top:34px}
+@media (min-width:700px){.st.bigc:not(.simp)>.sgm{top:8px;left:8px;padding:4px 8px;border-width:3px;border-radius:12px;min-width:64px}
+ .st.bigc:not(.simp)>.sgm .sgv{font-size:30px;line-height:31px}.st.bigc:not(.simp)>.sgm .sgl{font-size:10px;line-height:11px}
+ .st.bigc:not(.simp)>.bdir{top:10px;right:10px;font-size:18px !important;line-height:30px !important;padding:0 10px !important}.st.bigc:not(.simp)>.sy{margin-top:48px}}
+.st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
 await Bun.write("/tmp/crypto_board.ts", src);
