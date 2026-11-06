@@ -15,6 +15,8 @@ Paper log lines: "[CLOSER-PAPER] <RULE> BUY/SELL/RESULT ...". Live lines: "[RISI
 import math
 import time
 import uuid
+
+import requests
 from datetime import datetime, timedelta, timezone
 
 import flip_star
@@ -36,7 +38,38 @@ SWING_MIN_PRICE, SWING_MAX_PRICE, SWING_DIP, SWING_TAKE = 0.55, 0.70, 0.10, 0.20
 
 _hist = {}     # ticker -> [(t, yes_ask, no_ask)]
 _paper = {}    # (rule, ticker) -> bet ; SWING may hold several per ticker over a round (key gets a counter)
-_tally = {r: {"n": 0, "w": 0, "pnl": 0.0} for r in RULES}
+_tally = {}
+MARKETS_BOARD = "https://markets-board-production.up.railway.app/api/state"   # commodities + currencies (paper only)
+FX = {"EURUSD", "GBPUSD", "USDJPY"}
+COMMODITIES = {"GOLD", "SILVER", "OIL", "BRENT", "NATGAS", "COPPER", "PLATINUM", "PALLADIUM"}
+_mb = {"data": {}, "at": 0.0}
+
+
+def _markets_board():
+    """ticker -> board numbers (+ 'cat': CMD / FX) for the 15-minute commodity and currency markets (cached 1s)."""
+    now = time.time()
+    if now - _mb["at"] < 1.0:
+        return _mb["data"]
+    _mb["at"] = now
+    out = {}
+    try:
+        st = requests.get(MARKETS_BOARD, timeout=4, headers={"Cache-Control": "no-store"}).json()
+        age = max(0.0, now - float(st.get("now", now)))
+        if age <= flip_star.FLIP_STALE_SECONDS:
+            for m in st.get("markets", []):
+                if m.get("kind") != "15m":
+                    continue
+                n = flip_star._side_numbers(m, age, st.get("coins") or {})
+                if not n or not n.get("ticker"):
+                    continue
+                c = str(n.get("coin") or "").upper()
+                n["cat"] = "FX" if c in FX else ("CMD" if c in COMMODITIES else None)
+                if n["cat"]:
+                    out[n["ticker"]] = n
+    except Exception:
+        pass
+    _mb["data"] = out
+    return out
 _live_done = {}    # ticker -> time (one live RISING bet per coin per round)
 _live_day = {"day": None, "pnl": 0.0, "off": False}
 
@@ -65,14 +98,18 @@ def record(position, pnl) -> None:
         pass
 
 
+def _base(rule):
+    return rule.split("-")[0]
+
+
 def _paper_buy(rule, key, ticker, n, side, px, tl, why, now):
     _paper[key] = {"rule": rule, "ticker": ticker, "coin": n.get("coin"), "side": side, "px": float(px), "close_at": now + tl}
     print(f"[CLOSER-PAPER] {rule} BUY {ticker} ({n.get('coin')}): {side.upper()} @ {px*100:.0f}c, {int(tl)}s left, {why} "
-          f"-- {RULES[rule]['shares']} shares (paper)")
+          f"-- {RULES[_base(rule)]['shares']} shares (paper)")
 
 
 def _score(rule, bet, pnl, won, how):
-    t = _tally[rule]
+    t = _tally.setdefault(rule, {"n": 0, "w": 0, "pnl": 0.0})
     t["n"] += 1
     t["w"] += won
     t["pnl"] += pnl
@@ -149,6 +186,18 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
         b = flip_star.board()
     except Exception:
         b = {}
+    _scan(b, "", True, now, client, state, excluded, state_lock, dry_run, ensure_funds)
+    try:
+        mb = _markets_board()
+    except Exception:
+        mb = {}
+    for cat in ("CMD", "FX"):
+        _scan({t: n for t, n in mb.items() if n.get("cat") == cat}, "-" + cat, False, now, client, state, excluded,
+              state_lock, dry_run, ensure_funds)
+    _settle(client, now)
+
+
+def _scan(b, tag, live, now, client, state, excluded, state_lock, dry_run, ensure_funds):
     for ticker, n in (b or {}).items():
         if "15M" not in ticker.split("-")[0].upper() or n.get("tl") is None:
             continue
@@ -159,7 +208,7 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
             h.pop(0)
         # FLIPS (paper)
         r = RULES["FLIPS"]
-        if ("FLIPS", ticker) not in _paper and r["until"] <= tl <= r["from"]:
+        if not tag and ("FLIPS", ticker) not in _paper and r["until"] <= tl <= r["from"]:
             side = n.get("side")
             px = ya if side == "yes" else na
             try:
@@ -171,15 +220,15 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
                 _paper_buy("FLIPS", ("FLIPS", ticker), ticker, n, side, px, tl, f"{n['flips']} flips, momentum {m*100:+.0f}", now)
         # RISING (paper log + LIVE)
         r = RULES["RISING"]
-        if ("RISING", ticker) not in _paper and r["until"] <= tl <= r["from"]:
+        if ("RISING" + tag, ticker) not in _paper and r["until"] <= tl <= r["from"]:
             old = [x for x in h if RISING_LOOKBACK[0] <= now - x[0] <= RISING_LOOKBACK[1]]
             if old:
                 _, ya0, na0 = old[-1]
                 for side, px, px0 in (("yes", ya, ya0), ("no", na, na0)):
                     if px is not None and px0 is not None and RISING_MIN_PRICE < px < RISING_MAX_PRICE and px > px0 + 1e-9:
                         why = f"up from {px0*100:.0f}c ~{int(now - old[-1][0])}s ago"
-                        _paper_buy("RISING", ("RISING", ticker), ticker, n, side, px, tl, why, now)
-                        if RISING_LIVE and state is not None:
+                        _paper_buy("RISING" + tag, ("RISING" + tag, ticker), ticker, n, side, px, tl, why, now)
+                        if live and RISING_LIVE and state is not None:
                             try:
                                 _live_rising(client, state, excluded, state_lock, dry_run, ensure_funds, ticker, n, side,
                                              px, tl, why)
@@ -188,7 +237,8 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
                         break
         # SWING (paper): sell open swing bets at +20c, otherwise look for a new dip to buy
         r = RULES["SWING"]
-        mine = [k for k, bet in _paper.items() if bet["rule"] == "SWING" and bet["ticker"] == ticker and not bet.get("done")]
+        sw = "SWING" + tag
+        mine = [k for k, bet in _paper.items() if bet["rule"] == sw and bet["ticker"] == ticker and not bet.get("done")]
         for k in mine:
             bet = _paper[k]
             other = na if bet["side"] == "yes" else ya
@@ -196,8 +246,8 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
             if bid is not None and bid >= bet["px"] + SWING_TAKE - 1e-9:
                 pnl = ((bid - bet["px"]) - _fee(bet["px"]) - _fee(bid)) * r["shares"]
                 bet["done"] = True
-                _score("SWING", bet, pnl, pnl > 0, f"SELL @ {bid*100:.0f}c")
-        mine = [k for k, bet in _paper.items() if bet["rule"] == "SWING" and bet["ticker"] == ticker and not bet.get("done")]
+                _score(sw, bet, pnl, pnl > 0, f"SELL @ {bid*100:.0f}c")
+        mine = [k for k, bet in _paper.items() if bet["rule"] == sw and bet["ticker"] == ticker and not bet.get("done")]
         if not mine and r["until"] <= tl <= r["from"] and len(h) >= 2:
             for side, ix in (("yes", 1), ("no", 2)):
                 px = ya if side == "yes" else na
@@ -205,9 +255,12 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
                 if px is None or not recent or not (SWING_MIN_PRICE <= px <= SWING_MAX_PRICE):
                     continue
                 if max(recent) - px >= SWING_DIP - 1e-9:
-                    key = ("SWING", ticker, int(now))
-                    _paper_buy("SWING", key, ticker, n, side, px, tl, f"dropped from {max(recent)*100:.0f}c in the last minute", now)
+                    key = (sw, ticker, int(now))
+                    _paper_buy(sw, key, ticker, n, side, px, tl, f"dropped from {max(recent)*100:.0f}c in the last minute", now)
                     break
+
+
+def _settle(client, now):
     # settle paper bets with Kalshi's real result
     for key, bet in list(_paper.items()):
         if bet.get("done") or now < bet["close_at"] + 60:
@@ -221,7 +274,7 @@ def run(client, state=None, excluded=None, state_lock=None, dry_run=False, ensur
                 bet["done"] = True
             continue
         won = res == bet["side"]
-        pnl = ((1 - bet["px"] if won else -bet["px"]) - _fee(bet["px"])) * RULES[bet["rule"]]["shares"]
+        pnl = ((1 - bet["px"] if won else -bet["px"]) - _fee(bet["px"])) * RULES[_base(bet["rule"])]["shares"]
         bet["done"] = True
         _score(bet["rule"], bet, pnl, won, "RESULT")
     for key in [k for k, bet in _paper.items() if bet.get("done") and now > bet["close_at"] + 3600]:
