@@ -103,7 +103,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
-        if flip_star._is_excluded(n.get("coin"), ticker):
+        if flip_star.not_allowed_to_buy(n.get("coin"), ticker):
             continue
         tl = n.get("tl")
         if tl is None or tl < RISE_MIN_SECONDS_LEFT:

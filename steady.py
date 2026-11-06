@@ -91,7 +91,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         if _attempts.get(ticker, 0) >= STEADY_MAX_ATTEMPTS:
             continue
-        if flip_star._is_excluded(n.get("coin"), ticker):
+        if flip_star.not_allowed_to_buy(n.get("coin"), ticker):
             continue
         side = "bid" if n["side"] == "yes" else "ask"
         try:

@@ -110,6 +110,7 @@ NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
+FLIP_ONLY_COINS = {"BTC"}   # 6 Nov 04:53 CT (Matt): Bitcoin only -- the other coins are too thin / unstable
 FLIP_MAX_ROUND_FLIPS = 2   # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
@@ -386,8 +387,18 @@ def _is_excluded(coin, ticker) -> bool:
     return c in FLIP_EXCLUDED_COINS or any(t.startswith("KX" + x) for x in FLIP_EXCLUDED_COINS)
 
 
+def not_allowed_to_buy(coin, ticker) -> bool:
+    """Real-money buying filter: excluded coins, plus anything outside FLIP_ONLY_COINS (6 Nov 04:53 CT, Matt: Bitcoin
+    only -- best liquidity/volume). Board data, paper tests and exits still see every coin."""
+    if _is_excluded(coin, ticker):
+        return True
+    c = str(coin or "").upper()
+    t = str(ticker or "").upper()
+    return bool(FLIP_ONLY_COINS) and not (c in FLIP_ONLY_COINS or any(t.startswith("KX" + x + "15M") for x in FLIP_ONLY_COINS))
+
+
 def entry_signal(n: dict) -> bool:
-    if _is_excluded(n.get("coin"), n.get("ticker")):
+    if not_allowed_to_buy(n.get("coin"), n.get("ticker")):
         return False
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
         return False

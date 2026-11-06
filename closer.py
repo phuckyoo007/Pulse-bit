@@ -122,6 +122,8 @@ def _live_rising(client, state, excluded, state_lock, dry_run, ensure_funds, tic
         _live_day.update(day=_ct_day(), pnl=0.0, off=False)
     if _live_day["off"] or flip_star.in_pause():
         return
+    if flip_star.not_allowed_to_buy(n.get("coin"), ticker):
+        return   # 6 Nov 04:53 CT (Matt): live bets on Bitcoin only (paper tests still watch every coin)
     if ticker in _live_done or ticker in state or ticker in excluded or ticker in flip_star.pending_tickers() \
             or ticker in flip_star.external_owned[0]():
         return
