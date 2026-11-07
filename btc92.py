@@ -1,0 +1,114 @@
+"""
+BTC92 strategy (7 Nov 11:30 CT, Matt).
+
+  * Bitcoin 15-minute rounds only.
+  * In the last BTC92_WINDOW seconds (2:00), when the board's pick for BTC is at 92%+ win AND its price is 92c+ (never
+    above 98c -- a 99c share can't pay for itself), buy BTC92_SHARES (5) of that side. One bet per round.
+  * Exit (bot.py, positions flagged "btc92"): instant stop if our side falls to 82% of what we paid; otherwise hold to
+    the end. No other stop touches it.
+"""
+import time
+import uuid
+
+import flip_star
+
+BTC92_ENABLED = True
+BTC92_SHARES = 5
+BTC92_WINDOW = 120          # last 2 minutes
+BTC92_MIN_SECONDS_LEFT = 10
+BTC92_MIN_WIN = 0.92
+BTC92_MIN_PRICE = 0.92
+BTC92_MAX_PRICE = 0.98
+BTC92_STOP_FRACTION = 0.82  # instant stop at 82% of entry
+
+_done = {}   # ticker -> time (one bet per round)
+_tries = {}
+_note = {}
+
+
+def _log_once(key, msg):
+    if _note.get(key) != msg:
+        _note[key] = msg
+        print(msg)
+
+
+def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
+    if not BTC92_ENABLED or flip_star.in_pause():
+        return
+    b = flip_star.board()
+    if not b:
+        return
+    now = time.time()
+    for t in [t for t, at in _done.items() if now - at > 1800]:
+        _done.pop(t, None)
+        _tries.pop(t, None)
+    for ticker, n in b.items():
+        if not ticker.upper().startswith("KXBTC15M-"):
+            continue
+        tl = n.get("tl")
+        if tl is None or tl > BTC92_WINDOW or tl < BTC92_MIN_SECONDS_LEFT:
+            continue
+        if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
+                or ticker in flip_star.external_owned[0]():
+            continue
+        if (n.get("p") or 0) < BTC92_MIN_WIN - 1e-9:
+            continue
+        side_name = n.get("side")
+        side = "bid" if side_name == "yes" else "ask"
+        try:
+            held, _ = flip_star._held_count(client, ticker)
+            if held != 0:
+                continue
+            mk = client.get_market(ticker).get("market", {})
+            ya, yb = float(mk.get("yes_ask_dollars")), float(mk.get("yes_bid_dollars"))
+            if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
+                continue
+            cost = ya if side == "bid" else 1 - yb
+            if cost < BTC92_MIN_PRICE - 1e-9 or cost > BTC92_MAX_PRICE + 1e-9:
+                _log_once(ticker, f"[BTC92] {ticker}: {side_name.upper()} at {n['p']*100:.0f}% but price {cost*100:.0f}c is "
+                                  f"outside {BTC92_MIN_PRICE*100:.0f}-{BTC92_MAX_PRICE*100:.0f}c -- waiting.")
+                continue
+            limit = min(BTC92_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
+        except Exception as e:
+            print(f"[BTC92] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
+            continue
+        _done[ticker] = now
+        print(f"[BTC92] ENTRY {ticker}: {side_name.upper()} at {n['p']*100:.0f}%, {int(tl)}s left -- "
+              f"{'DRY-RUN ' if dry_run else ''}buying {BTC92_SHARES} up to ${limit:.2f}")
+        if dry_run:
+            continue
+        try:
+            ensure_shard_funds(client, ticker, limit * BTC92_SHARES)
+            yes_price = limit if side == "bid" else round(1 - limit, 2)
+            client.create_order(ticker=ticker, client_order_id=f"pulse-surge-btc92-{uuid.uuid4()}", side=side,
+                                count=str(BTC92_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+        except Exception as e:
+            print(f"[BTC92] {ticker}: entry order failed ({e}).")
+            if "market_closed" in str(e) or "market_not_found" in str(e):
+                excluded_tickers.add(ticker)
+            elif "insufficient_balance" not in str(e):
+                _done.pop(ticker, None)
+            continue
+        filled, exposure = 0.0, 0.0
+        for _ in range(4):
+            try:
+                filled, exposure = flip_star._held_count(client, ticker)
+            except Exception:
+                pass
+            if filled != 0:
+                break
+            time.sleep(0.4)
+        count = abs(filled)
+        if count < 1e-9:
+            print(f"[BTC92] {ticker}: nothing filled at ${limit:.2f} (price moved) -- will retry while it qualifies.")
+            _tries[ticker] = _tries.get(ticker, 0) + 1
+            if _tries[ticker] < 3:
+                _done.pop(ticker, None)
+            continue
+        entry_price = exposure / count if exposure > 0 else cost
+        with state_lock:
+            state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
+                             "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": "BTC",
+                             "flip_star": False, "surge": True, "btc92": True}
+        print(f"[BTC92] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- stop at "
+              f"{BTC92_STOP_FRACTION*100:.0f}% (${entry_price*BTC92_STOP_FRACTION:.2f}), otherwise hold to the end.")

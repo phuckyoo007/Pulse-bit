@@ -28,6 +28,7 @@ import steady
 import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
+import btc92   # 7 Nov 11:30 CT (Matt): 5 shares on BTC at 92%+ in the last 2:00, 82% instant stop
 import closer   # 5 Nov 15:50 CT: data-built 'Closer' strategy -- PAPER only
 import pulse_v2
 import markets_paper
@@ -971,7 +972,10 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             state[ticker]["steady"] = True   # 2 Nov: a Steady bet re-adopted after a restart keeps its $1.00-only stop
         elif not is_manual and _placed_by_steady(client, ticker, "pulse-surge-"):
             state[ticker]["surge"] = True    # 3 Nov: a Surge bet re-adopted after a restart keeps its momentum exit
-            if _placed_by_steady(client, ticker, "pulse-surge-rising-"):
+            if _placed_by_steady(client, ticker, "pulse-surge-btc92-"):
+                state[ticker]["btc92"] = True   # 7 Nov: a BTC92 bet keeps its 82% stop after a restart
+                state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-rising-"):
                 state[ticker]["rising"] = True   # 6 Nov: a live RISING bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-rise-"):
@@ -1075,6 +1079,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("btc92"):
+                    # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
+                    if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"btc92_stop (held side {_hv*100:.0f}c <= {btc92.BTC92_STOP_FRACTION*100:.0f}% "
+                                                      f"of entry {position['entry_price']*100:.0f}c -- instant)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("rising"):
                     decision = ExitDecision(False, "")   # 6 Nov (Matt): live RISING bets are held to the end
                 elif position.get("rise"):
@@ -1493,6 +1504,10 @@ def run():
             closer.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[CLOSER-PAPER] pass failed (non-fatal): {e}")
+        try:
+            btc92.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[BTC92] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             rise.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)   # 5 Nov (Matt): rising-fastest rides
         except Exception as e:
