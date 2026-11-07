@@ -347,12 +347,14 @@ def board(force: bool = False) -> dict:
             print(f"[FLIP] dashboard data is {age:.0f}s old -- not trusting it.")
             return {}
         out = {}
+        _v = {}
         for m in st.get("markets", []):
             if m.get("kind") not in ("15m", "above/below"):   # 27 Oct 12:48 CT (Matthew): hourly crypto too
                 continue
             if m.get("kind") == "15m" and m.get("coin"):
                 try:
-                    _vol24[str(m["coin"]).upper()] = float(m.get("volume_24h") or 0)
+                    _c = str(m["coin"]).upper()   # a coin can have 2 live 15m markets -- keep its biggest
+                    _v[_c] = max(_v.get(_c, 0.0), float(m.get("volume_24h") or 0))
                 except Exception:
                     pass
             if _is_excluded(m.get("coin"), m.get("ticker")):
@@ -360,6 +362,9 @@ def board(force: bool = False) -> dict:
             n = _side_numbers(m, age, st.get("coins"))
             if n and n["ticker"]:
                 out[n["ticker"]] = n
+        if _v:
+            _vol24.clear()
+            _vol24.update(_v)
         _board["data"], _board["ok_at"] = out, now
         _update_momentum(st.get("coins") or {})
     except Exception as e:
@@ -401,6 +406,11 @@ def allowed_coins() -> set:
     if FLIP_ADD_TOP_VOLUME:
         ranked = sorted((c for c in _vol24 if c not in base and c not in FLIP_EXCLUDED_COINS), key=lambda c: -_vol24[c])
         extra = ranked[:FLIP_ADD_TOP_VOLUME]
+        # keep the current pick unless a new coin leads it by 25%+ (stops it flip-flopping between close coins)
+        cur = _vol_pick[0]
+        if cur and extra and extra != cur and all(c in _vol24 for c in cur) \
+                and _vol24[extra[0]] < 1.25 * _vol24[cur[0]]:
+            extra = cur
         if extra and extra != _vol_pick[0]:
             _vol_pick[0] = extra
             print(f"[COINS] buying {sorted(base)} + {extra} (next-biggest 24h volume: "
