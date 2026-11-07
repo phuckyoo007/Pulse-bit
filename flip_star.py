@@ -114,6 +114,7 @@ FLIP_ONLY_COINS = {"BTC"}   # 6 Nov 04:53 CT (Matt): Bitcoin only -- the other c
 FLIP_ADD_TOP_VOLUME = 1    # 7 Nov 14:10 CT (Matt): plus the coin with the 2nd-biggest 24h volume (picked live from the board)
 _vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
 _vol_pick = [None]
+_vhist = {}               # coin -> [(time, volume)] for the last 30 minutes
 FLIP_MAX_ROUND_FLIPS = 2   # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
@@ -362,9 +363,12 @@ def board(force: bool = False) -> dict:
             n = _side_numbers(m, age, st.get("coins"))
             if n and n["ticker"]:
                 out[n["ticker"]] = n
-        if _v:
-            _vol24.clear()
-            _vol24.update(_v)
+        # remember each coin's best volume over the last 30 min (a fresh 15m market starts at 0 every round)
+        for _c, _x in _v.items():
+            _vhist.setdefault(_c, []).append((now, _x))
+        for _c in list(_vhist):
+            _vhist[_c] = [(t, x) for t, x in _vhist[_c] if now - t <= 1800]
+            _vol24[_c] = max((x for _, x in _vhist[_c]), default=0.0)
         _board["data"], _board["ok_at"] = out, now
         _update_momentum(st.get("coins") or {})
     except Exception as e:
@@ -405,7 +409,9 @@ def allowed_coins() -> set:
     base = set(FLIP_ONLY_COINS)
     if FLIP_ADD_TOP_VOLUME:
         ranked = sorted((c for c in _vol24 if c not in base and c not in FLIP_EXCLUDED_COINS), key=lambda c: -_vol24[c])
-        extra = ranked[:FLIP_ADD_TOP_VOLUME]
+        extra = [c for c in ranked[:FLIP_ADD_TOP_VOLUME] if _vol24[c] > 0]
+        if not extra and _vol_pick[0]:
+            extra = _vol_pick[0]   # no volume data yet -- keep the last pick
         # keep the current pick unless a new coin leads it by 25%+ (stops it flip-flopping between close coins)
         cur = _vol_pick[0]
         if cur and extra and extra != cur and all(c in _vol24 for c in cur) \
