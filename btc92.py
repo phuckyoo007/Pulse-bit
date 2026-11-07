@@ -44,8 +44,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         _done.pop(t, None)
         _tries.pop(t, None)
     for ticker, n in b.items():
-        if not ticker.upper().startswith("KXBTC15M-"):
-            continue
+        if "15M" not in ticker.split("-")[0].upper() or flip_star.not_allowed_to_buy(n.get("coin"), ticker):
+            continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
         tl = n.get("tl")
         if tl is None or tl > BTC92_WINDOW or tl < BTC92_MIN_SECONDS_LEFT:
             continue
@@ -78,7 +78,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[BTC92] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
-        print(f"[BTC92] ENTRY {ticker}: {side_name.upper()} at {n['p']*100:.0f}%, {int(tl)}s left -- "
+        print(f"[BTC92] ENTRY {ticker} ({n.get('coin')}): {side_name.upper()} at {n['p']*100:.0f}%, {int(tl)}s left -- "
               f"{'DRY-RUN ' if dry_run else ''}buying {BTC92_SHARES} up to ${limit:.2f}")
         if dry_run:
             continue
@@ -113,7 +113,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         entry_price = exposure / count if exposure > 0 else cost
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
-                             "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": "BTC",
+                             "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n.get("coin"),
                              "flip_star": False, "surge": True, "btc92": True}
         print(f"[BTC92] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- stop at "
               f"{BTC92_STOP_FRACTION*100:.0f}% (${entry_price*BTC92_STOP_FRACTION:.2f}), otherwise hold to the end.")

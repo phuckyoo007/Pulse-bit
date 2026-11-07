@@ -111,6 +111,9 @@ NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
 FLIP_ONLY_COINS = {"BTC"}   # 6 Nov 04:53 CT (Matt): Bitcoin only -- the other coins are too thin / unstable
+FLIP_ADD_TOP_VOLUME = 1    # 7 Nov 14:10 CT (Matt): plus the coin with the 2nd-biggest 24h volume (picked live from the board)
+_vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
+_vol_pick = [None]
 FLIP_MAX_ROUND_FLIPS = 2   # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
@@ -347,6 +350,11 @@ def board(force: bool = False) -> dict:
         for m in st.get("markets", []):
             if m.get("kind") not in ("15m", "above/below"):   # 27 Oct 12:48 CT (Matthew): hourly crypto too
                 continue
+            if m.get("kind") == "15m" and m.get("coin"):
+                try:
+                    _vol24[str(m["coin"]).upper()] = float(m.get("volume_24h") or 0)
+                except Exception:
+                    pass
             if _is_excluded(m.get("coin"), m.get("ticker")):
                 continue
             n = _side_numbers(m, age, st.get("coins"))
@@ -387,6 +395,20 @@ def _is_excluded(coin, ticker) -> bool:
     return c in FLIP_EXCLUDED_COINS or any(t.startswith("KX" + x) for x in FLIP_EXCLUDED_COINS)
 
 
+def allowed_coins() -> set:
+    """FLIP_ONLY_COINS plus the FLIP_ADD_TOP_VOLUME biggest-volume other coins (excluded coins never count)."""
+    base = set(FLIP_ONLY_COINS)
+    if FLIP_ADD_TOP_VOLUME:
+        ranked = sorted((c for c in _vol24 if c not in base and c not in FLIP_EXCLUDED_COINS), key=lambda c: -_vol24[c])
+        extra = ranked[:FLIP_ADD_TOP_VOLUME]
+        if extra and extra != _vol_pick[0]:
+            _vol_pick[0] = extra
+            print(f"[COINS] buying {sorted(base)} + {extra} (next-biggest 24h volume: "
+                  + ", ".join(f"{c} {_vol24[c]:,.0f}" for c in ranked[:4]) + ")")
+        base |= set(extra)
+    return base
+
+
 def not_allowed_to_buy(coin, ticker) -> bool:
     """Real-money buying filter: excluded coins, plus anything outside FLIP_ONLY_COINS (6 Nov 04:53 CT, Matt: Bitcoin
     only -- best liquidity/volume). Board data, paper tests and exits still see every coin."""
@@ -394,7 +416,8 @@ def not_allowed_to_buy(coin, ticker) -> bool:
         return True
     c = str(coin or "").upper()
     t = str(ticker or "").upper()
-    return bool(FLIP_ONLY_COINS) and not (c in FLIP_ONLY_COINS or any(t.startswith("KX" + x + "15M") for x in FLIP_ONLY_COINS))
+    ok = allowed_coins()
+    return bool(FLIP_ONLY_COINS) and not (c in ok or any(t.startswith("KX" + x + "15M") for x in ok))
 
 
 def entry_signal(n: dict) -> bool:
