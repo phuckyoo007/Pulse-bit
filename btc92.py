@@ -20,6 +20,7 @@ BTC92_MIN_WIN = 0.92
 BTC92_MIN_PRICE = 0.92
 BTC92_MAX_PRICE = 0.98
 BTC92_STOP_FRACTION = 0.82  # instant stop at 82% of entry
+BTC92_MIN_SIGMA = 1.5       # 7 Nov 14:09 CT (Matt): only when 'To flip' is GREEN (2+) or YELLOW 1 (1.5-2 sigma)
 
 _done = {}   # ticker -> time (one bet per round)
 _tries = {}
@@ -52,6 +53,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 or ticker in flip_star.external_owned[0]():
             continue
         if (n.get("p") or 0) < BTC92_MIN_WIN - 1e-9:
+            continue
+        if (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:
+            _log_once(ticker + ":z", f"[BTC92] {ticker}: {n['p']*100:.0f}% but To flip is only {n.get('zs', 0):.1f} sigma "
+                                     f"(needs green or Yellow 1, {BTC92_MIN_SIGMA:.1f}+) -- not buying.")
             continue
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
