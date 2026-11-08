@@ -1117,7 +1117,15 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("rising"):
-                    decision = ExitDecision(False, "")   # 6 Nov (Matt): live RISING bets are held to the end
+                    # 8 Nov 11:40 CT (Matt, temporary): RISING bets take +$1.00 profit or cut a -$1.00 loss (net if sold now,
+                    # after the fee); otherwise held to the end. Set closer.RISING_TP_SL = 0 to go back to hold-to-end.
+                    _sg = _net_if_sold_now(position, market) if closer.RISING_TP_SL else None
+                    if _sg is not None and _sg >= closer.RISING_TP_SL - 1e-9:
+                        decision = ExitDecision(True, f"rising_take_profit (net +${_sg:.2f} if sold now -- cashing in)")
+                    elif _sg is not None and _sg <= -closer.RISING_TP_SL + 1e-9:
+                        decision = ExitDecision(True, f"rising_stop (net ${_sg:.2f} if sold now -- cutting the loss at ${closer.RISING_TP_SL:.2f})")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("rise"):
                     # 5 Nov 12:30 CT (Matt): Rise bets -- take the profit as soon as the momentum meter stops climbing
                     # (drops off its high since we bought) while the bet is in profit; stop at 90% of what was paid.
