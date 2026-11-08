@@ -110,8 +110,8 @@ NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
-FLIP_ONLY_COINS = {"BTC"}   # 6 Nov 04:53 CT (Matt): Bitcoin only -- the other coins are too thin / unstable
-FLIP_ADD_TOP_VOLUME = 1    # 7 Nov 14:10 CT (Matt): plus the coin with the 2nd-biggest 24h volume (picked live from the board)
+FLIP_ONLY_COINS = {"BTC", "XRP"}   # 7 Nov 20:36 CT (Matt): Bitcoin + XRP only
+FLIP_ADD_TOP_VOLUME = 0    # 7 Nov 20:36 CT (Matt): fixed BTC + XRP (no live volume pick)
 _vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
 _vol_pick = [None]
 _vhist = {}               # coin -> [(time, volume)] for the last 30 minutes

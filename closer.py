@@ -23,7 +23,7 @@ import flip_star
 import surge
 
 CLOSER_ENABLED = True
-RISING_LIVE = True
+RISING_LIVE = False   # 7 Nov 20:36 CT (Matt): real RISING bets off (paper tests keep running)
 RISING_SHARES = 2
 RISING_MAX_DAILY_LOSS = 2.00
 RULES = {
