@@ -24,12 +24,12 @@ FLIP_ENABLED = True
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_SHARES = 2                    # 6 Nov 02:52 CT (Matt): 2 shares per bet (was 5)
+FLIP_SHARES = 5                    # 7 Nov 18:48 CT (Matt): 5 shares per bet (was 2)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_MAX_SECONDS_LEFT = 240        # 22 Oct 20:43 CT (per Matthew): only the last 4 minutes of the window (was 6, before that 8)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_MAX_SECONDS_LEFT = 900        # 7 Nov 18:48 CT (Matt): can buy any time in the round as long as it meets the rules (was last 4 min)
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA_STRICT = 2.0     # 6 Nov 01:29 CT (Matt): GREEN only (2.0+ sigma to flip)
@@ -37,8 +37,8 @@ FLIP_ENTRY_SIGMA_LOOSE = 1.5      # 27 Oct 19:45 CT (Matthew): loosened to get m
 FLIP_ENTRY_SIGMA = FLIP_ENTRY_SIGMA_STRICT  # 28 Oct 01:48 CT: back to 1.8 (the 1.5 trial is over)
                                             # (entered below 1.8) loses, it reverts to 1.8 for good (see record_result)
 _SIGMA_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_sigma_breaker.json")
-FLIP_EXIT_SIGMA = 0.33              # 27 Oct 10:56 CT (Matthew): sell at RED 2 (<=0.33 sigma), instantly. Zones: RED 1 0.50-0.33, RED 2 0.33-0.17, RED 3 <0.17
-FLIP_EXIT_CONFIRM_SECONDS = 3      # sell immediately on red   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_EXIT_SIGMA = 0.50              # 7 Nov 18:48 CT (Matt): sell the moment the card turns RED (under 0.5 sigma to flip; was RED 2, 0.33)
+FLIP_EXIT_CONFIRM_SECONDS = 0      # 7 Nov 18:48 CT (Matt): sell immediately on red (was 3s)
 FLIP_EXIT_MAX_WIN = 1.01           # 20 Oct 15:32 CT: red alone sells (no win-% check)
 FLIP_EXIT_PANIC_WIN = 0.60         # (was 0.75) if win % falls under 60% the coin is really turning -- sell at once, no waiting   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_STOP_CONFIRM_SECONDS = 4      # (18 Oct 19:21: was 10) the 80% / 20c price stop must also hold this long (and win % be under 90%) -- thin books blip   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
