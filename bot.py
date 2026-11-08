@@ -647,6 +647,34 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
+STOP_BOARD_GATE = True        # 7 Nov 20:37 CT (Matt): price stops on bot bets only fire if the board agrees we're losing
+STOP_BOARD_MIN_WIN = 0.50     # ...i.e. the board gives OUR side under 50% (it has flipped). 7:45 PM BTC: price blipped 98c->~50c
+                              # for a few seconds, the stop sold at ~50c, the board never flipped and the round settled our way.
+_gate_note = {}
+
+
+def _board_says_holding(ticker, position):
+    """True when the board still gives the side we hold >= STOP_BOARD_MIN_WIN (so a price stop is just a blip).
+    No fresh board numbers -> False (the price stop is allowed to fire as before)."""
+    if not STOP_BOARD_GATE or position.get("manually_adopted"):
+        return False
+    try:
+        n = flip_star.board().get(ticker)
+    except Exception:
+        n = None
+    if not n or n.get("p") is None:
+        return False
+    held = "yes" if position.get("side") == "bid" else "no"
+    ours = n["p"] if n.get("side") == held else 1 - n["p"]
+    if ours >= STOP_BOARD_MIN_WIN - 1e-9:
+        msg = f"[STOP GATE] {ticker}: price stop hit but the board still gives our side {ours*100:.0f}% -- holding (blip)."
+        if _gate_note.get(ticker) != msg:
+            _gate_note[ticker] = msg
+            print(msg)
+        return True
+    return False
+
+
 HARD_BACKSTOP_FRACTION = 0.72                # was 0.78 -- kept below the 80% stop so it doesn't fire first
 HARD_BACKSTOP_CRASH_FRACTION = 0.50   # flip/ride positions: below this, sell instantly no matter what
 HARD_BACKSTOP_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
@@ -728,6 +756,8 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                               f"for {held:.0f}s, win {('?' if win is None else f'{win*100:.0f}%')} -- waiting "
                               f"(sells if it holds {HARD_BACKSTOP_CONFIRM_SECONDS}s with win under 90%, or at once on a crash).")
                         continue
+            if _board_says_holding(ticker, state.get(ticker) or {}):
+                continue
             _backstop_since.pop(ticker, None)
             print(f"HARD BACKSTOP TRIGGERED: {ticker} real value ${real_current_dollars:.2f} fell to/below "
                   f"{HARD_BACKSTOP_FRACTION*100:.0f}% of real bet ${real_bet_dollars:.2f} "
@@ -1257,6 +1287,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     decision = ExitDecision(True, f"profit_floor (was up ${position['peak_gain_per_contract']*float(position['count']):.2f}, "
                                                   f"now ${_gain_now:.2f} -- cashing out to keep at least ${PROFIT_FLOOR_KEEP_DOLLARS:.2f})")
             if not decision.should_exit:
+                continue
+            if decision.reason.startswith(("stop_", "btc92_stop", "instant_stop", "last_window_stop", "crash_stop",
+                                           "rise_stop", "surge_stop")) and _board_says_holding(ticker, position):
                 continue
             if decision.reason.startswith("instant_stop"):
                 print(f"[INSTANT STOP] {ticker} value {current_position_value(position, result.market_price):.2f} <= "
