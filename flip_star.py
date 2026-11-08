@@ -29,7 +29,7 @@ FLIP_SHARES = 4                    # 7 Nov 20:38 CT (Matt): 4 shares per bet
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_MAX_SECONDS_LEFT = 900        # 7 Nov 18:48 CT (Matt): can buy any time in the round as long as it meets the rules (was last 4 min)
+FLIP_MAX_SECONDS_LEFT = 300        # 7 Nov 23:07 CT (Matt): nothing above 80c unless in the last 5 minutes -- Flip Star only buys 94c+, so last 5:00 only
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA_STRICT = 2.0     # 6 Nov 01:29 CT (Matt): GREEN only (2.0+ sigma to flip)
