@@ -23,7 +23,7 @@ import flip_star
 import surge
 
 CLOSER_ENABLED = True
-RISING_LIVE = True   # 7 Nov 23:12 CT (Matt): real RISING bets back on (BTC + XRP, 2 shares, -$2/day stop)
+RISING_LIVE = False   # 8 Nov 12:42 CT (Matt): real RISING bets OFF (paper keeps running; open bets keep their exits)
 RISING_SHARES = 2   # 8 Nov 11:44 CT (Matt): back to 2 shares
 RISING_MAX_DAILY_LOSS = 2.00
 RISING_TP_SL = 1.00   # 8 Nov 11:40 CT (Matt, temporary): exit RISING bets at +$1.00 profit or -$1.00 loss (0 = hold to end)
