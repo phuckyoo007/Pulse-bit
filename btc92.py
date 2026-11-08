@@ -54,6 +54,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         if (n.get("p") or 0) < BTC92_MIN_WIN - 1e-9:
             continue
+        if n.get("flips") is None or n["flips"] > flip_star.FLIP_MAX_ROUND_FLIPS:
+            _log_once(ticker + ":f", f"[BTC92] {ticker}: {n['p']*100:.0f}% but it has flipped {n.get('flips')} times this round "
+                                     f"(max {flip_star.FLIP_MAX_ROUND_FLIPS}) -- not buying.")
+            continue   # 8 Nov 11:44 CT (Matt): XRP had flipped 13 times before the 6:13 AM XRP92 loss
         if (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:
             _log_once(ticker + ":z", f"[BTC92] {ticker}: {n['p']*100:.0f}% but To flip is only {n.get('zs', 0):.1f} sigma "
                                      f"(needs green or Yellow 1, {BTC92_MIN_SIGMA:.1f}+) -- not buying.")
