@@ -24,12 +24,12 @@ import surge
 
 CLOSER_ENABLED = True
 RISING_LIVE = True   # 7 Nov 23:12 CT (Matt): real RISING bets back on (BTC + XRP, 2 shares, -$2/day stop)
-RISING_SHARES = 5   # 8 Nov 11:29 CT (Matt): 5 shares (was 2)
+RISING_SHARES = 2   # 8 Nov 11:41 CT (Matt): back to 2 shares (temporary) while the +$1/-$1 exit is checked
 RISING_MAX_DAILY_LOSS = 2.00
 RISING_TP_SL = 1.00   # 8 Nov 11:40 CT (Matt, temporary): exit RISING bets at +$1.00 profit or -$1.00 loss (0 = hold to end)
 RULES = {
     "FLIPS":  {"shares": 5, "from": 180, "until": 120},
-    "RISING": {"shares": 5, "from": 900, "until": 30},   # 7 Nov 23:13 CT (Matt): whole round (was 2:00 -> 1:00 left)
+    "RISING": {"shares": 2, "from": 900, "until": 30},   # 7 Nov 23:13 CT (Matt): whole round (was 2:00 -> 1:00 left)
     "SWING":  {"shares": 2, "from": 900, "until": 300},
 }
 FLIPS_MIN_PRICE, FLIPS_MAX_PRICE, FLIPS_MAX_FLIPS, FLIPS_MAX_MOM_WITH = 0.70, 0.95, 2, 0.30
