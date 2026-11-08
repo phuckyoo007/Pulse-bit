@@ -312,7 +312,7 @@ TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet 
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 # 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
 # last 45s included. For a NO bet it is the NO price falling to 80% of entry (= YES rising the same amount).
-STOP_FRACTION_OF_ENTRY = 0.84   # 7 Nov 18:51 CT (Matt): instant stop at 84% (was 86%)
+STOP_FRACTION_OF_ENTRY = 0.86   # 8 Nov 16:26 CT (Matt): firm instant stop at 86% of entry (a 14% loss)
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
@@ -647,7 +647,7 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
         list(pool.map(_one, tickers))
 
 
-STOP_BOARD_GATE = True        # 7 Nov 20:37 CT (Matt): price stops on bot bets only fire if the board agrees we're losing
+STOP_BOARD_GATE = False       # 8 Nov 16:26 CT (Matt): OFF -- stops are firm (3:55 PM BTC: gate held a real crash, 97c->47c). Was: 7 Nov 20:37 CT (Matt): price stops on bot bets only fire if the board agrees we're losing
 STOP_BOARD_MIN_WIN = 0.50     # ...i.e. the board gives OUR side under 50% (it has flipped). 7:45 PM BTC: price blipped 98c->~50c
                               # for a few seconds, the stop sold at ~50c, the board never flipped and the round settled our way.
 _gate_note = {}
@@ -1299,6 +1299,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
             if decision.reason.startswith(("stop_", "btc92_stop", "instant_stop", "last_window_stop", "crash_stop",
                                            "rise_stop", "surge_stop")) and _board_says_holding(ticker, position):
                 continue
+            if decision.reason.startswith(("stop_", "btc92_stop", "instant_stop", "last_window_stop", "crash_stop",
+                                           "rise_stop", "surge_stop", "rising_stop")):
+                # 8 Nov 16:26 CT (Matt): firm stop -- sell at whatever buyers are paying right now, no 10c/25c steps
+                _exit_misses[ticker] = max(_exit_misses.get(ticker, 0), 2)
             if decision.reason.startswith("instant_stop"):
                 print(f"[INSTANT STOP] {ticker} value {current_position_value(position, result.market_price):.2f} <= "
                       f"{INSTANT_STOP_FRACTION*100:.0f}% of entry {position['entry_price']:.2f} -- selling now")

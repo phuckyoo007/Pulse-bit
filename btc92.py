@@ -19,7 +19,7 @@ BTC92_MIN_SECONDS_LEFT = 10
 BTC92_MIN_WIN = 0.92
 BTC92_MIN_PRICE = 0.92
 BTC92_MAX_PRICE = 0.98
-BTC92_STOP_FRACTION = 0.82  # instant stop at 82% of entry
+BTC92_STOP_FRACTION = 0.86  # 8 Nov 16:26 CT (Matt): firm instant stop at 86% of entry (was 82%)
 BTC92_MIN_SIGMA = 1.5       # 7 Nov 14:09 CT (Matt): only when 'To flip' is GREEN (2+) or YELLOW 1 (1.5-2 sigma)
 
 _done = {}   # ticker -> time (one bet per round)
