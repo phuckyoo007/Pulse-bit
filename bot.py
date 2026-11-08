@@ -294,7 +294,7 @@ _exit_misses = {}            # ticker -> unfilled exit tries in a row (widens th
 # EXIT_SPIKE_SPREAD apart) a sell waits up to EXIT_SPIKE_WAIT_SECONDS for buyers to come back, re-checking every loop.
 # After that it sells at whatever price is there, so a real crash still gets out a few seconds later.
 EXIT_SPIKE_SPREAD = 0.15
-EXIT_SPIKE_WAIT_SECONDS = 3
+EXIT_SPIKE_WAIT_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 EXIT_INSTANT_FLOOR = 0.20     # 26 Oct 17:08 CT (Matthew): at/under 20% OF ENTRY (not 20c) the sell goes out INSTANTLY -- no spike wait
 _spike_wait = {}             # ticker -> when the spike guard started holding this sell
 EXIT_MAX_SLIPPAGE = 0.10   # 19 Oct (SOL 19:25 CT): never pay more than 10c past the current quote to get out
@@ -329,7 +329,7 @@ PROFIT_LOCK_ENABLED = False
 PULSE_PCT_STOPS_ENABLED = False
 SIGMA_EXIT_MAX_HELD = 0.90
 RED_EXIT_SECONDS = 0          # 26 Oct 19:32 CT (Matthew): no wait -- sell the moment it reads RED 3 (<0.17 sigma)
-CRASH_CONFIRM_SECONDS = 4     # 25 Oct 13:27 CT (Matthew): 75c line is INSTANT; the 86%/87%-of-entry stops must hold 4s
+CRASH_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 
 
 STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in once their side reaches 99c
@@ -338,7 +338,7 @@ MANUAL_MOMENTUM_EXIT = 0.245        # 3 Nov 12:07 CT (Matt): manual bets sell wh
 MANUAL_TAKE_PROFIT_PCT = 0.33   # 3 Nov 18:59 CT (Matt): manual bets cash out once up 33% of what was paid (after fee, at the sell price) -- e.g. $15 -> $20
 MANUAL_STOP_PCT = 0.48             # 5 Nov 14:59 CT (Matt): manual bets sell if the held side falls to 48% of what was paid (was 80%)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
-MANUAL_DROP_CONFIRM_SECONDS = 3     # ...and the drop has held 3s (thin-book blips)
+MANUAL_DROP_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 MANUAL_CRASH_CENTS = 0.20           # ...and immediately when down 20c
 MANUAL_MOMENTUM_RED = 0.08   # 1 Nov (Matt): edge board momentum meter fill turns red at 0.08 against our side
 MANUAL_RED_SIGMA = 0.50   # 1 Nov (Matt): manual bets sell the instant their side turns red (RED 1 starts at 0.50)
@@ -649,7 +649,7 @@ def prefetch_markets(client: KalshiClient, tickers: list) -> None:
 
 HARD_BACKSTOP_FRACTION = 0.72                # was 0.78 -- kept below the 80% stop so it doesn't fire first
 HARD_BACKSTOP_CRASH_FRACTION = 0.50   # flip/ride positions: below this, sell instantly no matter what
-HARD_BACKSTOP_CONFIRM_SECONDS = 10    # flip/ride positions: otherwise the drop must hold this long (and win < 90%)
+HARD_BACKSTOP_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 _backstop_since = {}
 
 

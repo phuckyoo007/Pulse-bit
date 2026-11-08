@@ -52,7 +52,7 @@ TAKE_PROFIT_ENABLED = False
 TAKE_PROFIT_PRICE = 0.85      # sell when the held side's value reaches this
 MODEL_FLIP_ENABLED = True     # manual bets: sell if the model clearly favors the other side
 MODEL_FLIP_MIN_WIN = 0.35     # sell when the model's win chance for OUR side drops below this
-MODEL_FLIP_GRACE_SECONDS = 90
+MODEL_FLIP_GRACE_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 MODEL_FLIP_MIN_SECONDS_LEFT = 10
 
 
