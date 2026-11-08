@@ -28,12 +28,13 @@ RISING_SHARES = 2
 RISING_MAX_DAILY_LOSS = 2.00
 RULES = {
     "FLIPS":  {"shares": 5, "from": 180, "until": 120},
-    "RISING": {"shares": 2, "from": 120, "until": 60},
+    "RISING": {"shares": 2, "from": 900, "until": 30},   # 7 Nov 23:13 CT (Matt): whole round (was 2:00 -> 1:00 left)
     "SWING":  {"shares": 2, "from": 900, "until": 300},
 }
 FLIPS_MIN_PRICE, FLIPS_MAX_PRICE, FLIPS_MAX_FLIPS, FLIPS_MAX_MOM_WITH = 0.70, 0.95, 2, 0.30
 RISING_MIN_PRICE, RISING_MAX_PRICE = 0.50, 0.97
 RISING_LOOKBACK = (20, 45)
+EARLY_MAX_PRICE, EARLY_SECONDS = 0.80, 300   # 7 Nov 23:07 CT (Matt): nothing above 80c unless in the last 5 minutes
 SWING_MIN_PRICE, SWING_MAX_PRICE, SWING_DIP, SWING_TAKE = 0.55, 0.70, 0.10, 0.20
 
 _hist = {}     # ticker -> [(t, yes_ask, no_ask)]
@@ -140,6 +141,8 @@ def _live_rising(client, state, excluded, state_lock, dry_run, ensure_funds, tic
         cost = ya if side == "yes" else 1 - yb
         if not (RISING_MIN_PRICE < cost < RISING_MAX_PRICE):
             return
+        if tl > EARLY_SECONDS and cost > EARLY_MAX_PRICE + 1e-9:
+            return   # 7 Nov (Matt): nothing above 80c unless in the last 5 minutes
         limit = min(RISING_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
     except Exception as e:
         print(f"[RISING] {ticker}: couldn't read the live quote ({e}).")
@@ -227,7 +230,8 @@ def _scan(b, tag, live, now, client, state, excluded, state_lock, dry_run, ensur
             if old:
                 _, ya0, na0 = old[-1]
                 for side, px, px0 in (("yes", ya, ya0), ("no", na, na0)):
-                    if px is not None and px0 is not None and RISING_MIN_PRICE < px < RISING_MAX_PRICE and px > px0 + 1e-9:
+                    if (px is not None and px0 is not None and RISING_MIN_PRICE < px < RISING_MAX_PRICE and px > px0 + 1e-9
+                            and not (tl > EARLY_SECONDS and px > EARLY_MAX_PRICE + 1e-9)):
                         why = f"up from {px0*100:.0f}c ~{int(now - old[-1][0])}s ago"
                         _paper_buy("RISING" + tag, ("RISING" + tag, ticker), ticker, n, side, px, tl, why, now)
                         if live and RISING_LIVE and state is not None:
