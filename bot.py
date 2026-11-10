@@ -27,6 +27,7 @@ import kalshi_ws   # 5 Nov 12:25 CT (Matt): live streamed prices for the stop / 
 import steady
 import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
+import tickride   # 10 Nov 16:42 CT (Matt): PAPER ride-the-rise test on live tick prices (BTC/XRP)
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
 import btc92   # 7 Nov 11:30 CT (Matt): 5 shares on BTC at 92%+ in the last 2:00, 82% instant stop
 import closer   # 5 Nov 15:50 CT: data-built 'Closer' strategy -- PAPER only
@@ -1545,6 +1546,10 @@ def run():
             recorder.run(client)
         except Exception as e:
             print(f"[REC] snapshot failed (non-fatal): {e}")
+        try:
+            tickride.run()
+        except Exception as e:
+            print(f"[TICKRIDE-PAPER] pass failed (non-fatal): {e}")
         try:
             closer.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:

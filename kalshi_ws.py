@@ -23,6 +23,9 @@ MAX_QUIET_SECONDS = 25   # no message or heartbeat for this long -> treat the fe
 
 _quotes = {}        # ticker -> {"yb": float, "ya": float, "at": time}
 _want = set()       # tickers we want live prices for
+_held = set()       # ... because we hold them
+_extra = set()      # ... because a research module (tickride) asked for them
+_listeners = []     # fn(ticker, yes_bid, yes_ask, at) called on every price update (keep them fast)
 _subbed = set()     # tickers currently subscribed
 _lock = threading.Lock()
 _st = {"ws": None, "sid": None, "connected": False, "last_msg": 0.0, "next_id": 1, "started": False,
@@ -89,8 +92,28 @@ def reconcile(ticker: str, market: dict) -> None:
 
 def watch(tickers) -> None:
     """Tell the feed which markets to stream (call with the currently held tickers)."""
-    new = set(t for t in tickers if t)
     with _lock:
+        _held.clear()
+        _held.update(t for t in tickers if t)
+    _apply()
+
+
+def watch_extra(tickers) -> None:
+    """Extra markets to stream for research (tickride); kept alongside the held ones."""
+    with _lock:
+        _extra.clear()
+        _extra.update(t for t in tickers if t)
+    _apply()
+
+
+def add_listener(fn) -> None:
+    if fn not in _listeners:
+        _listeners.append(fn)
+
+
+def _apply():
+    with _lock:
+        new = _held | _extra
         if new == _want:
             return
         _want.clear()
@@ -181,6 +204,12 @@ def _on_message(ws, raw):
         if ya is not None:
             q["ya"] = ya
         q["at"] = time.time()
+        qb, qa, at = q.get("yb"), q.get("ya"), q["at"]
+    for fn in list(_listeners):
+        try:
+            fn(t, qb, qa, at)
+        except Exception:
+            pass
 
 
 def _on_open(ws):
