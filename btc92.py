@@ -52,13 +52,16 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
-        if (n.get("p") or 0) < BTC92_MIN_WIN - 1e-9:
+        _unf = n.get("flips") == 0   # 10 Nov 17:39 CT (Matt): a round that hasn't flipped can be bought at 80c+ / 80%+
+        _min_win = flip_star.UNFLIPPED_MIN if _unf else BTC92_MIN_WIN
+        _min_px = flip_star.UNFLIPPED_MIN if _unf else BTC92_MIN_PRICE
+        if (n.get("p") or 0) < _min_win - 1e-9:
             continue
         if n.get("flips") is None or n["flips"] > flip_star.FLIP_MAX_ROUND_FLIPS:
             _log_once(ticker + ":f", f"[BTC92] {ticker}: {n['p']*100:.0f}% but it has flipped {n.get('flips')} times this round "
                                      f"(max {flip_star.FLIP_MAX_ROUND_FLIPS}) -- not buying.")
             continue   # 8 Nov 11:44 CT (Matt): XRP had flipped 13 times before the 6:13 AM XRP92 loss
-        if (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:
+        if not _unf and (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:
             _log_once(ticker + ":z", f"[BTC92] {ticker}: {n['p']*100:.0f}% but To flip is only {n.get('zs', 0):.1f} sigma "
                                      f"(needs green or Yellow 1, {BTC92_MIN_SIGMA:.1f}+) -- not buying.")
             continue
@@ -73,9 +76,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb
-            if cost < BTC92_MIN_PRICE - 1e-9 or cost > BTC92_MAX_PRICE + 1e-9:
+            if cost < _min_px - 1e-9 or cost > BTC92_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[BTC92] {ticker}: {side_name.upper()} at {n['p']*100:.0f}% but price {cost*100:.0f}c is "
-                                  f"outside {BTC92_MIN_PRICE*100:.0f}-{BTC92_MAX_PRICE*100:.0f}c -- waiting.")
+                                  f"outside {_min_px*100:.0f}-{BTC92_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
             limit = min(BTC92_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:

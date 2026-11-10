@@ -436,11 +436,26 @@ def not_allowed_to_buy(coin, ticker) -> bool:
     return bool(FLIP_ONLY_COINS) and not (c in ok or any(t.startswith("KX" + x + "15M") for x in ok))
 
 
+UNFLIPPED_MIN = 0.80   # 10 Nov 17:39 CT (Matt): a round that hasn't flipped yet can be bought at 80c+ (and 80%+ win)
+
+
+def unflipped(n: dict) -> bool:
+    return n.get("flips") == 0
+
+
+def price_floor(n: dict) -> float:
+    if unflipped(n):
+        return UNFLIPPED_MIN
+    return FLIP_STAR_MIN_PRICE if n.get("lock") else FLIP_NONSTAR_MIN_PRICE
+
+
 def entry_signal(n: dict) -> bool:
     if not_allowed_to_buy(n.get("coin"), n.get("ticker")):
         return False
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
         return False
+    if unflipped(n):
+        return n["p"] >= UNFLIPPED_MIN - 1e-9   # 10 Nov 17:39 CT (Matt): hasn't flipped -> 80%+ is enough
     if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
         return False
     if n.get("flips") is None or n["flips"] > FLIP_MAX_ROUND_FLIPS:
@@ -643,10 +658,8 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             max_px = FLIP_MAX_PRICE if n["lock"] else FLIP_NONSTAR_MAX_PRICE
             if cost <= 0 or cost > max_px + 1e-9:
                 continue
-            if not n["lock"] and cost < FLIP_NONSTAR_MIN_PRICE - 1e-9:
-                continue   # no red star: only buy at 96c or higher
-            if n["lock"] and cost < FLIP_STAR_MIN_PRICE - 1e-9:
-                continue   # red star: only buy at the current floor or higher
+            if cost < price_floor(n) - 1e-9:
+                continue   # below the floor (80c if the round hasn't flipped, otherwise the star / non-star floor)
             limit_side_price = min(FLIP_FILL_CAP, round(cost + FLIP_SLIPPAGE, 2))   # quote must be <= max_px to qualify; fill may tick up
             rest = FLIP_RESTING_BIDS and bool(n["lock"]) and cost > FLIP_STAR_REST_PRICE + 1e-9
             if not rest and cost > FLIP_STAR_REST_PRICE + 1e-9 and not FLIP_RESTING_BIDS:
@@ -710,7 +723,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                     continue
                 _ya2, _yb2 = float(_ya2), float(_yb2)
                 live_cost = _ya2 if side == "bid" else 1 - _yb2
-                effective_floor = max(FLIP_STAR_MIN_PRICE if n["lock"] else FLIP_NONSTAR_MIN_PRICE, cost)
+                effective_floor = max(price_floor(n), cost)
             except Exception as e:
                 print(f"[FLIP] {ticker}: couldn't re-check the live quote ({e}) -- skipping this pass.")
                 continue
@@ -747,7 +760,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         # Lesson from BNB 15 Oct 20:12 CT: the quote passed the 96c floor, but by the time the order hit the book the
         # price had dropped and the order filled at 91c (a buy limit is only a MAXIMUM -- it happily fills cheaper).
         # A cheaper fill means the market just lost confidence, so anything under the floor is sold straight away.
-        floor = FLIP_STAR_MIN_PRICE if n["lock"] else FLIP_NONSTAR_MIN_PRICE
+        floor = price_floor(n)
         below_floor = entry_price < floor - 0.025   # 25 Oct: a 1-2c cheaper fill is fine (DOGE 93c was sold at 93c and then won)
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
