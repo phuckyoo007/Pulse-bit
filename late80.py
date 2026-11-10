@@ -22,7 +22,8 @@ import uuid
 import flip_star
 
 LATE80_ENABLED = True
-LATE80_SHARES = 3   # 10 Nov 16:46 CT (Matt)
+LATE80_SHARES = 3   # 10 Nov 16:46 CT (Matt) -- unused while LATE80_DOLLARS is set
+LATE80_DOLLARS = 0.11   # 10 Nov 17:35 CT (Matt): spend about 11c per bet (fractional shares, e.g. 0.12 share at 88c)
 LATE80_MAX_SECONDS_LEFT = 240
 LATE80_MIN_SECONDS_LEFT = 120
 LATE80_MIN_PRICE = 0.80
@@ -78,15 +79,28 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[LATE80] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
-        print(f"[LATE80] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), {int(tl)}s left -- "
-              f"{'DRY-RUN ' if dry_run else ''}buying {LATE80_SHARES} up to ${limit:.2f}")
+        qty = max(0.01, int(LATE80_DOLLARS / limit * 100) / 100) if LATE80_DOLLARS else float(LATE80_SHARES)
+        print(f"[LATE80] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), "
+              f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "
+              f"(about ${qty*limit:.2f})")
         if dry_run:
             continue
         try:
-            ensure_shard_funds(client, ticker, limit * LATE80_SHARES)
+            ensure_shard_funds(client, ticker, limit * qty)
             yes_price = limit if side == "bid" else round(1 - limit, 2)
-            client.create_order(ticker=ticker, client_order_id=f"pulse-surge-late80-{uuid.uuid4()}", side=side,
-                                count=str(LATE80_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+            coid = f"pulse-surge-late80-{uuid.uuid4()}"
+            try:
+                client.create_order(ticker=ticker, client_order_id=coid, side=side, count=f"{qty:.2f}",
+                                    price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+            except Exception as e1:
+                if "insufficient_balance" in str(e1) or "market_" in str(e1):
+                    raise
+                print(f"[LATE80] {ticker}: fractional 'count' refused ({e1}) -- retrying as count_fp.")
+                body = {"ticker": ticker, "client_order_id": f"pulse-surge-late80-{uuid.uuid4()}", "side": side,
+                        "count_fp": f"{qty:.2f}", "price": f"{yes_price:.2f}", "time_in_force": "immediate_or_cancel",
+                        "self_trade_prevention_type": "taker_at_cross"}
+                print(f"  [RAW ORDER BODY]: {body}")
+                client._request("POST", "/portfolio/events/orders", json_body=body)
         except Exception as e:
             print(f"[LATE80] {ticker}: entry order failed ({e}).")
             if "market_closed" in str(e) or "market_not_found" in str(e):
