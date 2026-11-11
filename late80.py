@@ -75,7 +75,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     for t in [t for t, at in _done.items() if now - at > 1800]:
         _done.pop(t, None)
         _tries.pop(t, None)
-    for ticker, n in b.items():
+    for ticker, n in flip_star.by_priority(b):
         if "15M" not in ticker.split("-")[0].upper() or flip_star.not_allowed_to_buy(n.get("coin"), ticker):
             continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
         tl = n.get("tl")

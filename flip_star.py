@@ -405,6 +405,31 @@ def _is_excluded(coin, ticker) -> bool:
     return c in FLIP_EXCLUDED_COINS or any(t.startswith("KX" + x) for x in FLIP_EXCLUDED_COINS)
 
 
+COIN_PRIORITY_FALLBACK = ["BTC", "XRP", "SOL", "BNB", "DOGE", "HYPE", "ZEC"]   # most liquid / steadiest first
+_prio_note = [None]
+
+
+def by_priority(b: dict):
+    """11 Nov 16:52 CT (Matt): bid on the more stable, higher-volume coins first -- board items sorted by the coin's
+    24h volume (biggest first), with a fixed liquidity order as tie-break / fallback. Matters when money is short:
+    the first coins in line get the bets."""
+    def key(item):
+        c = (item[1] or {}).get("coin")
+        fb = COIN_PRIORITY_FALLBACK.index(c) if c in COIN_PRIORITY_FALLBACK else 99
+        return (-float(_vol24.get(c, 0.0) or 0.0), fb)
+    items = sorted(b.items(), key=key)
+    order = []
+    for _, n in items:
+        c = (n or {}).get("coin")
+        if c and c not in order:
+            order.append(c)
+    if order != _prio_note[0]:
+        _prio_note[0] = order
+        print("[COINS] bidding order (highest volume first): " + ", ".join(
+            f"{c} {float(_vol24.get(c, 0) or 0):,.0f}" for c in order))
+    return items
+
+
 def allowed_coins() -> set:
     """FLIP_ONLY_COINS plus the FLIP_ADD_TOP_VOLUME biggest-volume other coins (excluded coins never count)."""
     base = set(FLIP_ONLY_COINS)
@@ -635,7 +660,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             _pause_note_at = time.time()
             print("[FLIP] 2:50-4:10 pm Central pause -- no new bets (stock-market close).")
         return
-    for ticker, n in b.items():
+    for ticker, n in by_priority(b):
         if not entry_signal(n):
             continue
         if ticker in state or ticker in excluded_tickers or ticker in _resting or ticker in _sold_red or ticker in external_owned[0]():
