@@ -315,7 +315,7 @@ TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet 
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 # 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
 # last 45s included. For a NO bet it is the NO price falling to 80% of entry (= YES rising the same amount).
-STOP_FRACTION_OF_ENTRY = 0.86   # 8 Nov 16:26 CT (Matt): firm instant stop at 86% of entry (a 14% loss)
+STOP_FRACTION_OF_ENTRY = 0.78   # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
@@ -1119,8 +1119,12 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
                 elif position.get("late80") or position.get("late60"):
-                    # 10 Nov 16:46 CT (Matt): LATE80 -- no stop, held to the end (stops cost money in testing)
-                    decision = ExitDecision(False, "")
+                    # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (was: no stop), otherwise held to the end
+                    if _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
+                        decision = ExitDecision(True, f"stop_{STOP_FRACTION_OF_ENTRY*100:.0f}pct_late (held side {_hv*100:.0f}c "
+                                                      f"<= {STOP_FRACTION_OF_ENTRY*100:.0f}% of entry {position['entry_price']*100:.0f}c -- instant)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:
