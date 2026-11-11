@@ -22,8 +22,8 @@ import uuid
 import flip_star
 
 LATE80_ENABLED = True
-LATE80_SHARES = 3   # 10 Nov 16:46 CT (Matt) -- unused while LATE80_DOLLARS is set
-LATE80_DOLLARS = 0.11   # 10 Nov 17:35 CT (Matt): spend about 11c per bet (fractional shares, e.g. 0.12 share at 88c)
+LATE80_SHARES = 2   # 10 Nov 18:02 CT (Matt): 2 shares like Flip Star and BTC92
+LATE80_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 LATE80_MAX_SECONDS_LEFT = 240
 LATE80_MIN_SECONDS_LEFT = 120
 LATE80_MIN_PRICE = 0.80
