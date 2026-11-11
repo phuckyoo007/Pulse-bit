@@ -29,6 +29,7 @@ import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import tickride   # 10 Nov 16:42 CT (Matt): PAPER ride-the-rise test on live tick prices (BTC/XRP)
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
+import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
 import late80   # 10 Nov 16:46 CT (Matt): board pick at 80-93c with 2:00-4:00 left, 3 shares, held to the end (no stop)
@@ -791,7 +792,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
-            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl)
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl); strategy_guard.record(state.get(ticker), pnl)
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -1387,7 +1388,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 pulse_v2.track_live_exit(ticker, position, exit_value)   # follow it to settlement: did the sell help?
             except Exception:
                 pass
-            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl)
+            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl)
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
             del state[ticker]
@@ -1445,7 +1446,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
         })
         newly_settled_pnl.append(pnl)
         print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
-        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl)
+        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl)
     if newly_settled_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
     return newly_settled_pnl
