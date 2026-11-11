@@ -9,7 +9,7 @@ import uuid
 import flip_star
 import kalshi_ws
 
-EARLY93_ENABLED = True
+EARLY93_ENABLED = False   # 11 Nov 15:23 CT (Matt): real OFF (negative today, -$1.16) -- paper keeps running in hour_study
 EARLY93_SHARES = 2   # 11 Nov 01:56 CT (Matt)
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
