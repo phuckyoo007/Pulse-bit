@@ -111,7 +111,7 @@ NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
-FLIP_ONLY_COINS = {"BTC", "XRP"}   # 7 Nov 20:36 CT (Matt): Bitcoin + XRP only
+FLIP_ONLY_COINS = {"BTC", "XRP", "SOL", "DOGE", "BNB", "HYPE", "ZEC"}   # 11 Nov 02:46 CT (Matt): all seven board coins (was BTC + XRP)
 FLIP_ADD_TOP_VOLUME = 0    # 7 Nov 20:36 CT (Matt): fixed BTC + XRP (no live volume pick)
 _vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
 _vol_pick = [None]
