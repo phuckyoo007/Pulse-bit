@@ -22,7 +22,7 @@ import uuid
 import flip_star
 
 LATE80_ENABLED = True
-LATE80_SHARES = 5   # 11 Nov 00:01 CT (Matt): 5 shares, no stop (was 10)
+LATE80_SHARES = 2   # 11 Nov 01:56 CT (Matt): 2 shares, no stop
 LATE80_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 LATE80_MAX_SECONDS_LEFT = 240
 LATE80_MIN_SECONDS_LEFT = 120

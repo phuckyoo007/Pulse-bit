@@ -29,6 +29,7 @@ import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import tickride   # 10 Nov 16:42 CT (Matt): PAPER ride-the-rise test on live tick prices (BTC/XRP)
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
+import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
 import late80   # 10 Nov 16:46 CT (Matt): board pick at 80-93c with 2:00-4:00 left, 3 shares, held to the end (no stop)
 import btc92   # 7 Nov 11:30 CT (Matt): 5 shares on BTC at 92%+ in the last 2:00, 82% instant stop
@@ -1006,7 +1007,10 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             state[ticker]["steady"] = True   # 2 Nov: a Steady bet re-adopted after a restart keeps its $1.00-only stop
         elif not is_manual and _placed_by_steady(client, ticker, "pulse-surge-"):
             state[ticker]["surge"] = True    # 3 Nov: a Surge bet re-adopted after a restart keeps its momentum exit
-            if _placed_by_steady(client, ticker, "pulse-surge-late60-"):
+            if _placed_by_steady(client, ticker, "pulse-surge-early93-"):
+                state[ticker]["early93"] = True   # 11 Nov: EARLY93 keeps its hold-to-the-end rule after a restart
+                state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-late60-"):
                 state[ticker]["late60"] = True   # 10 Nov: a LATE60 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-late80-"):
@@ -1119,7 +1123,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
-                elif position.get("late80") or position.get("late60"):
+                elif position.get("late80") or position.get("late60") or position.get("early93"):
                     # 11 Nov 00:01 CT (Matt): Follow the crowd -- NO stop, held to the end (78% stop removed)
                     decision = ExitDecision(False, "")
                 elif position.get("btc92"):
@@ -1570,6 +1574,10 @@ def run():
             btc92.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[BTC92] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            early93.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[EARLY93] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             late60.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:

@@ -14,9 +14,9 @@ import uuid
 import flip_star
 import surge
 
-LATE60_ENABLED = False   # 11 Nov 00:00 CT (Matt): dormant -- only Follow the crowd (LATE80) runs
-LATE60_PAPER = True   # 10 Nov 20:57 CT (Matt): PAPER only for now -- no real orders, results logged as [LATE60-PAPER]
-LATE60_SHARES = 5   # 10 Nov 19:14 CT (Matt): 5 shares (was 1)
+LATE60_ENABLED = True   # 11 Nov 01:56 CT (Matt): LIVE (top-3 strategy)
+LATE60_PAPER = False   # 11 Nov 01:56 CT (Matt): real orders
+LATE60_SHARES = 2   # 11 Nov 01:56 CT (Matt)
 LATE60_DOLLARS = 0
 LATE60_MIN_MOMENTUM = 0.05
 LATE60_MAX_SECONDS_LEFT = 240
