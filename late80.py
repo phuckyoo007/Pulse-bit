@@ -30,7 +30,7 @@ LATE80_MIN_PRICE = 0.80
 LATE80_MAX_PRICE = 0.93
 
 _done = {}   # ticker -> time (one bet per round)
-BREAKER_ARMED = True   # 11 Nov 00:00 CT (Matt): first LATE80 loss -> Flip Star + BTC92 on (LATE80 keeps running)
+BREAKER_ARMED = False   # 11 Nov 02:42 CT (Matt): Flip Star + BTC92 are on already -- breaker not needed
 _tries = {}
 _note = {}
 
