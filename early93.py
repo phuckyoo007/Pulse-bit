@@ -115,5 +115,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         with state_lock:
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n.get("coin"),
-                             "flip_star": False, "surge": True, "early93": True}
+                             "flip_star": False, "surge": True, "early93": True,
+                             "bad_fill": entry_price < EARLY93_MIN_PRICE - 0.05}
+        if entry_price < EARLY93_MIN_PRICE - 0.05:
+            print(f"[EARLY93] {ticker}: filled at ${entry_price:.2f}, more than 5c under the {EARLY93_MIN_PRICE*100:.0f}c minimum -- "
+                  f"price is falling fast, selling right away (11 Nov, Matt).")
         print(f"[EARLY93] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- no stop, held to the end.")

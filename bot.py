@@ -1125,7 +1125,12 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
                 elif position.get("late80") or position.get("late60") or position.get("early93"):
                     # 11 Nov 00:01 CT (Matt): Follow the crowd -- NO stop, held to the end (78% stop removed)
-                    decision = ExitDecision(False, "")
+                    # 11 Nov 02:03 CT (Matt): except a fill more than 5c under the strategy's minimum -> sell right away
+                    if position.get("bad_fill"):
+                        decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
+                                                      f"under the minimum -- price falling fast)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:
