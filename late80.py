@@ -30,24 +30,23 @@ LATE80_MIN_PRICE = 0.80
 LATE80_MAX_PRICE = 0.93
 
 _done = {}   # ticker -> time (one bet per round)
-BREAKER_ARMED = True   # 11 Nov 00:00 CT (Matt): first LATE80 loss -> LATE80 off, Flip Star + BTC92 on
+BREAKER_ARMED = True   # 11 Nov 00:00 CT (Matt): first LATE80 loss -> Flip Star + BTC92 on (LATE80 keeps running)
 _tries = {}
 _note = {}
 
 
 def record(position, pnl) -> None:
     """Circuit breaker: called for every closed bet. The first losing LATE80 bet trips it."""
-    global LATE80_ENABLED, BREAKER_ARMED
+    global BREAKER_ARMED
     try:
         if not isinstance(position, dict) or not position.get("late80") or not BREAKER_ARMED:
             return
         if float(pnl) < 0:
             import btc92
-            BREAKER_ARMED = False
-            LATE80_ENABLED = False
+            BREAKER_ARMED = False   # 11 Nov 00:02 CT (Matt): LATE80 stays ON after the breaker trips
             flip_star.FLIP_ENABLED = True
             btc92.BTC92_ENABLED = True
-            print(f"[BREAKER] TRIPPED -- Follow the crowd (LATE80) lost {float(pnl):+.2f}. LATE80 OFF; Flip Star and BTC92 ON.")
+            print(f"[BREAKER] TRIPPED -- Follow the crowd (LATE80) lost {float(pnl):+.2f}. LATE80 stays on; Flip Star and BTC92 now ON too.")
         else:
             print(f"[BREAKER] LATE80 bet closed {float(pnl):+.2f} -- breaker still armed (trips on the first loss).")
     except Exception as e:
