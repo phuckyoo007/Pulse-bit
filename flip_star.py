@@ -449,8 +449,13 @@ def price_floor(n: dict) -> float:
     return FLIP_STAR_MIN_PRICE if n.get("lock") else FLIP_NONSTAR_MIN_PRICE
 
 
+FLIP_15M_ONLY = True   # 11 Nov 02:45 CT (Matt): no hourly "above $X" markets -- 7 of Flip Star's last 8 losses were hourly
+
+
 def entry_signal(n: dict) -> bool:
     if not_allowed_to_buy(n.get("coin"), n.get("ticker")):
+        return False
+    if FLIP_15M_ONLY and "15M" not in str(n.get("ticker", "")).split("-")[0].upper():
         return False
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
         return False

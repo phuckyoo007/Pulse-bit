@@ -12,6 +12,7 @@ import time
 import uuid
 
 import flip_star
+import kalshi_ws
 import surge
 
 LATE60_ENABLED = True   # 11 Nov 01:56 CT (Matt): LIVE (top-3 strategy)
@@ -67,6 +68,11 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     if not b:
         return
     now = time.time()
+    try:
+        kalshi_ws.watch_extra([t for t, x in b.items() if "15M" in t.split("-")[0].upper()
+                               and not flip_star.not_allowed_to_buy(x.get("coin"), t)])
+    except Exception:
+        pass
     if LATE60_PAPER:
         _settle_paper(client, now)
     for t in [t for t, at in _done.items() if now - at > 1800]:
@@ -96,6 +102,17 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
                 continue
             cost = ya if side == "bid" else 1 - yb
+            # 11 Nov 02:45 CT (Matt): the REST quote can lag a fast-falling price (fills at 60-70c on an 80c+ check).
+            # Require the live stream's price too, and skip this pass if the two disagree by more than 2c.
+            _lq = kalshi_ws.quote(ticker)
+            if _lq is None:
+                _log_once(ticker + ":lq", f"[LATE60] {ticker}: no live price yet -- waiting for the stream before buying.")
+                continue
+            _lc = _lq[1] if side == "bid" else 1 - _lq[0]
+            if abs(_lc - cost) > 0.02 + 1e-9:
+                _log_once(ticker + ":lqd", f"[LATE60] {ticker}: live price {_lc*100:.0f}c vs lookup {cost*100:.0f}c -- price is "
+                                           f"moving fast, not buying this pass.")
+                continue
             if cost < LATE60_MIN_PRICE - 1e-9 or cost > LATE60_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[LATE60] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {LATE60_MIN_PRICE*100:.0f}-{LATE60_MAX_PRICE*100:.0f}c -- waiting.")
