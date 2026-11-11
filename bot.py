@@ -725,7 +725,9 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             current_value = market_price if side == "bid" else (1 - market_price)
             _pos0 = state.get(ticker) or {}
             if _pos0.get("manually_adopted") or _pos0.get("steady") or _pos0.get("surge"):
-                continue   # 1 Nov (Matt): manual bets only exit on their 12c / 20c drops (main exit loop)
+                continue
+            if _pos0.get("flip_star") and flip_star.FLIP_HOLD_TO_END and not _pos0.get("force_exit"):
+                continue   # 11 Nov 02:46 CT (Matt): Flip Star bets are held to the end -- no emergency backstop   # 1 Nov (Matt): manual bets only exit on their 12c / 20c drops (main exit loop)
             if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
                 # Pulse bets: backstop only fires on the 60/40 line or a 50% crash (same as the main exit loop).
                 if not (current_value <= real_entry_price * STOP_FRACTION_OF_ENTRY + 1e-9
@@ -1131,6 +1133,10 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                                       f"under the minimum -- price falling fast)")
                     else:
                         decision = ExitDecision(False, "")
+                elif (position.get("flip_star") and flip_star.FLIP_HOLD_TO_END) or \
+                        (position.get("btc92") and btc92.BTC92_HOLD_TO_END):
+                    # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no stop, no red-card sell, held to the end
+                    decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:

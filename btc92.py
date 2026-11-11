@@ -13,7 +13,8 @@ import uuid
 import flip_star
 
 BTC92_ENABLED = True   # 11 Nov 02:42 CT (Matt): back on
-BTC92_SHARES = 5   # 10 Nov 19:14 CT (Matt): 5 shares per bet (was 2)
+BTC92_SHARES = 1   # 11 Nov 02:46 CT (Matt): 1 share per bet (was 5)
+BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
 BTC92_MIN_SECONDS_LEFT = 10
 BTC92_MIN_WIN = 0.92
