@@ -29,6 +29,7 @@ import surge
 import rise   # 5 Nov 12:30 CT (Matt): 2 shares UP on the 2 coins rising fastest
 import tickride   # 10 Nov 16:42 CT (Matt): PAPER ride-the-rise test on live tick prices (BTC/XRP)
 import recorder   # 5 Nov 15:44 CT (Matt): logs board snapshots + round results for strategy research (read-only)
+import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history replay + live paper (read-only)
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
@@ -1583,6 +1584,10 @@ def run():
             recorder.run(client)
         except Exception as e:
             print(f"[REC] snapshot failed (non-fatal): {e}")
+        try:
+            hour_study.run(client)
+        except Exception as e:
+            print(f"[HOUR PAPER] pass failed (non-fatal): {e}")
         try:
             tickride.run()
         except Exception as e:
