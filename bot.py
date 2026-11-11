@@ -316,6 +316,7 @@ TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet 
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 # 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
 # last 45s included. For a NO bet it is the NO price falling to 80% of entry (= YES rising the same amount).
+HOLD_STOP_FRACTION = 0.40   # 11 Nov 11:15 CT (Matt): every bot bet sells the moment its side falls to 40% of what was paid
 BASE_PULSE_ENTRIES = False   # 11 Nov 00:00 CT (Matt): the original Pulse model entries are off
 STOP_FRACTION_OF_ENTRY = 0.78   # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
@@ -341,7 +342,7 @@ STEADY_TAKE_PROFIT_PRICE = 0.99   # 2 Nov 15:29 CT (Matt): Steady bets cash in o
 STEADY_MAX_LOSS_DOLLARS = 1.00   # 2 Nov 18:46 CT (Matt): a Steady bet is sold the moment it is down $1.00 (replaces the $2.50 floor)
 MANUAL_MOMENTUM_EXIT = 0.245        # 3 Nov 12:07 CT (Matt): manual bets sell when the momentum meter drops under 25 our way
 MANUAL_TAKE_PROFIT_PCT = 0.33   # 3 Nov 18:59 CT (Matt): manual bets cash out once up 33% of what was paid (after fee, at the sell price) -- e.g. $15 -> $20
-MANUAL_STOP_PCT = 0.48             # 5 Nov 14:59 CT (Matt): manual bets sell if the held side falls to 48% of what was paid (was 80%)
+MANUAL_STOP_PCT = 0.40   # 11 Nov 11:15 CT (Matt): 40% stop on every bet, manual too (was 48%)
 MANUAL_DROP_CENTS = 0.12            # 1 Nov (Matt): manual bets sell when down 12c from what was paid...
 MANUAL_DROP_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 MANUAL_CRASH_CENTS = 0.20           # ...and immediately when down 20c
@@ -1131,12 +1132,20 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if position.get("bad_fill"):
                         decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
                                                       f"under the minimum -- price falling fast)")
+                    elif _hv <= position["entry_price"] * HOLD_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= "
+                                                      f"{HOLD_STOP_FRACTION*100:.0f}% of entry {position['entry_price']*100:.0f}c -- instant)")
                     else:
                         decision = ExitDecision(False, "")
                 elif (position.get("flip_star") and flip_star.FLIP_HOLD_TO_END) or \
                         (position.get("btc92") and btc92.BTC92_HOLD_TO_END):
-                    # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no stop, no red-card sell, held to the end
-                    decision = ExitDecision(False, "")
+                    # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no red-card sell, held to the end
+                    # 11 Nov 11:15 CT (Matt): ...except the 40% stop
+                    if _hv <= position["entry_price"] * HOLD_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= "
+                                                      f"{HOLD_STOP_FRACTION*100:.0f}% of entry {position['entry_price']*100:.0f}c -- instant)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:
