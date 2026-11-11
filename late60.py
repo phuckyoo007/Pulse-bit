@@ -7,6 +7,7 @@ held to the end, won 83% of 65 test rounds (+11.7c/share; positive on all three 
   * With 4:00-2:00 left, buy LATE60_SHARES of the board's pick if it costs 60-80c and momentum for our side > +5.
   * One bet per round. Exit: NONE -- held to the end.
 """
+import math
 import time
 import uuid
 
@@ -14,6 +15,7 @@ import flip_star
 import surge
 
 LATE60_ENABLED = True
+LATE60_PAPER = True   # 10 Nov 20:57 CT (Matt): PAPER only for now -- no real orders, results logged as [LATE60-PAPER]
 LATE60_SHARES = 5   # 10 Nov 19:14 CT (Matt): 5 shares (was 1)
 LATE60_DOLLARS = 0
 LATE60_MIN_MOMENTUM = 0.05
@@ -25,12 +27,37 @@ LATE60_MAX_PRICE = 0.80
 _done = {}   # ticker -> time (one bet per round)
 _tries = {}
 _note = {}
+_paper = {}   # ticker -> {side, cost, qty, close_at}
+_ptot = {"n": 0, "won": 0, "pnl": 0.0}
 
 
 def _log_once(key, msg):
     if _note.get(key) != msg:
         _note[key] = msg
         print(msg)
+
+
+def _settle_paper(client, now):
+    for t, p in list(_paper.items()):
+        if now < p["close_at"] + 60:
+            continue
+        try:
+            res = client.get_market(t).get("market", {}).get("result")
+        except Exception:
+            continue
+        if res not in ("yes", "no"):
+            if now > p["close_at"] + 1800:
+                _paper.pop(t, None)
+            continue
+        _paper.pop(t, None)
+        won = res == p["side"]
+        fee = math.ceil(0.07 * p["cost"] * (1 - p["cost"]) * p["qty"] * 100 - 1e-9) / 100
+        pnl = ((1.0 if won else 0.0) - p["cost"]) * p["qty"] - fee
+        _ptot["n"] += 1
+        _ptot["won"] += 1 if won else 0
+        _ptot["pnl"] += pnl
+        print(f"[LATE60-PAPER] RESULT {t}: {'WON' if won else 'LOST'} {pnl:+.2f} -- LATE60 paper total {_ptot['n']} bets, "
+              f"{_ptot['won']} won, {_ptot['pnl']:+.2f}")
 
 
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
@@ -40,6 +67,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     if not b:
         return
     now = time.time()
+    if LATE60_PAPER:
+        _settle_paper(client, now)
     for t in [t for t, at in _done.items() if now - at > 1800]:
         _done.pop(t, None)
         _tries.pop(t, None)
@@ -49,7 +78,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         tl = n.get("tl")
         if tl is None or tl > LATE60_MAX_SECONDS_LEFT or tl < LATE60_MIN_SECONDS_LEFT:
             continue
-        if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
+        if ticker in _done or (not LATE60_PAPER and ticker in state) or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
         side_name = n.get("side")
@@ -58,9 +87,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if _mom is None or _mom <= LATE60_MIN_MOMENTUM + 1e-9:
             continue   # momentum must be moving our way
         try:
-            held, _ = flip_star._held_count(client, ticker)
-            if held != 0:
-                continue
+            if not LATE60_PAPER:
+                held, _ = flip_star._held_count(client, ticker)
+                if held != 0:
+                    continue
             mk = client.get_market(ticker).get("market", {})
             ya, yb = float(mk.get("yes_ask_dollars")), float(mk.get("yes_bid_dollars"))
             if ya - yb > flip_star.FLIP_MAX_SPREAD + 1e-9:
@@ -75,6 +105,11 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[LATE60] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        if LATE60_PAPER:
+            _paper[ticker] = {"side": side_name, "cost": cost, "qty": float(LATE60_SHARES), "close_at": now + float(tl)}
+            print(f"[LATE60-PAPER] BUY {ticker} ({n.get('coin')}): board pick {side_name.upper()} @ {cost*100:.0f}c, "
+                  f"momentum {_mom*100:+.0f}, {int(tl)}s left -- {LATE60_SHARES} shares (paper), held to the end")
+            continue
         qty = max(0.01, int(LATE60_DOLLARS / limit * 100) / 100) if LATE60_DOLLARS else float(LATE60_SHARES)
         print(f"[LATE60] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%, momentum {_mom*100:+.0f}), "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "
