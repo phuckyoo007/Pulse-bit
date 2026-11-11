@@ -90,7 +90,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             yes_price = limit if side == "bid" else round(1 - limit, 2)
             coid = f"pulse-surge-late80-{uuid.uuid4()}"
             try:
-                client.create_order(ticker=ticker, client_order_id=coid, side=side, count=f"{qty:.2f}",
+                client.create_order(ticker=ticker, client_order_id=coid, side=side, count=(str(int(qty)) if abs(qty - round(qty)) < 1e-9 else f"{qty:.2f}"),
                                     price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
             except Exception as e1:
                 if "insufficient_balance" in str(e1) or "market_" in str(e1):
