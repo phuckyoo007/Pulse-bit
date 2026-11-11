@@ -14,7 +14,7 @@ import flip_star
 import surge
 
 LATE60_ENABLED = True
-LATE60_SHARES = 1   # 10 Nov 18:03 CT (Matt)
+LATE60_SHARES = 5   # 10 Nov 19:14 CT (Matt): 5 shares (was 1)
 LATE60_DOLLARS = 0
 LATE60_MIN_MOMENTUM = 0.05
 LATE60_MAX_SECONDS_LEFT = 240
