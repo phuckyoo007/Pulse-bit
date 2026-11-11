@@ -22,7 +22,7 @@ import time
 import flip_star
 import kalshi_ws
 
-TICKRIDE_ENABLED = True
+TICKRIDE_ENABLED = False   # 11 Nov 00:00 CT (Matt): dormant -- only Follow the crowd (LATE80) runs
 TICKRIDE_COINS = {"BTC", "XRP"}
 TICKRIDE_SHARES = 2
 RISES_NEEDED = 3

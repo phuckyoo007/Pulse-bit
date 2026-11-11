@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 import flip_star
 import surge
 
-CLOSER_ENABLED = True
+CLOSER_ENABLED = False   # 11 Nov 00:00 CT (Matt): dormant -- only Follow the crowd (LATE80) runs
 RISING_LIVE = False   # 8 Nov 12:42 CT (Matt): real RISING bets OFF (paper keeps running; open bets keep their exits)
 RISING_SHARES = 2   # 8 Nov 11:44 CT (Matt): back to 2 shares
 RISING_MAX_DAILY_LOSS = 2.00

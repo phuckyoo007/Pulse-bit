@@ -25,7 +25,7 @@ import uuid
 
 import flip_star
 
-RIDE_ENABLED = True
+RIDE_ENABLED = False   # 11 Nov 00:00 CT (Matt): dormant -- only Follow the crowd (LATE80) runs
 RIDE_PAPER = True            # TRIAL MODE: no real orders. Rides are simulated on live Kalshi quotes and logged as [RIDE-PAPER]
                              # (paper positions are tracked here, NOT in Pulse's state, so they never block real flip-star trades)
 RIDE_SHARES = 1

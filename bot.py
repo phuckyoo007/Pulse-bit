@@ -315,6 +315,7 @@ TAKE_PROFIT_DOLLARS = 1.00   # 25 Oct 13:31 CT (Matthew): sell once a Pulse bet 
 LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 # 26 Oct 15:12 CT (Matthew): the instant stop is 80% OF WHAT WAS PAID (a 20% loss), not an 80c price -- all round,
 # last 45s included. For a NO bet it is the NO price falling to 80% of entry (= YES rising the same amount).
+BASE_PULSE_ENTRIES = False   # 11 Nov 00:00 CT (Matt): the original Pulse model entries are off
 STOP_FRACTION_OF_ENTRY = 0.78   # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
@@ -786,7 +787,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
-            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl)
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl)
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -1366,7 +1367,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 pulse_v2.track_live_exit(ticker, position, exit_value)   # follow it to settlement: did the sell help?
             except Exception:
                 pass
-            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl)
+            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl)
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
             del state[ticker]
@@ -1424,7 +1425,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
         })
         newly_settled_pnl.append(pnl)
         print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
-        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl)
+        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl)
     if newly_settled_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
     return newly_settled_pnl
@@ -2075,6 +2076,8 @@ def run():
                         continue
                 except Exception as _e:
                     print(f"ENTRY SAFETY: couldn't verify existing positions for {result.ticker} ({_e}) -- continuing.")
+                if not BASE_PULSE_ENTRIES:
+                    continue   # 11 Nov 00:00 CT (Matt): dormant -- only LATE80 places bets
                 if flip_star.FLIP_HALTED:
                     print(f"  KILL SWITCH: {result.ticker} -- Pulse is halted after 3 losses, not entering (restart to resume).")
                     continue
