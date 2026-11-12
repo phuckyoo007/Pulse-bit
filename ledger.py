@@ -85,7 +85,8 @@ def run(client) -> None:
         return
     _last[0] = now
     try:
-        bal = client.get_balance()
+        time.sleep(0.5)
+        bal = client.get_balance_cached(max_age=30)
         cash = _money(bal, "balance")
         pv = _money(bal, "portfolio_value")
         if pv is None:
@@ -125,4 +126,5 @@ def run(client) -> None:
               f"{datetime.fromtimestamp(_start['t'], timezone.utc).strftime('%H:%MZ')}: ${since:+.2f} "
               f"(deposits in that time ${dep_since:.2f} not counted)")
     except Exception as e:
-        print(f"[LEDGER] check failed ({e}).")
+        _last[0] = now - LEDGER_EVERY + 60   # try again in a minute (startup is busy -- Kalshi rate limit)
+        print(f"[LEDGER] check failed ({e}) -- retrying in 60s.")
