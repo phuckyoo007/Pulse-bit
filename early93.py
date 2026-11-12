@@ -10,7 +10,7 @@ import flip_star
 import kalshi_ws
 
 EARLY93_ENABLED = True   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
-EARLY93_SHARES = 1   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
+EARLY93_SHARES = 2   # 12 Nov 08:43 CT (Matt): everything at 2 shares
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
 EARLY93_MIN_SECONDS_LEFT = 240
