@@ -22,7 +22,7 @@ import uuid
 import flip_star
 import kalshi_ws
 
-LATE80_ENABLED = True
+LATE80_ENABLED = False   # 11 Nov 23:41 CT (Matt): Follow the crowd real money OFF (paper keeps running in hour_study)
 LATE80_SHARES = 2   # 11 Nov 01:56 CT (Matt): 2 shares, no stop
 LATE80_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 LATE80_MAX_SECONDS_LEFT = 240
