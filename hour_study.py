@@ -80,7 +80,7 @@ def _ts(s):
 def _table(title, agg):
     """agg: {(rule, hour): [n, won, pnl]}"""
     print(f"[HOUR STUDY] ===== {title} (P/L at {HS_SHARES} shares, held to the end; hour = Central time the round ended) =====")
-    for name, *_ in RULES:
+    for name in [r[0] for r in RULES] + sorted({k[0] for k in agg} - {r[0] for r in RULES}):
         rows = [(h, agg.get((name, h))) for h in range(24)]
         tot_n = sum(r[0] for _, r in rows if r)
         tot_p = sum(r[2] for _, r in rows if r)
@@ -176,6 +176,10 @@ def _history(client):
             _combo()
         except Exception as e:
             print(f"[COMBO] crashed ({e}).")
+        try:
+            _pockets()
+        except Exception as e:
+            print(f"[POCKET] crashed ({e}).")
         for name, *_ in RULES:
             parts = [f"{k[1]} {v[2]:+.2f} ({v[1]}/{v[0]})" for k, v in sorted(days.items()) if k[0] == name]
             print(f"[HOUR STUDY] {name} by day: " + "  |  ".join(parts))
@@ -279,12 +283,102 @@ def _combo():
     print("[COMBO] done -- anything positive on several hundred bets across most days is worth live paper testing.")
 
 
+def _pockets():
+    """12 Nov 16:02 CT (Matt): at ~3:00 left, pick YES/NO from what the OTHER coins are doing, cross-check against every
+    past close, and find the conditions where that bet never misses.
+    Cells = (decision time, how many of the other 6 coins point the same way, this coin's price bucket for that side,
+    whether this coin's own last-2-minute move agrees). Found on the first ~10 days (TRAIN), then checked on the last
+    ~4 days it never saw (TEST) -- a pocket that only looks perfect by luck falls apart on TEST."""
+    if not _rounds:
+        return
+    ts = sorted(_rounds)
+    cut = ts[0] + (ts[-1] - ts[0]) * 0.7
+    cells = {}
+    for tl in (180, 120):
+        for close_ts, coins in _rounds.items():
+            now, moves = {}, {}
+            for coin, (c, res) in coins.items():
+                a, b = _at(c, tl), _at(c, tl + 120)
+                if a:
+                    now[coin] = (a[0] + a[1]) / 2
+                if a and b:
+                    moves[coin] = now[coin] - (b[0] + b[1]) / 2
+            if len(now) < 5:
+                continue
+            for coin, mid in now.items():
+                others = [v for k, v in now.items() if k != coin]
+                ups = sum(1 for v in others if v > 0.5)
+                downs = len(others) - ups
+                up = ups > downs
+                k = max(ups, downs)
+                if k < 4:
+                    continue
+                c, res = coins[coin]
+                ya, yb = _at(c, tl)
+                cost = ya if up else 1 - yb
+                if not (0.30 <= cost <= 0.97):
+                    continue
+                mv = moves.get(coin)
+                own = "own-agrees" if mv is not None and (mv > 0.01 if up else mv < -0.01) else \
+                      ("own-against" if mv is not None and (mv < -0.01 if up else mv > 0.01) else "own-flat")
+                bucket = int(cost * 100) // 5 * 5
+                won = res == ("yes" if up else "no")
+                pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                part = 0 if close_ts < cut else 1
+                v = cells.setdefault((tl, k, bucket, own), [[0, 0, 0.0], [0, 0, 0.0]])[part]
+                v[0] += 1
+                v[1] += 0 if won else 1
+                v[2] += pnl
+    print(f"[POCKET] ===== pick the side the other coins point to; TRAIN = first 70% of {HS_DAYS} days, TEST = last 30% =====")
+    rows = [(k, v) for k, v in cells.items() if v[0][0] >= 25]
+    rows.sort(key=lambda kv: -kv[1][0][2] / kv[1][0][0])
+    for (tl, k, bucket, own), (tr, te) in rows[:25]:
+        print(f"[POCKET] {tl // 60}:{tl % 60:02d} left | {k}/6 others agree | {bucket}-{bucket + 4}c | {own} || TRAIN {tr[0]} bets, "
+              f"lost {tr[1]}, ${tr[2]:+.2f} || TEST {te[0]} bets, lost {te[1]}, ${te[2]:+.2f}")
+    never = [(k, v) for k, v in cells.items() if v[0][0] >= 20 and v[0][1] == 0]
+    print(f"[POCKET] cells that NEVER lost in TRAIN (20+ bets): {len(never)}")
+    for (tl, k, bucket, own), (tr, te) in sorted(never, key=lambda kv: -kv[1][0][2]):
+        print(f"[POCKET] NEVER-LOST {tl // 60}:{tl % 60:02d} left | {k}/6 | {bucket}-{bucket + 4}c | {own} || TRAIN {tr[0]} "
+              f"bets ${tr[2]:+.2f} || TEST {te[0]} bets, lost {te[1]}, ${te[2]:+.2f}")
+    print("[POCKET] done.")
+
+
 # ---------------- live paper ----------------
 _started = [False]
 _open = {}     # (rule, ticker) -> dict
 _agg = {}      # (rule, hour) -> [n, won, pnl]
 _last_table_hour = [None]
 _mid_prev = {}  # ticker -> (side, mid)
+
+
+def _last3(b, now):
+    rounds = {}
+    for ticker, n in b.items():
+        if "15M" not in ticker.split("-")[0].upper() or n.get("coin") not in HS_COINS or n.get("tl") is None:
+            continue
+        if n.get("side") not in ("yes", "no") or n.get("yes_ask") is None or n.get("no_ask") is None:
+            continue
+        rounds.setdefault(ticker.split("-")[1], []).append((ticker, n))
+    for rid, items in rounds.items():
+        for ticker, n in items:
+            tl = float(n["tl"])
+            if not (120 <= tl <= 180):
+                continue
+            others = [m for t, m in items if t != ticker]
+            for want in ("yes", "no"):
+                agree = sum(1 for m in others if m.get("side") == want)
+                cost = float(n["yes_ask"]) if want == "yes" else float(n["no_ask"])
+                p_side = (n.get("p") or 0) if n.get("side") == want else 1 - (n.get("p") or 0)
+                if not (0.50 <= cost <= 0.92):
+                    continue
+                rules = {
+                    "L3-CROWD5": agree >= 5,                              # 5+ of the other 6 point this way
+                    "L3-VALUE": p_side - cost >= 0.05,                    # board's win % at least 5 pts above the price
+                    "L3-BOTH": agree >= 5 and p_side - cost >= 0.05,
+                }
+                for name, ok in rules.items():
+                    if ok and (name, ticker) not in _open:
+                        _open[(name, ticker)] = {"side": want, "cost": cost, "close_at": now + tl, "coin": n.get("coin")}
 
 
 def run(client) -> None:
@@ -319,6 +413,8 @@ def run(client) -> None:
                                          and n["flips"] <= flip_star.FLIP_MAX_ROUND_FLIPS):
                 continue
             _open[(name, ticker)] = {"side": side, "cost": cost, "close_at": now + tl, "coin": n.get("coin")}
+    # 12 Nov 16:01 CT (Matt): last ~3 minutes, use the edge board + what the other coins are doing
+    _last3(b, now)
     # settle
     for (name, ticker), p in list(_open.items()):
         if now < p["close_at"] + 60:
