@@ -16,10 +16,11 @@ import time
 from datetime import datetime, timezone, timedelta
 
 LEDGER_ENABLED = True
-LEDGER_EVERY = 900   # 15 min
+LEDGER_EVERY = 300   # 5 min (12 Nov: explain each balance change quickly)
 _last = [0.0]
 _start = {}          # {"t": ts, "value": dollars, "dep": dollars, "wd": dollars}
 _logged_raw = [False]
+_prev = {}          # last check: value, dep, wd, t
 
 
 def _d(v):
@@ -129,6 +130,23 @@ def run(client) -> None:
         alltime = value - dep_total + wd_total
         if not _start:
             _start.update({"t": now, "value": value, "dep": dep_total, "wd": wd_total})
+        if _prev:
+            # 12 Nov 11:14 CT (Matt): explain every change in the account -- deposit vs. withdrawal vs. trading
+            d_val = value - _prev["value"]
+            d_dep = dep_total - _prev["dep"]
+            d_wd = wd_total - _prev["wd"]
+            trading = d_val - d_dep + d_wd
+            if abs(d_val) >= 0.01 or d_dep or d_wd:
+                mins = (now - _prev["t"]) / 60
+                parts = []
+                if d_dep:
+                    parts.append(f"DEPOSIT +${d_dep:.2f}")
+                if d_wd:
+                    parts.append(f"WITHDRAWAL -${d_wd:.2f}")
+                parts.append(f"TRADING {'WON' if trading > 0 else 'LOST' if trading < 0 else 'flat'} ${trading:+.2f}")
+                print(f"[LEDGER] last {mins:.0f} min: account ${_prev['value']:.2f} -> ${value:.2f} ({d_val:+.2f}) = "
+                      + " + ".join(parts))
+        _prev.update({"t": now, "value": value, "dep": dep_total, "wd": wd_total})
         dep_since = dep_total - _start["dep"]
         wd_since = wd_total - _start["wd"]
         since = (value - _start["value"]) - dep_since + wd_since
