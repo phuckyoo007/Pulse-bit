@@ -13,7 +13,7 @@ Read-only -- never trades.
 """
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 LEDGER_ENABLED = True
 LEDGER_EVERY = 900   # 15 min
@@ -113,6 +113,16 @@ def run(client) -> None:
             print("[LEDGER] raw balance fields: " + json.dumps(bal)[:400])
             if deps:
                 print("[LEDGER] raw deposit example: " + json.dumps(deps[0])[:400])
+        if not _start:   # once per start: show the latest deposits/withdrawals exactly as Kalshi reports them
+            def _row(d):
+                t = _ts(d.get("created_ts") or d.get("created_time"))
+                when = (datetime.fromtimestamp(t, timezone.utc) - timedelta(hours=6)).strftime("%b %d %H:%M CT") if t else "?"
+                return f"{when} ${(_money(d, 'amount') or 0):.2f} {d.get('type', '')} {d.get('status', '')}"
+            recent = sorted(deps, key=lambda d: -_ts(d.get("created_ts") or d.get("created_time")))[:15]
+            print("[LEDGER] latest deposits: " + " | ".join(_row(d) for d in recent))
+            if wds:
+                recent_w = sorted(wds, key=lambda d: -_ts(d.get("created_ts") or d.get("created_time")))[:10]
+                print("[LEDGER] latest withdrawals: " + " | ".join(_row(d) for d in recent_w))
         dep_total, dep_rows = _sum_moves(deps)
         wd_total, wd_rows = _sum_moves(wds)
         value = (cash or 0.0) + pv
