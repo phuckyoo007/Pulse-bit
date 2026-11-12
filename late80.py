@@ -20,6 +20,7 @@ import time
 import uuid
 
 import flip_star
+import strategy_guard
 import kalshi_ws
 
 LATE80_ENABLED = False   # 12 Nov 11:34 CT (Matt): off -- losing real money, paper and 14-day study
@@ -84,6 +85,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
+        if not strategy_guard.can_enter(ticker, state, "LATE80"):
+            continue   # 12 Nov: one coin per round + cooldown after a loss
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
         try:
@@ -115,6 +118,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[LATE80] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        strategy_guard.note_entry(ticker)
         qty = max(0.01, int(LATE80_DOLLARS / limit * 100) / 100) if LATE80_DOLLARS else float(LATE80_SHARES)
         print(f"[LATE80] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "

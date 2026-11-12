@@ -47,10 +47,10 @@ FLIP_USE_80_STOP = False   # 20 Oct 00:18 CT: 80c stop OFF (sold SOL/ETH dips th
 FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
-FLIP_NONSTAR_MIN_PRICE = 0.94      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_NONSTAR_MIN_PRICE = 0.96   # 12 Nov: 94-95c lost on paper, 96c+ won;      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_NONSTAR_MIN_WIN = 0.98        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_MIN_WIN_ALL = 0.98            # 28 Oct 01:48 CT: back to 98% minimum win   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_STAR_MIN_PRICE = 0.94         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_STAR_MIN_PRICE = 0.96   # 12 Nov: 94-95c lost on paper, 96c+ won;         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
                                    # (HYPE -0.08, BTC -10.90, ETH -3.30 within seconds of filling). Buy at the live price only.
@@ -484,8 +484,6 @@ def unflipped(n: dict) -> bool:
 
 
 def price_floor(n: dict) -> float:
-    if unflipped(n):
-        return UNFLIPPED_MIN
     return FLIP_STAR_MIN_PRICE if n.get("lock") else FLIP_NONSTAR_MIN_PRICE
 
 
@@ -499,8 +497,8 @@ def entry_signal(n: dict) -> bool:
         return False
     if n["zs"] is None or n["tl"] is None or not (FLIP_MIN_SECONDS_LEFT <= n["tl"] <= FLIP_MAX_SECONDS_LEFT):
         return False
-    if unflipped(n):
-        return n["p"] >= UNFLIPPED_MIN - 1e-9   # 10 Nov 17:39 CT (Matt): hasn't flipped -> 80%+ is enough
+    # 12 Nov 14:54 CT (Matt: "Flip Star was working when we had it at a 98% minimum"): the 10 Nov 80% shortcut for
+    # unflipped rounds is gone -- every Flip Star bet needs 98%+ win again.
     if n["p"] < FLIP_MIN_WIN_ALL - 1e-9:
         return False
     if n.get("flips") is None or n["flips"] > FLIP_MAX_ROUND_FLIPS:
@@ -686,6 +684,9 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
             continue
         if _falling_against(n):
             continue
+        import strategy_guard
+        if not strategy_guard.can_enter(ticker, state, "FLIP"):
+            continue   # 12 Nov: one coin per round + cooldown after a loss
         side = "bid" if n["side"] == "yes" else "ask"
         try:
             held, _ = _held_count(client, ticker)
@@ -730,11 +731,13 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
                     excluded_tickers.add(ticker)
                 continue
             _attempts[ticker] = _attempts.get(ticker, 0) + 1
+            strategy_guard.note_entry(ticker)
             _resting[ticker] = {"order_id": _find_order_id(client, ticker, coid, resp), "side": side, "n": n,
                                 "placed": time.time()}
             continue
 
         _attempts[ticker] = _attempts.get(ticker, 0) + 1
+        strategy_guard.note_entry(ticker)
         why = "RED STAR" if n["lock"] else (f"To flip GREEN {n['zs']:.1f} sigma" if n["zs"] >= 2 else f"To flip YELLOW 1 (bid zone) {n['zs']:.1f} sigma")
         want, boosted = shares_for(n["coin"])
         print(f"[FLIP] ENTRY {ticker} ({n['coin']}): {why}, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "

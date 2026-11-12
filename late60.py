@@ -12,6 +12,7 @@ import time
 import uuid
 
 import flip_star
+import strategy_guard
 import kalshi_ws
 import surge
 
@@ -87,6 +88,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or (not LATE60_PAPER and ticker in state) or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
+        if not LATE60_PAPER and not strategy_guard.can_enter(ticker, state, "LATE60"):
+            continue   # 12 Nov: one coin per round + cooldown after a loss
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
         _mom = surge.momentum_for(ticker, side_name)
@@ -122,6 +125,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[LATE60] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        if not LATE60_PAPER:
+            strategy_guard.note_entry(ticker)
         if LATE60_PAPER:
             _paper[ticker] = {"side": side_name, "cost": cost, "qty": float(LATE60_SHARES), "close_at": now + float(tl)}
             print(f"[LATE60-PAPER] BUY {ticker} ({n.get('coin')}): board pick {side_name.upper()} @ {cost*100:.0f}c, "

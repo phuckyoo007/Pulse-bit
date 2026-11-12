@@ -35,6 +35,10 @@ RULES = [
     ("LATE60", 120, 240, 0.60, 0.80, True),
     ("FLIP94", 10, 300, 0.94, 0.98, False),
     ("BTC92", 10, 120, 0.92, 0.98, False),
+    # 12 Nov 14:53 CT: the tightened versions now used for real money
+    ("EARLY96", 240, 420, 0.96, 0.98, False),
+    ("BTC94", 10, 120, 0.94, 0.98, False),
+    ("FLIP98", 10, 300, 0.96, 0.98, False),   # live paper also needs 98%+ win and <=2 flips (see run)
 ]
 
 
@@ -209,6 +213,9 @@ def run(client) -> None:
             if (name, ticker) in _open or not (tl0 <= tl <= tl1 and lo <= cost <= hi):
                 continue
             if rising and not (prev and prev[0] == side and cost > prev[1] + 1e-9):
+                continue
+            if name == "FLIP98" and not ((n.get("p") or 0) >= 0.98 - 1e-9 and n.get("flips") is not None
+                                         and n["flips"] <= flip_star.FLIP_MAX_ROUND_FLIPS):
                 continue
             _open[(name, ticker)] = {"side": side, "cost": cost, "close_at": now + tl, "coin": n.get("coin")}
     # settle

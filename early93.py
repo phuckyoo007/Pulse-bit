@@ -7,6 +7,7 @@ import time
 import uuid
 
 import flip_star
+import strategy_guard
 import kalshi_ws
 
 EARLY93_ENABLED = True   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
@@ -14,7 +15,7 @@ EARLY93_SHARES = 2   # 12 Nov 08:43 CT (Matt): everything at 2 shares
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
 EARLY93_MIN_SECONDS_LEFT = 240
-EARLY93_MIN_PRICE = 0.93
+EARLY93_MIN_PRICE = 0.96   # 12 Nov 14:53 CT: was 93c -- 93-95c lost -$2.19 on paper, 96c+ +$2.34
 EARLY93_MAX_PRICE = 0.98
 
 _done = {}   # ticker -> time (one bet per round)
@@ -52,6 +53,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
+        if not strategy_guard.can_enter(ticker, state, "EARLY93"):
+            continue   # 12 Nov: one coin per round + cooldown after a loss
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
         try:
@@ -83,6 +86,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[EARLY93] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        strategy_guard.note_entry(ticker)
         qty = max(0.01, int(EARLY93_DOLLARS / limit * 100) / 100) if EARLY93_DOLLARS else float(EARLY93_SHARES)
         print(f"[EARLY93] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "

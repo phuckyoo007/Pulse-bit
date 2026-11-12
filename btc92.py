@@ -11,6 +11,7 @@ import time
 import uuid
 
 import flip_star
+import strategy_guard
 
 BTC92_ENABLED = True   # 11 Nov 02:42 CT (Matt): back on
 BTC92_SHARES = 2   # 12 Nov 08:43 CT (Matt): everything at 2 shares
@@ -18,7 +19,7 @@ BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
 BTC92_MIN_SECONDS_LEFT = 10
 BTC92_MIN_WIN = 0.92
-BTC92_MIN_PRICE = 0.92
+BTC92_MIN_PRICE = 0.94   # 12 Nov 14:53 CT: was 92c -- 92-93c lost -$2.72 on paper, 94c+ +$8.75
 BTC92_MAX_PRICE = 0.98
 BTC92_STOP_FRACTION = 0.78  # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (was 86%)
 BTC92_MIN_SIGMA = 1.5       # 7 Nov 14:09 CT (Matt): only when 'To flip' is GREEN (2+) or YELLOW 1 (1.5-2 sigma)
@@ -53,16 +54,18 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
+        if not strategy_guard.can_enter(ticker, state, "BTC92"):
+            continue   # 12 Nov: one coin per round + cooldown after a loss
         _unf = n.get("flips") == 0   # 10 Nov 17:39 CT (Matt): a round that hasn't flipped can be bought at 80c+ / 80%+
-        _min_win = flip_star.UNFLIPPED_MIN if _unf else BTC92_MIN_WIN
-        _min_px = flip_star.UNFLIPPED_MIN if _unf else BTC92_MIN_PRICE
+        _min_win = BTC92_MIN_WIN   # 12 Nov: no more 80% shortcut for unflipped rounds
+        _min_px = BTC92_MIN_PRICE
         if (n.get("p") or 0) < _min_win - 1e-9:
             continue
         if n.get("flips") is None or n["flips"] > flip_star.FLIP_MAX_ROUND_FLIPS:
             _log_once(ticker + ":f", f"[BTC92] {ticker}: {n['p']*100:.0f}% but it has flipped {n.get('flips')} times this round "
                                      f"(max {flip_star.FLIP_MAX_ROUND_FLIPS}) -- not buying.")
             continue   # 8 Nov 11:44 CT (Matt): XRP had flipped 13 times before the 6:13 AM XRP92 loss
-        if not _unf and (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:
+        if (n.get("zs") if n.get("zs") is not None else -9) < BTC92_MIN_SIGMA - 1e-9:   # 12 Nov: sigma check for every round
             _log_once(ticker + ":z", f"[BTC92] {ticker}: {n['p']*100:.0f}% but To flip is only {n.get('zs', 0):.1f} sigma "
                                      f"(needs green or Yellow 1, {BTC92_MIN_SIGMA:.1f}+) -- not buying.")
             continue
@@ -86,6 +89,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[BTC92] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
+        strategy_guard.note_entry(ticker)
         print(f"[BTC92] ENTRY {ticker} ({n.get('coin')}): {side_name.upper()} at {n['p']*100:.0f}%, {int(tl)}s left -- "
               f"{'DRY-RUN ' if dry_run else ''}buying {BTC92_SHARES} up to ${limit:.2f}")
         if dry_run:
