@@ -142,6 +142,7 @@ def _history(client):
                     continue
                 candles.append((close_ts - int(t), ya, yb))
             candles.sort(key=lambda x: -x[0])   # most time left first
+            _rounds.setdefault(close_ts, {})[coin] = (candles, result)
             hour = _ct_hour(close_ts)
             day = (datetime.fromtimestamp(close_ts, timezone.utc) - timedelta(hours=6)).strftime("%m-%d")
             for name, tl0, tl1, lo, hi, rising in RULES:
@@ -171,11 +172,111 @@ def _history(client):
             if done % 500 == 0:
                 print(f"[HOUR STUDY] history: {done}/{len(markets)} rounds replayed.")
         _table(f"HISTORY, last {HS_DAYS} days, {done} rounds", agg)
+        try:
+            _combo()
+        except Exception as e:
+            print(f"[COMBO] crashed ({e}).")
         for name, *_ in RULES:
             parts = [f"{k[1]} {v[2]:+.2f} ({v[1]}/{v[0]})" for k, v in sorted(days.items()) if k[0] == name]
             print(f"[HOUR STUDY] {name} by day: " + "  |  ".join(parts))
     except Exception as e:
         print(f"[HOUR STUDY] history crashed ({e}).")
+
+
+# ---------------- COMBO: all coins together (12 Nov 15:10 CT, Matt) ----------------
+# "Can't you use collective pieces of data to see which direction it's going?"
+# For every round of the last HS_DAYS days, at a decision time (5:00 or 3:00 left) combine:
+#   * this coin's own direction over the last 2 minutes (its YES price rising = heading UP),
+#   * how many of the OTHER six coins moved the same way over those 2 minutes,
+#   * whether Bitcoin agrees,
+#   * where the other coins already stand (their YES prices above/below 50c).
+# Then buy the predicted side at its real ask price (only 35-85c, where a win pays enough) and hold to the end.
+# Logged as [COMBO] lines: bets, % won, average price paid, P/L at HS_SHARES shares after fees, and EDGE
+# (% won minus average price -- positive means the combined read beat the market's own odds).
+_rounds = {}   # close_ts -> {coin: (candles [(secs_left, yes_ask, yes_bid)], result)}
+
+
+def _at(candles, tl):
+    """(yes_ask, yes_bid) at the last candle with at least tl seconds left, within 60s."""
+    best = None
+    for t, ya, yb in candles:
+        if tl <= t <= tl + 60:
+            best = (ya, yb)
+    return best
+
+
+def _combo():
+    variants = {}
+    for tl in (300, 180):
+        for close_ts, coins in _rounds.items():
+            mids_now, moves = {}, {}
+            for coin, (c, res) in coins.items():
+                a, b = _at(c, tl), _at(c, tl + 120)
+                if not a or not b:
+                    continue
+                mids_now[coin] = (a[0] + a[1]) / 2
+                moves[coin] = mids_now[coin] - (b[0] + b[1]) / 2
+            if len(moves) < 5:
+                continue
+            for coin, mv in moves.items():
+                if abs(mv) < 0.02:
+                    continue
+                up = mv > 0
+                others = [m for k, m in moves.items() if k != coin]
+                agree = sum(1 for m in others if (m > 0.01 if up else m < -0.01))
+                btc = moves.get("BTC")
+                btc_ok = coin == "BTC" or (btc is not None and (btc > 0.01 if up else btc < -0.01))
+                o_lvl = [v for k, v in mids_now.items() if k != coin]
+                crowd_lvl = sum(1 for v in o_lvl if (v > 0.5 if up else v < 0.5))
+                c, res = coins[coin]
+                ya, yb = _at(c, tl)
+                cost = ya if up else 1 - yb
+                if not (0.35 <= cost <= 0.85):
+                    continue
+                won = res == ("yes" if up else "no")
+                pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                # Matt 12 Nov 15:10: "jumping on at 55 and getting off at 65 is as much of a win as a 96 closing at 100"
+                # SCALP exit: sell at the bid once it is +10c over what we paid; cut it at -10c; otherwise hold to the end.
+                # (1-minute candles, so real fills could be a little worse.)
+                s_pnl, s_won = pnl, won
+                for t, a2, b2 in c:
+                    if t >= tl:
+                        continue
+                    bid = b2 if up else 1 - a2
+                    if bid >= cost + 0.10 or bid <= cost - 0.10:
+                        s_pnl = (bid - cost) * HS_SHARES - _fee(cost, HS_SHARES) - _fee(bid, HS_SHARES)
+                        s_won = s_pnl > 0
+                        break
+                rules = {
+                    "A own+4of6": agree >= 4,
+                    "B own+5of6+BTC": agree >= 5 and btc_ok,
+                    "C own+6of6+BTC": agree >= 6 and btc_ok,
+                    "D laggard (crowd 5of6 already there, this coin behind)": crowd_lvl >= 5 and agree >= 4 and cost <= 0.65,
+                }
+                for rname, ok in rules.items():
+                    if not ok:
+                        continue
+                    for ex, e_pnl, e_won in (("hold", pnl, won), ("scalp+10/-10", s_pnl, s_won)):
+                        for band in ("all", "35-60c", "60-85c"):
+                            if band == "35-60c" and cost > 0.60:
+                                continue
+                            if band == "60-85c" and cost <= 0.60:
+                                continue
+                            v = variants.setdefault((tl, rname, ex, band), [0, 0, 0.0, 0.0, set()])
+                            v[0] += 1
+                            v[1] += 1 if e_won else 0
+                            v[2] += e_pnl
+                            v[3] += cost
+                            v[4].add(datetime.fromtimestamp(close_ts, timezone.utc).strftime("%m-%d"))
+    print(f"[COMBO] ===== all coins together, last {HS_DAYS} days ({len(_rounds)} rounds), {HS_SHARES} shares, after fees =====")
+    for (tl, rname, ex, band), (n, w, p, c, days) in sorted(variants.items()):
+        if n == 0:
+            continue
+        edge = w / n - c / n
+        print(f"[COMBO] {tl // 60}:00 left | {rname} | {ex} | {band}: {n} bets, won {w / n * 100:.1f}%, avg price "
+              f"{c / n * 100:.1f}c, {'EDGE ' + format(edge * 100, '+.1f') + ' pts, ' if ex == 'hold' else ''}"
+              f"P/L ${p:+.2f} (${p / n:+.3f} a bet)")
+    print("[COMBO] done -- anything positive on several hundred bets across most days is worth live paper testing.")
 
 
 # ---------------- live paper ----------------
