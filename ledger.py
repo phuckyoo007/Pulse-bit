@@ -35,6 +35,10 @@ def _money(obj, *keys):
         if obj.get(k + "_dollars") is not None:
             return _d(obj.get(k + "_dollars"))
     for k in keys:
+        if obj.get(k + "_cents") is not None:
+            v = _d(obj.get(k + "_cents"))
+            return None if v is None else v / 100.0
+    for k in keys:
         if obj.get(k) is not None:
             v = _d(obj.get(k))
             return None if v is None else v / 100.0
@@ -42,6 +46,8 @@ def _money(obj, *keys):
 
 
 def _ts(s):
+    if isinstance(s, (int, float)):
+        return float(s)
     try:
         return datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp()
     except Exception:
@@ -71,7 +77,7 @@ def _sum_moves(items):
         amt = _money(d, "amount")
         if amt is None:
             continue
-        t = _ts(d.get("created_time") or d.get("created_ts") or d.get("timestamp"))
+        t = _ts(d.get("created_ts") or d.get("created_time") or d.get("timestamp"))
         total += amt
         rows.append((t, amt))
     return total, rows
