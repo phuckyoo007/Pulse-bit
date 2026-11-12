@@ -34,6 +34,7 @@ import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history repl
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
+import last3   # 12 Nov 16:11 CT (Matt): last-3-minutes crowd + board edge, real money 1 share
 import late80   # 10 Nov 16:46 CT (Matt): board pick at 80-93c with 2:00-4:00 left, 3 shares, held to the end (no stop)
 import btc92   # 7 Nov 11:30 CT (Matt): 5 shares on BTC at 92%+ in the last 2:00, 82% instant stop
 import closer   # 5 Nov 15:50 CT: data-built 'Closer' strategy -- PAPER only
@@ -1019,6 +1020,9 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             elif _placed_by_steady(client, ticker, "pulse-surge-late60-"):
                 state[ticker]["late60"] = True   # 10 Nov: a LATE60 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-last3-"):
+                state[ticker]["last3"] = True   # 12 Nov: LAST3 keeps its hold-to-the-end rule after a restart
+                state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-late80-"):
                 state[ticker]["late80"] = True   # 10 Nov: a LATE80 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
@@ -1129,7 +1133,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
-                elif position.get("late80") or position.get("late60") or position.get("early93"):
+                elif position.get("late80") or position.get("late60") or position.get("early93") or position.get("last3"):
                     # 11 Nov 00:01 CT (Matt): Follow the crowd -- NO stop, held to the end (78% stop removed)
                     # 11 Nov 02:03 CT (Matt): except a fill more than 5c under the strategy's minimum -> sell right away
                     if position.get("bad_fill"):
@@ -1613,6 +1617,10 @@ def run():
             late60.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[LATE60] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            last3.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[LAST3] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             late80.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:

@@ -22,7 +22,7 @@ _off = set()
 
 
 def _which(p: dict):
-    for flag in ("early93", "late80", "late60", "btc92", "rising", "rise"):
+    for flag in ("early93", "last3", "late80", "late60", "btc92", "rising", "rise"):
         if p.get(flag):
             return flag
     if p.get("flip_star") and not p.get("manually_adopted"):
@@ -31,9 +31,11 @@ def _which(p: dict):
 
 
 def _switch_off(name):
-    import btc92, early93, flip_star, late60, late80
+    import btc92, early93, flip_star, last3, late60, late80
     if name == "early93":
         early93.EARLY93_ENABLED = False
+    elif name == "last3":
+        last3.LAST3_ENABLED = False
     elif name == "late80":
         late80.LATE80_ENABLED = False
     elif name == "late60":
