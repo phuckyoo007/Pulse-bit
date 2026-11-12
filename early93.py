@@ -17,6 +17,9 @@ EARLY93_MAX_SECONDS_LEFT = 420
 EARLY93_MIN_SECONDS_LEFT = 240
 EARLY93_MIN_PRICE = 0.96   # 12 Nov 14:53 CT: was 93c -- 93-95c lost -$2.19 on paper, 96c+ +$2.34
 EARLY93_MAX_PRICE = 0.98
+# 12 Nov 15:58 CT (Matt: tighten on every loss). All 7 Early settle losses since 11 Nov were bought with the board at
+# 90-95% win; none of the ~50 bought at 96%+ lost. And 3 losers FILLED under the minimum (91, 92, 90c) = price falling.
+EARLY93_MIN_WIN = 0.96
 
 _done = {}   # ticker -> time (one bet per round)
 _tries = {}
@@ -55,6 +58,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         if not strategy_guard.can_enter(ticker, state, "EARLY93"):
             continue   # 12 Nov: one coin per round + cooldown after a loss
+        if (n.get("p") or 0) < EARLY93_MIN_WIN - 1e-9:
+            continue   # 12 Nov: board must give 96%+ (every loss was 90-95%)
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
         try:
@@ -137,8 +142,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             state[ticker] = {"count": count, "entry_price": entry_price, "side": side, "dry_run": False,
                              "peak_gain_per_contract": 0.0, "entry_time": time.time(), "coin": n.get("coin"),
                              "flip_star": False, "surge": True, "early93": True,
-                             "bad_fill": entry_price < EARLY93_MIN_PRICE - 0.05}
-        if entry_price < EARLY93_MIN_PRICE - 0.05:
-            print(f"[EARLY93] {ticker}: filled at ${entry_price:.2f}, more than 5c under the {EARLY93_MIN_PRICE*100:.0f}c minimum -- "
+                             "bad_fill": entry_price < EARLY93_MIN_PRICE - 0.005}   # 12 Nov: ANY fill under the minimum = falling -> sell now
+        if entry_price < EARLY93_MIN_PRICE - 0.005:
+            print(f"[EARLY93] {ticker}: filled at ${entry_price:.2f}, under the {EARLY93_MIN_PRICE*100:.0f}c minimum -- "
                   f"price is falling fast, selling right away (11 Nov, Matt).")
         print(f"[EARLY93] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- no stop, held to the end.")
