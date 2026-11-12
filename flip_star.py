@@ -405,6 +405,20 @@ def _is_excluded(coin, ticker) -> bool:
     return c in FLIP_EXCLUDED_COINS or any(t.startswith("KX" + x) for x in FLIP_EXCLUDED_COINS)
 
 
+# 12 Nov 08:41 CT (Matt: "implement improvements"): real-money betting hours per strategy (Central time, hour the bet
+# is placed). Only hours that made money in BOTH the 14-day history replay AND the live paper test since 11 Nov 3 PM.
+# A strategy not listed here can bet at any hour.
+STRATEGY_HOURS = {"btc92": {0, 4, 21, 23}}
+
+
+def hour_ok(strategy: str) -> bool:
+    hrs = STRATEGY_HOURS.get(strategy)
+    if not hrs:
+        return True
+    from datetime import datetime, timezone, timedelta
+    return (datetime.now(timezone.utc) - timedelta(hours=6)).hour in hrs
+
+
 COIN_PRIORITY_FALLBACK = ["BTC", "XRP", "SOL", "BNB", "DOGE", "HYPE", "ZEC"]   # most liquid / steadiest first
 _prio_note = [None]
 

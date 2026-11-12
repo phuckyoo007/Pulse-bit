@@ -35,8 +35,8 @@ def _log_once(key, msg):
 
 
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
-    if not BTC92_ENABLED or flip_star.in_pause():
-        return
+    if not BTC92_ENABLED or flip_star.in_pause() or not flip_star.hour_ok("btc92"):
+        return   # 12 Nov: only in its good hours (flip_star.STRATEGY_HOURS)
     b = flip_star.board()
     if not b:
         return

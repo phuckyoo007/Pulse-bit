@@ -15,7 +15,7 @@ import flip_star
 import kalshi_ws
 import surge
 
-LATE60_ENABLED = True   # 11 Nov 01:56 CT (Matt): LIVE (top-3 strategy)
+LATE60_ENABLED = False   # 12 Nov 08:41 CT (Matt: improvements): real OFF -- worst on paper (-$10.45, 69% won) and in the 14-day study (-$101.61); paper keeps running
 LATE60_PAPER = False   # 11 Nov 01:56 CT (Matt): real orders
 LATE60_SHARES = 1   # 12 Nov 02:04 CT (Matt): 1 share (was 2)
 LATE60_DOLLARS = 0
