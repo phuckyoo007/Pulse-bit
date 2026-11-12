@@ -20,7 +20,7 @@ import uuid
 
 import requests
 
-FLIP_ENABLED = False   # 11 Nov 11:26 CT (Matt): OFF temporarily until it can be made positive (-$4.47 since 2:47 AM)
+FLIP_ENABLED = True   # 12 Nov 15:08 CT (Matt): back ON, tighter -- 98% win always, 96-98c, flipped <=1 time, 1 share
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
@@ -116,7 +116,7 @@ FLIP_ADD_TOP_VOLUME = 0    # 7 Nov 20:36 CT (Matt): fixed BTC + XRP (no live vol
 _vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
 _vol_pick = [None]
 _vhist = {}               # coin -> [(time, volume)] for the last 30 minutes
-FLIP_MAX_ROUND_FLIPS = 2   # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
+FLIP_MAX_ROUND_FLIPS = 1   # 12 Nov 15:08 CT (Matt: tighter) was 2;  # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
@@ -158,7 +158,7 @@ def _trip_boost(pnl, how):
 LOOSE_STRICT = {"win": 0.98, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
 LOOSE_VALUES = {"win": 0.97, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
-LOOSE_ACTIVE = not os.path.exists(_LOOSE_BREAKER_FILE)
+LOOSE_ACTIVE = False   # 12 Nov 15:08 CT: was re-arming at 97% on every deploy -- strict 98% always now
 
 
 def _apply_settings(v):

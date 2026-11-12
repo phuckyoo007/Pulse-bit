@@ -5,6 +5,7 @@ started), that strategy is switched off until the bot is restarted. Other strate
 import time
 
 STRATEGY_MAX_LOSS = 4.00
+MAX_LOSS_BY_STRATEGY = {"flip_star": 2.00}   # 12 Nov 15:08 CT: Flip Star switches off sooner (-$2)
 
 # 12 Nov 14:53 CT (Matt: "tighten every strategy so the losses don't happen again").
 # Paper + real records 11-12 Nov: most losses come in rounds where SEVERAL coins crash together (all 7 coins move
@@ -92,8 +93,8 @@ def record(position, pnl) -> None:
             _cool_until[0] = time.time() + COOLDOWN_AFTER_LOSS
             print(f"[GUARD] {name} lost {float(pnl):+.2f} -- pausing ALL new real bets for {COOLDOWN_AFTER_LOSS // 60} min.")
         print(f"[LOSS LIMIT] {name} bet closed {float(pnl):+.2f} -- {name} net {_pnl[name]:+.2f} since start "
-              f"(switches off at -${STRATEGY_MAX_LOSS:.2f}).")
-        if name not in _off and _pnl[name] <= -STRATEGY_MAX_LOSS + 1e-9:
+              f"(switches off at -${MAX_LOSS_BY_STRATEGY.get(name, STRATEGY_MAX_LOSS):.2f}).")
+        if name not in _off and _pnl[name] <= -MAX_LOSS_BY_STRATEGY.get(name, STRATEGY_MAX_LOSS) + 1e-9:
             _off.add(name)
             _switch_off(name)
             print(f"[LOSS LIMIT] {name} OFF -- it has lost ${-_pnl[name]:.2f} since start. Stays off until the bot restarts.")
