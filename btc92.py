@@ -13,7 +13,7 @@ import uuid
 import flip_star
 
 BTC92_ENABLED = True   # 11 Nov 02:42 CT (Matt): back on
-BTC92_SHARES = 2   # 11 Nov 15:23 CT (Matt): 2 shares (positive today)
+BTC92_SHARES = 1   # 12 Nov 02:04 CT (Matt): 1 share (was 2)
 BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
 BTC92_MIN_SECONDS_LEFT = 10

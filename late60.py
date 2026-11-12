@@ -17,7 +17,7 @@ import surge
 
 LATE60_ENABLED = True   # 11 Nov 01:56 CT (Matt): LIVE (top-3 strategy)
 LATE60_PAPER = False   # 11 Nov 01:56 CT (Matt): real orders
-LATE60_SHARES = 2   # 11 Nov 01:56 CT (Matt)
+LATE60_SHARES = 1   # 12 Nov 02:04 CT (Matt): 1 share (was 2)
 LATE60_DOLLARS = 0
 LATE60_MIN_MOMENTUM = 0.05
 LATE60_MAX_SECONDS_LEFT = 240
