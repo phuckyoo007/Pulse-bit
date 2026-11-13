@@ -16,13 +16,14 @@ ONE_COIN_PER_ROUND = True
 COOLDOWN_AFTER_LOSS = 1800
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
 _cool_until = [0.0]
+_own = {}            # (round id, strategy) -> ticker, for strategies with their own slot
 _said = {}
 _pnl = {}       # strategy -> net P/L since start
 _off = set()
 
 
 def _which(p: dict):
-    for flag in ("early93", "last3", "late80", "late60", "btc92", "rising", "rise"):
+    for flag in ("early93", "ride82", "last3", "late80", "late60", "btc92", "rising", "rise"):
         if p.get(flag):
             return flag
     if p.get("flip_star") and not p.get("manually_adopted"):
@@ -31,9 +32,11 @@ def _which(p: dict):
 
 
 def _switch_off(name):
-    import btc92, early93, flip_star, last3, late60, late80
+    import btc92, early93, flip_star, last3, late60, late80, ride82
     if name == "early93":
         early93.EARLY93_ENABLED = False
+    elif name == "ride82":
+        ride82.RIDE82_ENABLED = False
     elif name == "last3":
         last3.LAST3_ENABLED = False
     elif name == "late80":
@@ -58,12 +61,19 @@ def _say(key, msg):
         print(msg)
 
 
-def can_enter(ticker, state=None, tag="") -> bool:
-    """False while cooling down after a loss, or if another coin is already bet this round."""
+def can_enter(ticker, state=None, tag="", own_slot=False) -> bool:
+    """False while cooling down after a loss, or if another coin is already bet this round.
+    own_slot=True (13 Nov, RIDE82): the strategy gets its own one-bet-per-round slot instead of sharing."""
     now = time.time()
     if now < _cool_until[0]:
         _say("cool", f"[GUARD] cooling down after a loss -- no new real bets for {(_cool_until[0] - now) / 60:.0f} more min.")
         return False
+    if own_slot:
+        k = (_round(ticker), tag)
+        if k in _own and _own[k] != ticker:
+            _say("o" + k[0] + tag, f"[GUARD] {tag} {ticker}: {tag} already has a bet this round ({_own[k]}).")
+            return False
+        return True
     if ONE_COIN_PER_ROUND:
         r = _round(ticker)
         if r in _rounds and _rounds[r] != ticker:
@@ -76,7 +86,13 @@ def can_enter(ticker, state=None, tag="") -> bool:
     return True
 
 
-def note_entry(ticker) -> None:
+def note_entry(ticker, own_slot=None) -> None:
+    if own_slot:
+        _own[(_round(ticker), own_slot)] = ticker
+        if len(_own) > 200:
+            for k in list(_own)[:100]:
+                _own.pop(k, None)
+        return
     _rounds[_round(ticker)] = ticker
     if len(_rounds) > 200:
         for k in list(_rounds)[:100]:
