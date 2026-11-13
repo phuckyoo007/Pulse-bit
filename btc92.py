@@ -13,7 +13,7 @@ import uuid
 import flip_star
 import strategy_guard
 
-BTC92_ENABLED = True   # 11 Nov 02:42 CT (Matt): back on
+BTC92_ENABLED = False   # 12 Nov 23:40 CT (Matt): only strategies that made a profit -- BTC92 has no bets since the tightening
 BTC92_SHARES = 4   # 12 Nov 23:39 CT (Matt): double the shares (was 2)
 BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
