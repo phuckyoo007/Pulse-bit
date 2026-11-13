@@ -147,7 +147,7 @@ def _history(client):
             day = (datetime.fromtimestamp(close_ts, timezone.utc) - timedelta(hours=6)).strftime("%m-%d")
             for name, tl0, tl1, lo, hi, rising in RULES:
                 prev = None
-                for tl, ya, yb in candles:
+                for ci, (tl, ya, yb) in enumerate(candles):
                     side = "yes" if (ya + yb) / 2 >= 0.5 else "no"
                     cost = ya if side == "yes" else 1 - yb
                     mid = (ya + yb) / 2 if side == "yes" else 1 - (ya + yb) / 2
@@ -159,6 +159,22 @@ def _history(client):
                         continue
                     won = result == side
                     pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                    # 13 Nov 03:23 CT (Matt): would a stop at 90/80/70/60/50/40/30/20% of entry have helped?
+                    for frac in STOP_TEST:
+                        s_pnl, hit = pnl, False
+                        for t2, a2, b2 in candles[ci + 1:]:
+                            bid = b2 if side == "yes" else 1 - a2
+                            if bid <= cost * frac + 1e-9:
+                                s_pnl = (bid - cost) * HS_SHARES - _fee(cost, HS_SHARES) - (_fee(bid, HS_SHARES) if bid > 0 else 0)
+                                hit = True
+                                break
+                        st = _stops.setdefault((name, frac), [0, 0, 0.0, 0, 0.0])
+                        st[0] += 1
+                        st[2] += s_pnl
+                        if hit:
+                            st[1] += 1
+                            st[3] += 1 if won else 0      # stopped out of a bet that would have WON
+                            st[4] += s_pnl - pnl          # money the stop made (+) or cost (-) vs holding
                     a = agg.setdefault((name, hour), [0, 0, 0.0])
                     a[0] += 1
                     a[1] += 1 if won else 0
@@ -172,6 +188,21 @@ def _history(client):
             if done % 500 == 0:
                 print(f"[HOUR STUDY] history: {done}/{len(markets)} rounds replayed.")
         _table(f"HISTORY, last {HS_DAYS} days, {done} rounds", agg)
+        try:
+            print(f"[STOP TEST] ===== stop at X% of what we paid vs holding to the end, last {HS_DAYS} days, "
+                  f"{HS_SHARES} shares, after fees (1-minute prices: real stops fill a little worse) =====")
+            for name, *_ in RULES:
+                parts = []
+                for frac in STOP_TEST:
+                    st = _stops.get((name, frac))
+                    if not st:
+                        continue
+                    lab = "no stop" if frac > 1 else f"{frac * 100:.0f}%"
+                    parts.append(f"{lab}: ${st[2]:+.2f}" + ("" if frac > 1 else
+                                 f" ({st[1]} stopped, {st[3]} of them would have won, vs hold {st[4]:+.2f})"))
+                print(f"[STOP TEST] {name}: " + " | ".join(parts))
+        except Exception as e:
+            print(f"[STOP TEST] crashed ({e}).")
         try:
             _combo()
         except Exception as e:
@@ -197,6 +228,8 @@ def _history(client):
 # Then buy the predicted side at its real ask price (only 35-85c, where a win pays enough) and hold to the end.
 # Logged as [COMBO] lines: bets, % won, average price paid, P/L at HS_SHARES shares after fees, and EDGE
 # (% won minus average price -- positive means the combined read beat the market's own odds).
+STOP_TEST = (1.01, 0.90, 0.80, 0.70, 0.60, 0.50, 0.40, 0.30, 0.20)   # 1.01 = never triggers = hold to the end
+_stops = {}    # (rule, frac) -> [bets, stopped, P/L, stopped-but-would-have-won, stop vs hold]
 _rounds = {}   # close_ts -> {coin: (candles [(secs_left, yes_ask, yes_bid)], result)}
 
 
