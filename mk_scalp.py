@@ -13,8 +13,9 @@ Every MKS_POLL_SECONDS it reads all of this round's commodity markets in one bat
     * sigma (Yahoo spot + 1-minute volatility vs the strike, from the Markets edge board): our side >= MKS_MIN_SIGMA
       and RISING over the same reads -- the underlying commodity really is moving our way, not just the Kalshi book
     * "the win at the end matters": the win chance from sigma is at least MKS_MIN_EDGE above the price we pay
-  EXIT (first that fires)
-    * TAKE PROFIT: we could sell for MKS_TAKE_PROFIT_CENTS+ more than we paid (after both fees, still a gain)
+  EXIT (first that fires) -- 13 Nov 15:26 CT (Matt): "ride it until it slows and stops"
+    * TURNED: our side's sell price drops MKS_TRAIL_CENTS under its best since we bought
+    * STALLED: ahead of what we paid but no new high for MKS_STALL_SECONDS
     * STOP: our side's sell price is MKS_STOP_CENTS under what we paid, or sigma drops under MKS_EXIT_SIGMA
     * TIME: under MKS_HOLD_FINAL_SECONDS left -> sell, unless it's a near-sure winner (bid >= 92c and sigma >= 2): hold
   1 share, at most MKS_MAX_OPEN open, one entry per market per round, stops for the day after MKS_DAY_LOSS_LIMIT.
@@ -77,7 +78,9 @@ MKS_RISE_POLLS = 3          # ~12 seconds of reads
 MKS_RISE_CENTS = 0.02
 MKS_MIN_SIGMA = 0.3
 MKS_MIN_EDGE = 0.03
-MKS_TAKE_PROFIT_CENTS = 0.06
+MKS_TAKE_PROFIT_CENTS = None   # 13 Nov 15:26 CT (Matt): no fixed take-profit -- "ride it until it slows and stops"
+MKS_TRAIL_CENTS = 0.02         # sell once our side's sell price is 2c under its best since we bought (it turned)
+MKS_STALL_SECONDS = 24         # ...or it hasn't made a new high for 24s (it stopped climbing) while we're ahead
 MKS_STOP_CENTS = 0.06
 MKS_EXIT_SIGMA = 0.0
 MKS_HOLD_FINAL_SECONDS = 60
@@ -240,8 +243,13 @@ def run(client, place_exit=None):
             continue
         zs, _w, _src = _sig_win(ticker, m, pos["side"], sl)
         why = None
-        if bid >= pos["entry"] + MKS_TAKE_PROFIT_CENTS - 1e-9:
-            why = f"TAKE PROFIT (+{(bid - pos['entry'])*100:.0f}c)"
+        if bid > pos.get("peak", pos["entry"]) + 1e-9:
+            pos["peak"], pos["peak_at"] = bid, now
+        peak = pos.get("peak", pos["entry"])
+        if peak > pos["entry"] + 1e-9 and bid <= peak - MKS_TRAIL_CENTS + 1e-9:
+            why = f"turned down -- {bid*100:.0f}c is {(peak - bid)*100:.0f}c under its high of {peak*100:.0f}c"
+        elif bid > pos["entry"] + 1e-9 and now - pos.get("peak_at", pos["at"]) >= MKS_STALL_SECONDS:
+            why = f"stalled -- no new high for {now - pos.get('peak_at', pos['at']):.0f}s (high {peak*100:.0f}c)"
         elif bid <= pos["entry"] - MKS_STOP_CENTS + 1e-9:
             why = f"stop (-{(pos['entry'] - bid)*100:.0f}c)"
         elif zs is not None and zs < MKS_EXIT_SIGMA:
@@ -293,7 +301,8 @@ def run(client, place_exit=None):
                     print(f"[MKSCALP] {ticker}: nothing filled at {ask*100:.0f}c.")
                     continue
                 fee_in = mk._fee(count, entry)
-            _open[ticker] = {"side": side, "entry": entry, "fee_in": fee_in, "count": count, "at": now}
+            _open[ticker] = {"side": side, "entry": entry, "fee_in": fee_in, "count": count, "at": now,
+                             "peak": bid, "peak_at": now}
             _done.add(ticker)
             print(f"{_tag()} ENTRY {ticker} ({mk._label(ticker)}) {side.upper()} {count:g} @ {entry*100:.0f}c: price up "
                   f"{(asks[-1]-asks[0])*100:.0f}c in {now - h[0][0]:.0f}s, sigma {sig[0]:.2f} -> {sig[-1]:.2f} "
