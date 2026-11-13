@@ -18,7 +18,8 @@ BTC92_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
 BTC92_MIN_SECONDS_LEFT = 10
-BTC92_MIN_WIN = 0.96   # 12 Nov 15:58 CT: was 92% -- board must agree with the 94c+ price (same lesson as Early settle)
+BTC92_MIN_WIN = 0.94   # 13 Nov 15:30 CT (Matt): board one-to-one with the price (board % >= price) instead of a fixed 96% -- the per-bet check is below.
+# (was) BTC92_MIN_WIN = 0.96   # 12 Nov 15:58 CT: was 92% -- board must agree with the 94c+ price (same lesson as Early settle)
 BTC92_MIN_PRICE = 0.94   # 12 Nov 14:53 CT: was 92c -- 92-93c lost -$2.72 on paper, 94c+ +$8.75
 BTC92_MAX_PRICE = 0.98
 BTC92_STOP_FRACTION = 0.78  # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (was 86%)
@@ -83,6 +84,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             if cost < _min_px - 1e-9 or cost > BTC92_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[BTC92] {ticker}: {side_name.upper()} at {n['p']*100:.0f}% but price {cost*100:.0f}c is "
                                   f"outside {_min_px*100:.0f}-{BTC92_MAX_PRICE*100:.0f}c -- waiting.")
+                continue
+            if (n.get("p") or 0) < cost - 1e-9:
+                _log_once(ticker + ":1to1", f"[BTC92] {ticker}: board {(n.get('p') or 0)*100:.0f}% is below the {cost*100:.0f}c "
+                                            f"price -- needs one-to-one (board >= price).")
                 continue
             limit = min(BTC92_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
