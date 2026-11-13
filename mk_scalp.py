@@ -89,7 +89,7 @@ MKS_DAY_LOSS_LIMIT = 3.00
 # 13 Nov 15:28 CT (Matt): "run it live -- the first time it loses, trip a circuit breaker, then we'll work on it".
 # First losing trade -> no new commodity bets (open ones still get their exits) until Matt restarts it.
 MKS_BREAKER = True
-MKS_TRIPPED = False   # set True in code once it has tripped, so a restart doesn't revive it
+MKS_TRIPPED = True    # 13 Nov 15:33 CT: tripped -- NATGAS NO 77c -> 73c in 16s, -$0.08. Off until Matt restarts it.
 
 _round = {"key": None, "tickers": [], "last_poll": 0.0}
 _hist = {}      # (ticker, side) -> [(t, ask, bid, sigma)]
