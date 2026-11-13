@@ -27,6 +27,9 @@ RIDE82_MIN_SECONDS_LEFT = 15
 # 13 Nov 09:31 CT (auto loss review): all 4 Ride 82 losses so far were DOGE (09:57Z 82c, 10:41Z 84c, 12:29Z 82c,
 # 12:43Z 95c) -- a higher DOGE price floor wouldn't have stopped the 95c one, so DOGE is out of Ride 82.
 RIDE82_SKIP_COINS = {"DOGE"}
+# 13 Nov 11:33 CT (auto loss review): XRP 84c (board 85%), SOL 86c (88%), BTC 95c (94%) all lost -- every Ride 82 loss
+# was bought with the board within about 2 points of the price. Now the board must be 3+ points above the price.
+RIDE82_MIN_EDGE = 0.03
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
@@ -105,9 +108,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 _log_once(ticker, f"[RIDE82] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {RIDE82_MIN_PRICE*100:.0f}-{RIDE82_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
-            if (n.get("p") or 0) < cost - 1e-9:
+            if (n.get("p") or 0) < cost + RIDE82_MIN_EDGE - 1e-9:
                 _log_once(ticker + ":bp", f"[RIDE82] {ticker}: board {(n.get('p') or 0)*100:.0f}% is below the {cost*100:.0f}c "
-                                          f"price -- skipping (13 Nov: DOGE losses at 79%/82c and 78%/82c).")
+                                          f"price + {RIDE82_MIN_EDGE*100:.0f} pts -- skipping (13 Nov: losses were all bought with the board 0-2 pts over the price).")
                 continue
             limit = min(RIDE82_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
