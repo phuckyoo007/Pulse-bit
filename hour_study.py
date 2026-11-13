@@ -443,15 +443,31 @@ def _cheap():
     res = {}
     for tl in (720, 600, 480, 360, 240):
         for close_ts, coins in _rounds.items():
+            # 13 Nov 03:29 CT (Matt): "can't just bet on the low number -- there has to be a reason to expect it to go up"
+            mv = {}
+            for k2, (c2, r2) in coins.items():
+                x, y = _at(c2, tl), _at(c2, tl + 120)
+                if x and y:
+                    mv[k2] = (x[0] + x[1]) / 2 - (y[0] + y[1]) / 2   # YES price change over the last 2 minutes
             for coin, (c, r) in coins.items():
                 a = _at(c, tl)
-                if not a:
+                if not a or coin not in mv:
                     continue
                 ya, yb = a
                 for side in ("yes", "no"):
                     cost = ya if side == "yes" else 1 - yb
                     if not (0.05 <= cost <= 0.25):
                         continue
+                    sgn = 1 if side == "yes" else -1
+                    own_up = mv[coin] * sgn > 0.02                       # our cheap side already climbing
+                    crowd = sum(1 for k2, m in mv.items() if k2 != coin and m * sgn > 0.02)   # other coins moving our way
+                    reasons = ["no reason (any cheap side)"]
+                    if own_up:
+                        reasons.append("its own price rising")
+                    if crowd >= 4:
+                        reasons.append("4+ other coins moving its way")
+                    if own_up and crowd >= 4:
+                        reasons.append("BOTH")
                     band = "5-12c" if cost <= 0.12 else "13-25c"
                     won = r == side
                     hold = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
@@ -465,20 +481,22 @@ def _cheap():
                                 p = (bid - cost) * HS_SHARES - _fee(cost, HS_SHARES) - _fee(bid, HS_SHARES)
                                 hit = True
                                 break
-                        v = res.setdefault((tl, band, f"sell at {mult:g}x"), [0, 0, 0.0, 0.0])
+                        for why in reasons:
+                            v = res.setdefault((tl, why, band, f"sell at {mult:g}x"), [0, 0, 0.0, 0.0])
+                            v[0] += 1
+                            v[1] += 1 if (hit or won) else 0
+                            v[2] += p
+                            v[3] += cost
+                    for why in reasons:
+                        v = res.setdefault((tl, why, band, "hold to end"), [0, 0, 0.0, 0.0])
                         v[0] += 1
-                        v[1] += 1 if (hit or won) else 0
-                        v[2] += p
+                        v[1] += 1 if won else 0
+                        v[2] += hold
                         v[3] += cost
-                    v = res.setdefault((tl, band, "hold to end"), [0, 0, 0.0, 0.0])
-                    v[0] += 1
-                    v[1] += 1 if won else 0
-                    v[2] += hold
-                    v[3] += cost
     print(f"[CHEAP] ===== buy the cheap side (5-25c), sell at 1.5x / 2x what we paid, else hold; {HS_DAYS} days, "
           f"{HS_SHARES} shares, after fees =====")
-    for (tl, band, ex), (n, w, p, c) in sorted(res.items()):
-        print(f"[CHEAP] {tl // 60}:00 left | {band} | {ex}: {n} bets, {w / n * 100:.1f}% hit target or won, avg price "
+    for (tl, why, band, ex), (n, w, p, c) in sorted(res.items()):
+        print(f"[CHEAP] {tl // 60}:00 left | {why} | {band} | {ex}: {n} bets, {w / n * 100:.1f}% hit target or won, avg price "
               f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet, {p / max(c * HS_SHARES, 1e-9) * 100:+.1f}% of money put in)")
     print("[CHEAP] done.")
 
