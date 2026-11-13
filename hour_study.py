@@ -406,18 +406,29 @@ def _turn():
                         continue
                     won = r == ("yes" if up else "no")
                     pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                    # Matt 03:26: "buy at 40 and sell at 80" -- also try selling the moment our side is bid 80c+
+                    s80, w80 = pnl, won
+                    for t2, a2, b2 in c:
+                        if t2 >= tl:
+                            continue
+                        bid = b2 if up else 1 - a2
+                        if bid >= 0.80:
+                            s80 = (bid - cost) * HS_SHARES - _fee(cost, HS_SHARES) - _fee(bid, HS_SHARES)
+                            w80 = True
+                            break
                     for k in (3, 4, 5, 6):
                         if turned >= k:
-                            v = res.setdefault((tl, k), [0, 0, 0.0, 0.0])
-                            v[0] += 1
-                            v[1] += 1 if won else 0
-                            v[2] += pnl
-                            v[3] += cost
+                            for ex, e_p, e_w in (("hold to end", pnl, won), ("sell at 80c", s80, w80)):
+                                v = res.setdefault((tl, k, ex), [0, 0, 0.0, 0.0])
+                                v[0] += 1
+                                v[1] += 1 if e_w else 0
+                                v[2] += e_p
+                                v[3] += cost
     print(f"[TURN] ===== crowd just turned (3+ / 4+ / 5+ / 6 of the other coins crossed 50c in the last 3 min), buy the "
           f"coin that hasn't (40-60c), hold to the end, {HS_DAYS} days, {HS_SHARES} shares, after fees =====")
-    for (tl, k), (n, w, p, c) in sorted(res.items()):
-        print(f"[TURN] {tl // 60}:{tl % 60:02d} left | {k}+ others turned: {n} bets, won {w / n * 100:.1f}%, avg price "
-              f"{c / n * 100:.1f}c, EDGE {(w - c) / n * 100:+.1f} pts, P/L ${p:+.2f}")
+    for (tl, k, ex), (n, w, p, c) in sorted(res.items()):
+        print(f"[TURN] {tl // 60}:{tl % 60:02d} left | {k}+ others turned | {ex}: {n} bets, won {w / n * 100:.1f}%, avg price "
+              f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet)")
     print("[TURN] done.")
 
 
