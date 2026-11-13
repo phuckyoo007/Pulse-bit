@@ -100,6 +100,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 _log_once(ticker, f"[RIDE82] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {RIDE82_MIN_PRICE*100:.0f}-{RIDE82_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
+            if (n.get("p") or 0) < cost - 1e-9:
+                _log_once(ticker + ":bp", f"[RIDE82] {ticker}: board {(n.get('p') or 0)*100:.0f}% is below the {cost*100:.0f}c "
+                                          f"price -- skipping (13 Nov: DOGE losses at 79%/82c and 78%/82c).")
+                continue
             limit = min(RIDE82_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
             print(f"[RIDE82] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
