@@ -41,6 +41,7 @@ import btc92   # 7 Nov 11:30 CT (Matt): 5 shares on BTC at 92%+ in the last 2:00
 import closer   # 5 Nov 15:50 CT: data-built 'Closer' strategy -- PAPER only
 import pulse_v2
 import markets_paper
+import mk_scalp   # 13 Nov 15:17 CT (Matt): commodity scalp -- buy rising price + rising sigma, take profit fast
 import ride
 import build_dashboard_data
 import reversion
@@ -719,7 +720,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             ticker = p.get("ticker")
             if not ticker:
                 continue
-            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned() or ticker in pulse_v2.owned():
+            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned():
                 continue
             position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
             if position_fp == 0:
@@ -955,7 +956,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
-        if ticker and ticker in state and (ticker in markets_paper.owned() or ticker in pulse_v2.owned()):
+        if ticker and ticker in state and (ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned()):
             state.pop(ticker, None)   # the commodity/currency bot or live V2 owns this one -- Pulse lets it go
             continue
         if ticker and ticker not in state:
@@ -982,7 +983,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                         _pos["count"], _pos["entry_price"] = abs(_fp), _new_entry   # (caller already holds STATE_LOCK)
             except Exception as _e:
                 print(f"  couldn't resync manual bet {ticker} ({_e})")
-        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in pulse_v2.owned():
+        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
         if position_fp == 0:
@@ -1664,6 +1665,10 @@ def run():
             markets_paper.run(client, place_exit)   # commodity / currency 15-min + hourly markets (2 shares, live)
         except Exception as e:
             print(f"[MKTS-PAPER] pass failed (non-fatal): {e}")
+        try:
+            mk_scalp.run(client, place_exit)
+        except Exception as e:
+            print(f"[MKSCALP] pass failed (non-fatal): {e}")
 
         if time.time() - last_balance_sync >= BALANCE_SYNC_SECONDS:
             try:
