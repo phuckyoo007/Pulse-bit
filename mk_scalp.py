@@ -86,12 +86,16 @@ MKS_EXIT_SIGMA = 0.0
 MKS_HOLD_FINAL_SECONDS = 60
 MKS_MAX_OPEN = 3
 MKS_DAY_LOSS_LIMIT = 3.00
+# 13 Nov 15:28 CT (Matt): "run it live -- the first time it loses, trip a circuit breaker, then we'll work on it".
+# First losing trade -> no new commodity bets (open ones still get their exits) until Matt restarts it.
+MKS_BREAKER = True
+MKS_TRIPPED = False   # set True in code once it has tripped, so a restart doesn't revive it
 
 _round = {"key": None, "tickers": [], "last_poll": 0.0}
 _hist = {}      # (ticker, side) -> [(t, ask, bid, sigma)]
 _open = {}      # ticker -> {"side", "entry", "fee_in", "count", "at"}
 _done = set()   # tickers already entered this round
-_tot = {"n": 0, "won": 0, "pnl": 0.0, "day": None, "day_pnl": 0.0}
+_tot = {"n": 0, "won": 0, "pnl": 0.0, "day": None, "day_pnl": 0.0, "tripped": False}
 
 
 def owned() -> set:
@@ -164,6 +168,10 @@ def _close(client, place_exit, ticker, pos, value, why):
     print(f"{_tag()} EXIT {ticker} ({mk._label(ticker)}) {pos['side'].upper()}: {why} -- bought {pos['entry']*100:.0f}c, "
           f"sold {value*100:.0f}c after {time.time() - pos['at']:.0f}s, P/L {pnl:+.2f} | total {_tot['n']} trades, "
           f"{_tot['won']} up, {_tot['pnl']:+.2f} (today {_tot['day_pnl']:+.2f})")
+    if MKS_BREAKER and pnl < -0.005 and not _tot["tripped"]:
+        _tot["tripped"] = True
+        print(f"[MKSCALP] CIRCUIT BREAKER TRIPPED -- first losing trade ({ticker} {pnl:+.2f}). No new commodity bets until "
+              f"Matt restarts it; open ones keep their exits.")
     _open.pop(ticker, None)
 
 
@@ -179,6 +187,10 @@ def _settle(ticker, pos, m):
     _tot["day_pnl"] += pnl
     print(f"{_tag()} SETTLED {ticker} ({mk._label(ticker)}) {pos['side'].upper()}: {'WON' if won else 'LOST'} -- bought "
           f"{pos['entry']*100:.0f}c, P/L {pnl:+.2f} | total {_tot['n']} trades, {_tot['won']} up, {_tot['pnl']:+.2f}")
+    if MKS_BREAKER and pnl < -0.005 and not _tot["tripped"]:
+        _tot["tripped"] = True
+        print(f"[MKSCALP] CIRCUIT BREAKER TRIPPED -- first losing trade ({ticker} {pnl:+.2f}). No new commodity bets until "
+              f"Matt restarts it; open ones keep their exits.")
     _open.pop(ticker, None)
 
 
@@ -260,6 +272,8 @@ def run(client, place_exit=None):
             _close(client, place_exit, ticker, pos, bid, why)
 
     # ---- entries ----
+    if MKS_TRIPPED or _tot["tripped"]:
+        return   # circuit breaker: first loss -> no new bets
     if _tot["day"] == _today() and _tot["day_pnl"] <= -MKS_DAY_LOSS_LIMIT:
         return
     for ticker in _round["tickers"]:
