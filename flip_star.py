@@ -20,7 +20,7 @@ import uuid
 
 import requests
 
-FLIP_ENABLED = False   # 12 Nov 23:40 CT (Matt): only strategies that made a profit -- Flip Star has no profitable bets since 3:13 PM
+FLIP_ENABLED = True   # 12 Nov 23:50 CT (Matt): back on (not doing that bad), 2 shares, strict 98%
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
