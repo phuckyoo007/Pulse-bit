@@ -20,6 +20,13 @@ EARLY93_MAX_PRICE = 0.98
 # 12 Nov 15:58 CT (Matt: tighten on every loss). All 7 Early settle losses since 11 Nov were bought with the board at
 # 90-95% win; none of the ~50 bought at 96%+ lost. And 3 losers FILLED under the minimum (91, 92, 90c) = price falling.
 EARLY93_MIN_WIN = 0.96
+# 13 Nov 03:21 CT (Matt: HYPE lost $2.59). HYPE 04:00 round: bought YES at 97c with 6:16 left, board 96% but only
+# 1.76 sigma from flipping, and the price had been 71c just 3 minutes earlier (a fresh spike). It fell to 36c by 1:52.
+# Two new rules:
+EARLY93_MIN_SIGMA = 2.0          # board must say 2.0+ sigma from flipping (Flip Star's rule) -- HYPE was 1.76
+EARLY93_STEADY_SECONDS = 180     # our side must have been 85c+ for the last 3 minutes -- no buying a fresh spike
+EARLY93_STEADY_PRICE = 0.85
+_px = {}   # ticker -> [(time, side, price)]
 
 _done = {}   # ticker -> time (one bet per round)
 _tries = {}
@@ -47,6 +54,14 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     for t in [t for t, at in _done.items() if now - at > 1800]:
         _done.pop(t, None)
         _tries.pop(t, None)
+    for ticker, n in b.items():   # 13 Nov: remember each round's prices so a fresh spike can be spotted
+        if n.get("side") in ("yes", "no") and n.get("yes_ask") is not None and n.get("no_ask") is not None:
+            h = _px.setdefault(ticker, [])
+            h.append((now, n["side"], float(n["yes_ask"]) if n["side"] == "yes" else float(n["no_ask"])))
+            while h and now - h[0][0] > EARLY93_STEADY_SECONDS + 120:
+                h.pop(0)
+    for t in [t for t in _px if t not in b]:
+        _px.pop(t, None)
     for ticker, n in flip_star.by_priority(b):
         if "15M" not in ticker.split("-")[0].upper() or flip_star.not_allowed_to_buy(n.get("coin"), ticker):
             continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
@@ -60,6 +75,13 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue   # 12 Nov: one coin per round + cooldown after a loss
         if (n.get("p") or 0) < EARLY93_MIN_WIN - 1e-9:
             continue   # 12 Nov: board must give 96%+ (every loss was 90-95%)
+        if n.get("zs") is None or n["zs"] < EARLY93_MIN_SIGMA - 1e-9:
+            continue   # 13 Nov: 2.0+ sigma from flipping (HYPE loss was 1.76)
+        _h = _px.get(ticker, [])
+        if not _h or now - _h[0][0] < EARLY93_STEADY_SECONDS - 5 or any(
+                sd != n.get("side") or pr < EARLY93_STEADY_PRICE - 1e-9
+                for at, sd, pr in _h if now - at <= EARLY93_STEADY_SECONDS):
+            continue   # 13 Nov: not steady at 85c+ for 3 minutes (HYPE spiked 71c -> 97c)
         side_name = n.get("side")
         side = "bid" if side_name == "yes" else "ask"
         try:
