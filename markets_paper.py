@@ -32,7 +32,7 @@ MK_RATES_ONLY = True  # currencies + commodities stay off; only Treasury-yield (
 # (was) MK_NEW_BETS = False   # 27 Oct 08:43 CT (Matthew: "turn off everything that's losing") -- Pulse Markets was -$11.20 over 33 bets; no new bets, open ones still managed to the end
 MK_PAPER = False                   # 26 Oct: live, 2 shares a bet (set True to go back to paper)
 MK_START_BALANCE = 40.0
-MK_SHARES = 2  # 2 Nov 15:07 CT (Matt): temporary 2-share trial (was 5)
+MK_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 MK_MAX_OPEN = 4
 MK_MAX_SECONDS_LEFT = 180   # 26 Oct 19:17 CT (Matthew): last 3 minutes only
 MK_MIN_SECONDS_LEFT = 20
@@ -49,7 +49,7 @@ MK_POLL_SECONDS = 5
 # possible; gold/silver gapped through the 80% stop) against about +$3.80 from 15 wins. Currencies were about even.
 # Commodities (gold, silver, copper, platinum, palladium, natural gas, oil, Brent) are no longer bid on.
 MK_NO_COMMODITIES = False   # 27 Oct 20:45 CT (Matthew): commodities back on, 2 shares each (MK_COMMOD_SHARES)
-MK_COMMOD_SHARES = 2
+MK_COMMOD_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 _COMMODITY_WORDS = ("GOLD", "SILVER", "COPPER", "PLATINUM", "PALLADIUM", "NATGAS", "NATURAL GAS", "WTI", "OIL", "BRENT", "CRUDE", "TIN")
 
 
@@ -78,7 +78,7 @@ def _min_sigma(ticker):
 # 27 Oct 17:58 CT (Matthew): currencies back on, with much stricter rules. Since the 1.8-sigma rule they went 14 wins /
 # 1 loss but net -$0.13: the loss (EUR/USD, filled at 91c, 80s left, gapped to 45c) erased the 14 small wins.
 MK_FX_ON = True
-MK_FX_SHARES = 2              # 27 Oct 18:06 CT (Matthew): currencies at 2 shares (rates stay at MK_SHARES)
+MK_FX_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 MK_FX_MIN_PRICE = 0.96        # only the safest prices (the loser was bought at 91c)
 MK_FX_MIN_SIGMA = 2.5         # well clear of the flip line (rest of Pulse Markets: 1.8)
 MK_FX_MAX_SECONDS = 120       # last 2 minutes only -- less time for a reversal

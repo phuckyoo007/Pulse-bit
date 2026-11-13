@@ -15,7 +15,7 @@ import uuid
 import flip_star
 
 STEADY_ENABLED = False   # 7 Nov 20:36 CT (Matt): off -- only Flip Star and BTC92/XRP92
-STEADY_SHARES = 2               # 6 Nov 02:52 CT (Matt): 2 shares per bet (was 5)
+STEADY_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 STEADY_WATCH_UNTIL = 165        # 5 Nov 16:28 CT (Matt): back to the last 2:45
 STEADY_MUST_SEE_FROM = 840      # must have been watching with at least 14:00 left (round opened at 15:00)
 STEADY_MIN_WIN = 0.83           # 2 Nov 18:26 CT (Matt): 83%+ win chance (was 78)

@@ -32,7 +32,7 @@ import flip_star
 
 V2_ENABLED = True
 V2_PAPER = False                 # 26 Oct 19:42 CT (Matthew): "try V2 alongside Pulse" -- LIVE, small (V2_LIVE_SHARES)
-V2_LIVE_SHARES = 2               # fixed shares per live bet (paper used 5%-risk sizing)
+V2_LIVE_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 V2_LIVE_MAX_OPEN = 0   # 3 Nov 16:43 CT (Matt): no new V2 bets -- Flip Star only (open V2 bets still managed)
 V2_LIVE_DAILY_STOP = 10.0        # no new live V2 bets once V2 is down this many dollars on the (Central) day
 V2_START_BALANCE = 60.0          # simulated bankroll (about Pulse's real balance on 25 Oct)

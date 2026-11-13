@@ -11,7 +11,7 @@ import strategy_guard
 import kalshi_ws
 
 EARLY93_ENABLED = True   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
-EARLY93_SHARES = 4   # 12 Nov 23:39 CT (Matt): double the shares (was 2)
+EARLY93_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
 EARLY93_MIN_SECONDS_LEFT = 240

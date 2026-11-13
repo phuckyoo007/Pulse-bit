@@ -24,7 +24,7 @@ import strategy_guard
 import kalshi_ws
 
 LATE80_ENABLED = False   # 12 Nov 11:34 CT (Matt): off -- losing real money, paper and 14-day study
-LATE80_SHARES = 2   # 12 Nov 08:43 CT (Matt): everything at 2 shares
+LATE80_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 LATE80_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 LATE80_MAX_SECONDS_LEFT = 240
 LATE80_MIN_SECONDS_LEFT = 120
