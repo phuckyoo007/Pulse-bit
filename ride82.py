@@ -3,7 +3,7 @@ RIDE82 -- REAL MONEY (13 Nov 03:33 CT, Matt): "in the last 3 1/2-4 minutes, anyt
 riding to 100 -- bid on Bitcoin and XRP (and DOGE) the second they hit 82c or above with less than four minutes left,
 40% stop loss."
 
-  * BTC, XRP, DOGE 15-minute rounds only.
+  * 13 Nov 03:35 CT (Matt): every coin's 15-minute round (all nine), 1 share, one bet per coin per round.
   * Under RIDE82_MAX_SECONDS_LEFT (4:00) left, down to RIDE82_MIN_SECONDS_LEFT.
   * The board's pick, priced RIDE82_MIN_PRICE..RIDE82_MAX_PRICE (82-97c).
   * "Seems like it continues riding": our side's price must not have fallen over the last minute.
@@ -19,9 +19,9 @@ import strategy_guard
 import kalshi_ws
 
 RIDE82_ENABLED = True   # 13 Nov 03:33 CT (Matt): real money
-RIDE82_SHARES = 2
+RIDE82_SHARES = 1   # 13 Nov 03:35 CT (Matt): one share
 RIDE82_DOLLARS = 0
-RIDE82_COINS = {"BTC", "XRP", "DOGE"}
+RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round
 RIDE82_MAX_SECONDS_LEFT = 240
 RIDE82_MIN_SECONDS_LEFT = 15
 RIDE82_MIN_PRICE = 0.82
@@ -50,15 +50,14 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         return
     now = time.time()
     try:
-        kalshi_ws.watch_extra([t for t, x in b.items() if "15M" in t.split("-")[0].upper()
-                               and not flip_star.not_allowed_to_buy(x.get("coin"), t)])
+        kalshi_ws.watch_extra([t for t, x in b.items() if "15M" in t.split("-")[0].upper()])
     except Exception:
         pass
     for t in [t for t, at in _done.items() if now - at > 1800]:
         _done.pop(t, None)
         _tries.pop(t, None)
     for ticker, n in flip_star.by_priority(b):
-        if "15M" not in ticker.split("-")[0].upper() or flip_star.not_allowed_to_buy(n.get("coin"), ticker):
+        if "15M" not in ticker.split("-")[0].upper():   # 13 Nov: every coin -- no coin filter for RIDE82
             continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
         tl = n.get("tl")
         if tl is None or tl > RIDE82_MAX_SECONDS_LEFT or tl < RIDE82_MIN_SECONDS_LEFT:
@@ -66,9 +65,9 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if ticker in _done or ticker in state or ticker in excluded_tickers or ticker in flip_star.pending_tickers() \
                 or ticker in flip_star.external_owned[0]():
             continue
-        if not strategy_guard.can_enter(ticker, state, "RIDE82", own_slot=True):
+        if not strategy_guard.can_enter(ticker, state, "RIDE82-" + str(n.get("coin")), own_slot=True):
             continue   # 12 Nov: one coin per round + cooldown after a loss
-        if n.get("coin") not in RIDE82_COINS:
+        if RIDE82_COINS and n.get("coin") not in RIDE82_COINS:
             continue
         side_name = n.get("side")
         if side_name not in ("yes", "no"):
@@ -106,7 +105,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             print(f"[RIDE82] {ticker}: couldn't read the live quote ({e}) -- skipping this pass.")
             continue
         _done[ticker] = now
-        strategy_guard.note_entry(ticker, own_slot="RIDE82")
+        strategy_guard.note_entry(ticker, own_slot="RIDE82-" + str(n.get("coin")))
         qty = max(0.01, int(RIDE82_DOLLARS / limit * 100) / 100) if RIDE82_DOLLARS else float(RIDE82_SHARES)
         print(f"[RIDE82] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "
