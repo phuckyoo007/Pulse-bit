@@ -27,7 +27,42 @@ import time
 import uuid
 from datetime import datetime, timezone, timedelta
 
+import requests
+
 import markets_paper as mk
+
+# 13 Nov 15:23 CT (Matt shared it): the Markets Edge Board's own sigma + fitted win % (spot, volatility, momentum,
+# order book), read from its JSON. Falls back to Pulse's own Yahoo sigma if the board can't be reached.
+BOARD_URL = "https://markets-board-production.up.railway.app/api/state"
+_board = {"at": 0.0, "rows": {}, "warned": 0.0}
+
+
+def _board_rows():
+    if time.time() - _board["at"] < 3:
+        return _board["rows"]
+    _board["at"] = time.time()
+    try:
+        d = requests.get(BOARD_URL, timeout=4).json()
+        _board["rows"] = {r.get("ticker"): r for r in d.get("markets", []) if r.get("ticker")}
+    except Exception as e:
+        if time.time() - _board["warned"] > 300:
+            _board["warned"] = time.time()
+            print(f"[MKSCALP] Markets Edge Board unreachable ({e}) -- using Pulse's own sigma for now.")
+        _board["rows"] = {}
+    return _board["rows"]
+
+
+def _sig_win(ticker, m, side, sl):
+    """(sigma for our side, win chance for our side) -- from the edge board when it has the market."""
+    r = _board_rows().get(ticker)
+    if r and r.get("z") is not None and r.get("dir") in (1, -1):
+        z_yes = float(r["z"]) * (1 if r["dir"] == 1 else -1)
+        p_yes = r.get("model_p")
+        zs = z_yes if side == "yes" else -z_yes
+        win = None if p_yes is None else (float(p_yes) if side == "yes" else 1 - float(p_yes))
+        return zs, (win if win is not None else _phi(zs)), "board"
+    zs = mk._held_sigma(ticker, m, side, sl)
+    return zs, (None if zs is None else _phi(zs)), "pulse"
 
 MKS_ENABLED = True
 MKS_PAPER = True            # 13 Nov 15:17 CT: paper first -- set False when Matt says go live
@@ -203,7 +238,7 @@ def run(client, place_exit=None):
         bid = yb if pos["side"] == "yes" else (None if ya is None else 1 - ya)
         if bid is None:
             continue
-        zs = mk._held_sigma(ticker, m, pos["side"], sl)
+        zs, _w, _src = _sig_win(ticker, m, pos["side"], sl)
         why = None
         if bid >= pos["entry"] + MKS_TAKE_PROFIT_CENTS - 1e-9:
             why = f"TAKE PROFIT (+{(bid - pos['entry'])*100:.0f}c)"
@@ -230,7 +265,7 @@ def run(client, place_exit=None):
         for side in ("yes", "no"):
             ask = ya if side == "yes" else 1 - yb
             bid = yb if side == "yes" else 1 - ya
-            zs = mk._held_sigma(ticker, m, side, sl)
+            zs, win, src = _sig_win(ticker, m, side, sl)
             h = _hist.setdefault((ticker, side), [])
             h.append((now, ask, bid, zs))
             del h[:-(MKS_RISE_POLLS + 1)]
@@ -246,7 +281,7 @@ def run(client, place_exit=None):
             sig = [x[3] for x in h]
             rising = asks[-1] - asks[0] >= MKS_RISE_CENTS - 1e-9 and all(asks[i + 1] >= asks[i] - 1e-9 for i in range(len(asks) - 1))
             sig_up = sig[-1] >= MKS_MIN_SIGMA and sig[-1] > sig[0] + 0.05
-            edge = _phi(sig[-1]) - ask
+            edge = (win if win is not None else _phi(sig[-1])) - ask
             if not (rising and sig_up and edge >= MKS_MIN_EDGE - 1e-9):
                 continue
             fee_in = mk._fee(MKS_SHARES, ask)
@@ -262,4 +297,4 @@ def run(client, place_exit=None):
             _done.add(ticker)
             print(f"{_tag()} ENTRY {ticker} ({mk._label(ticker)}) {side.upper()} {count:g} @ {entry*100:.0f}c: price up "
                   f"{(asks[-1]-asks[0])*100:.0f}c in {now - h[0][0]:.0f}s, sigma {sig[0]:.2f} -> {sig[-1]:.2f} "
-                  f"(win {_phi(sig[-1])*100:.0f}%), {sl:.0f}s left")
+                  f"(win {(win if win is not None else _phi(sig[-1]))*100:.0f}% from {src}), {sl:.0f}s left")
