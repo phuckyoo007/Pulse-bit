@@ -208,6 +208,10 @@ def _history(client):
         except Exception as e:
             print(f"[COMBO] crashed ({e}).")
         try:
+            _turn()
+        except Exception as e:
+            print(f"[TURN] crashed ({e}).")
+        try:
             _pockets()
         except Exception as e:
             print(f"[POCKET] crashed ({e}).")
@@ -374,6 +378,47 @@ def _pockets():
         print(f"[POCKET] NEVER-LOST {tl // 60}:{tl % 60:02d} left | {k}/6 | {bucket}-{bucket + 4}c | {own} || TRAIN {tr[0]} "
               f"bets ${tr[2]:+.2f} || TEST {te[0]} bets, lost {te[1]}, ${te[2]:+.2f}")
     print("[POCKET] done.")
+
+
+def _turn():
+    """13 Nov 03:26 CT (Matt): "if all sides are down and 4 then 6 lift up, expect the other ones too -- if they're at
+    45-60c buy and ride to 100". For each round and each check time, look 3 minutes back: the OTHER coins that were
+    under 50c then and are over 50c now (they just turned). If K+ of them turned the same way and this coin hasn't yet
+    (its price for that side is 40-60c), buy it and hold to the end."""
+    res = {}
+    for tl in (600, 480, 360, 240, 180):
+        for close_ts, coins in _rounds.items():
+            now, before = {}, {}
+            for coin, (c, r) in coins.items():
+                a, b = _at(c, tl), _at(c, tl + 180)
+                if a and b:
+                    now[coin], before[coin] = (a[0] + a[1]) / 2, (b[0] + b[1]) / 2
+            if len(now) < 5:
+                continue
+            for coin in now:
+                for up in (True, False):
+                    turned = sum(1 for k in now if k != coin and
+                                 ((before[k] < 0.5 < now[k]) if up else (before[k] > 0.5 > now[k])))
+                    c, r = coins[coin]
+                    ya, yb = _at(c, tl)
+                    cost = ya if up else 1 - yb
+                    if not (0.40 <= cost <= 0.60):
+                        continue
+                    won = r == ("yes" if up else "no")
+                    pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                    for k in (3, 4, 5, 6):
+                        if turned >= k:
+                            v = res.setdefault((tl, k), [0, 0, 0.0, 0.0])
+                            v[0] += 1
+                            v[1] += 1 if won else 0
+                            v[2] += pnl
+                            v[3] += cost
+    print(f"[TURN] ===== crowd just turned (3+ / 4+ / 5+ / 6 of the other coins crossed 50c in the last 3 min), buy the "
+          f"coin that hasn't (40-60c), hold to the end, {HS_DAYS} days, {HS_SHARES} shares, after fees =====")
+    for (tl, k), (n, w, p, c) in sorted(res.items()):
+        print(f"[TURN] {tl // 60}:{tl % 60:02d} left | {k}+ others turned: {n} bets, won {w / n * 100:.1f}%, avg price "
+              f"{c / n * 100:.1f}c, EDGE {(w - c) / n * 100:+.1f} pts, P/L ${p:+.2f}")
+    print("[TURN] done.")
 
 
 # ---------------- live paper ----------------
