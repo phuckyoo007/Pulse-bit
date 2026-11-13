@@ -29,7 +29,10 @@ RIDE82_MIN_SECONDS_LEFT = 15
 RIDE82_SKIP_COINS = {"DOGE"}
 # 13 Nov 11:33 CT (auto loss review): XRP 84c (board 85%), SOL 86c (88%), BTC 95c (94%) all lost -- every Ride 82 loss
 # was bought with the board within about 2 points of the price. Now the board must be 3+ points above the price.
-RIDE82_MIN_EDGE = 0.01   # 13 Nov 13:49 CT (Matt): only a 1-point difference (was 3)
+RIDE82_MIN_EDGE = 0.01   # 13 Nov 13:49 CT (Matt): only a 1-point difference (was 3) -- for 90c and up
+# 13 Nov 14:26 CT (Matt: 2 losses, "make sure that doesn't happen again"): every Ride 82 loss under 90c today (XRP 84c/85%,
+# SOL 86c/88%, BNB 86c/88%, XRP 88c/88%) had the board 0-2 pts over the price -> under 90c it must be 3+ pts.
+RIDE82_MIN_EDGE_UNDER90 = 0.03
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
@@ -108,9 +111,10 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 _log_once(ticker, f"[RIDE82] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {RIDE82_MIN_PRICE*100:.0f}-{RIDE82_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
-            if (n.get("p") or 0) < cost + RIDE82_MIN_EDGE - 1e-9:
+            _edge = RIDE82_MIN_EDGE if cost >= 0.90 - 1e-9 else RIDE82_MIN_EDGE_UNDER90
+            if (n.get("p") or 0) < cost + _edge - 1e-9:
                 _log_once(ticker + ":bp", f"[RIDE82] {ticker}: board {(n.get('p') or 0)*100:.0f}% is below the {cost*100:.0f}c "
-                                          f"price + {RIDE82_MIN_EDGE*100:.0f} pts -- skipping (13 Nov: losses were all bought with the board 0-2 pts over the price).")
+                                          f"price + {_edge*100:.0f} pts -- skipping (13 Nov: losses were all bought with the board 0-2 pts over the price).")
                 continue
             limit = min(RIDE82_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:
