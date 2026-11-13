@@ -16,6 +16,7 @@ ONE_COIN_PER_ROUND = True
 COOLDOWN_AFTER_LOSS = 1800
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
 _cool_until = [0.0]
+_BOT_FLAGS = ("early93", "ride82", "last3", "late80", "late60", "btc92", "flip_star", "rising", "rise")
 _own = {}            # (round id, strategy) -> ticker, for strategies with their own slot
 _said = {}
 _pnl = {}       # strategy -> net P/L since start
@@ -79,7 +80,11 @@ def can_enter(ticker, state=None, tag="", own_slot=False) -> bool:
         if r in _rounds and _rounds[r] != ticker:
             _say("r" + r + tag, f"[GUARD] {tag} {ticker}: already have a bet this round ({_rounds[r]}) -- one coin per round.")
             return False
-        for t in list((state or {}).keys()):
+        for t, pos in list((state or {}).items()):
+            # 13 Nov 16:12 CT (Matt: "nothing is bidding"): only the BOT's own crypto bets count -- Matt's manual bets
+            # (and commodity markets like KXCOPPER15M) were blocking every strategy for the whole round.
+            if not isinstance(pos, dict) or not any(pos.get(f) for f in _BOT_FLAGS):
+                continue
             if t != ticker and _round(t) == r and "15M" in str(t).split("-")[0].upper():
                 _say("s" + r + tag, f"[GUARD] {tag} {ticker}: already holding {t} this round -- one coin per round.")
                 return False
