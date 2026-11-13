@@ -208,6 +208,10 @@ def _history(client):
         except Exception as e:
             print(f"[COMBO] crashed ({e}).")
         try:
+            _cheap()
+        except Exception as e:
+            print(f"[CHEAP] crashed ({e}).")
+        try:
             _turn()
         except Exception as e:
             print(f"[TURN] crashed ({e}).")
@@ -430,6 +434,53 @@ def _turn():
         print(f"[TURN] {tl // 60}:{tl % 60:02d} left | {k}+ others turned | {ex}: {n} bets, won {w / n * 100:.1f}%, avg price "
               f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet)")
     print("[TURN] done.")
+
+
+def _cheap():
+    """13 Nov 03:28 CT (Matt): "it's not about winning at the end -- buy in at 10c and if it climbs to 20c that doubles the
+    money". Buy the CHEAP side (5-25c) at each check time and sell the moment the bid reaches 1.5x or 2x what we paid;
+    otherwise hold to the end (it usually expires at 0). Real spreads/fees included (fills at the ask, sells at the bid)."""
+    res = {}
+    for tl in (720, 600, 480, 360, 240):
+        for close_ts, coins in _rounds.items():
+            for coin, (c, r) in coins.items():
+                a = _at(c, tl)
+                if not a:
+                    continue
+                ya, yb = a
+                for side in ("yes", "no"):
+                    cost = ya if side == "yes" else 1 - yb
+                    if not (0.05 <= cost <= 0.25):
+                        continue
+                    band = "5-12c" if cost <= 0.12 else "13-25c"
+                    won = r == side
+                    hold = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                    for mult in (1.5, 2.0):
+                        p, hit = hold, False
+                        for t2, a2, b2 in c:
+                            if t2 >= tl:
+                                continue
+                            bid = b2 if side == "yes" else 1 - a2
+                            if bid >= cost * mult - 1e-9:
+                                p = (bid - cost) * HS_SHARES - _fee(cost, HS_SHARES) - _fee(bid, HS_SHARES)
+                                hit = True
+                                break
+                        v = res.setdefault((tl, band, f"sell at {mult:g}x"), [0, 0, 0.0, 0.0])
+                        v[0] += 1
+                        v[1] += 1 if (hit or won) else 0
+                        v[2] += p
+                        v[3] += cost
+                    v = res.setdefault((tl, band, "hold to end"), [0, 0, 0.0, 0.0])
+                    v[0] += 1
+                    v[1] += 1 if won else 0
+                    v[2] += hold
+                    v[3] += cost
+    print(f"[CHEAP] ===== buy the cheap side (5-25c), sell at 1.5x / 2x what we paid, else hold; {HS_DAYS} days, "
+          f"{HS_SHARES} shares, after fees =====")
+    for (tl, band, ex), (n, w, p, c) in sorted(res.items()):
+        print(f"[CHEAP] {tl // 60}:00 left | {band} | {ex}: {n} bets, {w / n * 100:.1f}% hit target or won, avg price "
+              f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet, {p / max(c * HS_SHARES, 1e-9) * 100:+.1f}% of money put in)")
+    print("[CHEAP] done.")
 
 
 # ---------------- live paper ----------------
