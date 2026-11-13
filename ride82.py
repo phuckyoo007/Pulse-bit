@@ -24,6 +24,9 @@ RIDE82_DOLLARS = 0
 RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round
 RIDE82_MAX_SECONDS_LEFT = 240
 RIDE82_MIN_SECONDS_LEFT = 15
+# 13 Nov 09:31 CT (auto loss review): all 4 Ride 82 losses so far were DOGE (09:57Z 82c, 10:41Z 84c, 12:29Z 82c,
+# 12:43Z 95c) -- a higher DOGE price floor wouldn't have stopped the 95c one, so DOGE is out of Ride 82.
+RIDE82_SKIP_COINS = {"DOGE"}
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
@@ -68,6 +71,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if not strategy_guard.can_enter(ticker, state, "RIDE82-" + str(n.get("coin")), own_slot=True):
             continue   # 12 Nov: one coin per round + cooldown after a loss
         if RIDE82_COINS and n.get("coin") not in RIDE82_COINS:
+            continue
+        if n.get("coin") in RIDE82_SKIP_COINS:
             continue
         side_name = n.get("side")
         if side_name not in ("yes", "no"):
