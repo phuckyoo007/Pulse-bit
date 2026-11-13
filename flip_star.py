@@ -48,8 +48,8 @@ FLIP_MAX_SPREAD = 0.05             # skip thin, jumpy books
 FLIP_MAX_PRICE = 0.98              # 25 Oct 13:33 CT (per Matthew): 94-98c (99c bets: ~1c win, ~3/4 of losses)
 FLIP_NONSTAR_MAX_PRICE = 0.98      # 25 Oct 13:33 CT: 94-98c
 FLIP_NONSTAR_MIN_PRICE = 0.96   # 12 Nov: 94-95c lost on paper, 96c+ won;      # 28 Oct 01:48 CT: floor back to 94c (ZEC/DOGE losers tonight were bought at 94-95c)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_NONSTAR_MIN_WIN = 0.98        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_MIN_WIN_ALL = 0.98            # 28 Oct 01:48 CT: back to 98% minimum win   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_NONSTAR_MIN_WIN = 0.96   # 13 Nov 03:31 CT (Matt): 96% minimum win;        # 28 Oct 01:48 CT: back to 98% (all 4 losers tonight entered at 96-97%)   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_MIN_WIN_ALL = 0.96   # 13 Nov 03:31 CT (Matt): 96% minimum win;            # 28 Oct 01:48 CT: back to 98% minimum win   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_STAR_MIN_PRICE = 0.96   # 12 Nov: 94-95c lost on paper, 96c+ won;         # 28 Oct 01:48 CT: floor back to 94c; breaker can only raise it   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 FLIP_STAR_REST_PRICE = 0.96        # 18 Oct: red star priced above this -> post a resting bid HERE and wait, instead of paying 97-99c
 FLIP_RESTING_BIDS = False          # 18 Oct 19:15 CT: OFF. Resting 96c bids only filled when the price was falling into them
@@ -83,7 +83,7 @@ except Exception:
 
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.98   # 28 Oct 01:48 CT: 98%   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+FLIP_WIN_SAFE_MIN = 0.96   # 13 Nov 03:31 CT (Matt): 96% minimum win;   # 28 Oct 01:48 CT: 98%   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
@@ -107,7 +107,7 @@ except Exception:
 PAUSE_CT = PAUSE_CT = ((0, 0), (0, 0))
 # (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
 NO_SIDE_NEEDS_STAR = True
-NO_SIDE_MIN_WIN = 0.98   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
+NO_SIDE_MIN_WIN = 0.96   # 13 Nov 03:31 CT (Matt): 96% minimum win;   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
 COIN_SHARE_MULT = {}   # 6 Nov 01:29 CT (Matt): no per-coin multipliers -- 5 shares on everything
@@ -155,7 +155,7 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.98, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
+LOOSE_STRICT = {"win": 0.96, "sigma": 1.75, "floor": 0.96}   # 13 Nov 03:31 CT (Matt): 96% minimum win (1.75 sigma = 96%);   # 6 Nov 01:29 CT (Matt): green only
 LOOSE_VALUES = {"win": 0.97, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = False   # 12 Nov 15:08 CT: was re-arming at 97% on every deploy -- strict 98% always now
