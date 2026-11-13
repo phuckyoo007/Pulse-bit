@@ -33,6 +33,9 @@ RIDE82_MIN_EDGE = 0.01   # 13 Nov 13:49 CT (Matt): only a 1-point difference (wa
 # 13 Nov 14:26 CT (Matt: 2 losses, "make sure that doesn't happen again"): every Ride 82 loss under 90c today (XRP 84c/85%,
 # SOL 86c/88%, BNB 86c/88%, XRP 88c/88%) had the board 0-2 pts over the price -> under 90c it must be 3+ pts.
 RIDE82_MIN_EDGE_UNDER90 = 0.03
+# 13 Nov 16:28 CT (Matt): "allow a two-point difference all directions" -- the board may be up to 2 points BELOW the
+# price (board lags the live price in a fast move); replaces the +1 / +3 point rules above.
+RIDE82_BOARD_TOLERANCE = -0.02
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
@@ -103,18 +106,20 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 _log_once(ticker + ":lq", f"[RIDE82] {ticker}: no live price yet -- waiting for the stream before buying.")
                 continue
             _lc = _lq[1] if side == "bid" else 1 - _lq[0]
-            if abs(_lc - cost) > 0.02 + 1e-9:
+            if _lc < cost - 0.02 - 1e-9:
                 _log_once(ticker + ":lqd", f"[RIDE82] {ticker}: live price {_lc*100:.0f}c vs lookup {cost*100:.0f}c -- price is "
-                                           f"moving fast, not buying this pass.")
+                                           f"FALLING fast, not buying this pass.")
                 continue
+            if _lc > cost + 1e-9:
+                cost = _lc   # 13 Nov 16:28 CT (Matt: "don't skip those"): price rising our way -> use the live price
             if cost < RIDE82_MIN_PRICE - 1e-9 or cost > RIDE82_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[RIDE82] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {RIDE82_MIN_PRICE*100:.0f}-{RIDE82_MAX_PRICE*100:.0f}c -- waiting.")
                 continue
-            _edge = RIDE82_MIN_EDGE if cost >= 0.90 - 1e-9 else RIDE82_MIN_EDGE_UNDER90
+            _edge = RIDE82_BOARD_TOLERANCE
             if (n.get("p") or 0) < cost + _edge - 1e-9:
                 _log_once(ticker + ":bp", f"[RIDE82] {ticker}: board {(n.get('p') or 0)*100:.0f}% is below the {cost*100:.0f}c "
-                                          f"price + {_edge*100:.0f} pts -- skipping (13 Nov: losses were all bought with the board 0-2 pts over the price).")
+                                          f"price by more than 2 pts -- skipping.")
                 continue
             limit = min(RIDE82_MAX_PRICE, round(cost + flip_star.FLIP_SLIPPAGE, 2))
         except Exception as e:

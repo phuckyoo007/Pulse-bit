@@ -94,10 +94,12 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 _log_once(ticker + ":lq", f"[LAST3] {ticker}: no live price yet -- waiting for the stream before buying.")
                 continue
             _lc = _lq[1] if side == "bid" else 1 - _lq[0]
-            if abs(_lc - cost) > 0.02 + 1e-9:
+            if _lc < cost - 0.02 - 1e-9:
                 _log_once(ticker + ":lqd", f"[LAST3] {ticker}: live price {_lc*100:.0f}c vs lookup {cost*100:.0f}c -- price is "
-                                           f"moving fast, not buying this pass.")
+                                           f"FALLING fast, not buying this pass.")
                 continue
+            if _lc > cost + 1e-9:
+                cost = _lc   # 13 Nov 16:28 CT (Matt: "don't skip those"): price rising our way -> use the live price
             if cost < LAST3_MIN_PRICE - 1e-9 or cost > LAST3_MAX_PRICE + 1e-9:
                 _log_once(ticker, f"[LAST3] {ticker}: board pick {side_name.upper()} but price {cost*100:.0f}c is "
                                   f"outside {LAST3_MIN_PRICE*100:.0f}-{LAST3_MAX_PRICE*100:.0f}c -- waiting.")
