@@ -18,7 +18,7 @@ import strategy_guard
 import kalshi_ws
 
 LAST3_ENABLED = True   # 12 Nov 16:11 CT (Matt): real money, 1 share
-LAST3_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
+LAST3_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 LAST3_DOLLARS = 0
 LAST3_MAX_SECONDS_LEFT = 180
 LAST3_MIN_SECONDS_LEFT = 120

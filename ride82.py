@@ -19,7 +19,7 @@ import strategy_guard
 import kalshi_ws
 
 RIDE82_ENABLED = True   # 13 Nov 03:33 CT (Matt): real money
-RIDE82_SHARES = 1   # 13 Nov 03:35 CT (Matt): one share
+RIDE82_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 RIDE82_DOLLARS = 0
 RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round
 RIDE82_MAX_SECONDS_LEFT = 240

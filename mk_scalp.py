@@ -66,7 +66,7 @@ def _sig_win(ticker, m, side, sl):
     return zs, (None if zs is None else _phi(zs)), "pulse"
 
 MKS_ENABLED = True
-MKS_PAPER = True            # 13 Nov 15:17 CT: paper first -- set False when Matt says go live
+MKS_PAPER = False           # 13 Nov 15:27 CT (Matt): run it live at 1 share
 MKS_SHARES = 1
 MKS_POLL_SECONDS = 4
 MKS_MAX_SECONDS_LEFT = 720  # 12:00 left

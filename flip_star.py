@@ -24,7 +24,7 @@ FLIP_ENABLED = True   # 12 Nov 23:50 CT (Matt): back on (not doing that bad), 2 
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
+FLIP_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 FLIP_HOLD_TO_END = True            # 11 Nov 02:46 CT (Matt): no red-card sell, no stop -- held to the end (backtest: 99% won)
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:

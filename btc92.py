@@ -14,7 +14,7 @@ import flip_star
 import strategy_guard
 
 BTC92_ENABLED = True   # 12 Nov 23:50 CT (Matt): back on (not doing that bad), 4 shares, its 4 hours only
-BTC92_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
+BTC92_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes
 BTC92_MIN_SECONDS_LEFT = 10
