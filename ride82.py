@@ -29,7 +29,7 @@ RIDE82_MIN_SECONDS_LEFT = 15
 RIDE82_SKIP_COINS = {"DOGE"}
 # 13 Nov 11:33 CT (auto loss review): XRP 84c (board 85%), SOL 86c (88%), BTC 95c (94%) all lost -- every Ride 82 loss
 # was bought with the board within about 2 points of the price. Now the board must be 3+ points above the price.
-RIDE82_MIN_EDGE = 0.03
+RIDE82_MIN_EDGE = 0.01   # 13 Nov 13:49 CT (Matt): only a 1-point difference (was 3)
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
