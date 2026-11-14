@@ -509,6 +509,79 @@ _last_table_hour = [None]
 _mid_prev = {}  # ticker -> (side, mid)
 
 
+# ---------------- MOMENTUM RIDE paper (13 Nov 18:52 CT, Matt) ----------------
+# "Once something hits 90% momentum, buy in; ride it as long as you can over the 15-minute window until momentum falls
+# below 50%." Momentum = the edge board's MOMENTUM meter (-1..+1 from the coin's 1- and 5-minute spot moves), toward
+# the side we'd buy. Buys at the ask, sells at the bid (both fees), or settles at the end if momentum never fades.
+MOM_VARIANTS = {"MOM90": (0.90, 0.50), "MOM80": (0.80, 0.40)}   # (buy at, sell below)
+MOM_SHARES = 2
+_mom_pos = {}    # (variant, ticker) -> dict
+_mom_done = set()
+_mom_tot = {v: {"n": 0, "up": 0, "pnl": 0.0} for v in MOM_VARIANTS}
+
+
+def _mom_close(v, ticker, p, value, why, settled=False):
+    fee_out = 0.0 if settled else _fee(value, MOM_SHARES) if 0 < value < 1 else 0.0
+    pnl = (value - p["entry"]) * MOM_SHARES - _fee(p["entry"], MOM_SHARES) - fee_out
+    t = _mom_tot[v]
+    t["n"] += 1
+    t["up"] += 1 if pnl > 0 else 0
+    t["pnl"] += pnl
+    print(f"[MOM-PAPER] {v} EXIT {ticker} {p['side'].upper()}: {why} -- bought {p['entry']*100:.0f}c, "
+          f"{'settled' if settled else 'sold'} {value*100:.0f}c after {time.time() - p['at']:.0f}s, {pnl:+.2f} | "
+          f"{v} total {t['n']} rides, {t['up']} up, {t['pnl']:+.2f}")
+
+
+def _momentum_ride(client, b, now):
+    for ticker, n in b.items():
+        if "15M" not in ticker.split("-")[0].upper() or n.get("coin") not in HS_COINS or n.get("tl") is None:
+            continue
+        ya, na = n.get("yes_ask"), n.get("no_ask")
+        if ya is None or na is None:
+            continue
+        tl = float(n["tl"])
+        for side in ("yes", "no"):
+            try:
+                ma = flip_star.momentum_against(ticker, side)
+            except Exception:
+                ma = None
+            if ma is None:
+                continue
+            m_side = -ma
+            ask = float(ya) if side == "yes" else float(na)
+            bid = 1 - float(na) if side == "yes" else 1 - float(ya)
+            for v, (buy_at, sell_below) in MOM_VARIANTS.items():
+                key = (v, ticker)
+                p = _mom_pos.get(key)
+                if p and p["side"] == side:
+                    if tl > 5 and m_side < sell_below:
+                        _mom_close(v, ticker, _mom_pos.pop(key), max(bid, 0.0),
+                                   f"momentum faded to {m_side*100:.0f}% ({tl:.0f}s left)")
+                    elif tl <= 5:
+                        p["await"] = True
+                    continue
+                if p or key in _mom_done or tl < 60:
+                    continue
+                if m_side >= buy_at and 0.10 <= ask <= 0.90:
+                    _mom_pos[key] = {"side": side, "entry": ask, "at": now, "close_at": now + tl}
+                    _mom_done.add(key)
+                    print(f"[MOM-PAPER] {v} ENTRY {ticker} {side.upper()} @ {ask*100:.0f}c: momentum {m_side*100:.0f}% "
+                          f"toward {side.upper()}, {tl:.0f}s left")
+    # settle rides still open after their round closed
+    for key, p in list(_mom_pos.items()):
+        if now < p["close_at"] + 60:
+            continue
+        try:
+            res = client.get_market(key[1]).get("market", {}).get("result")
+        except Exception:
+            continue
+        if res in ("yes", "no"):
+            _mom_close(key[0], key[1], _mom_pos.pop(key), 1.0 if res == p["side"] else 0.0,
+                       f"held to the end ({res.upper()})", settled=True)
+    if len(_mom_done) > 3000:
+        _mom_done.clear()
+
+
 def _last3(b, now):
     rounds = {}
     for ticker, n in b.items():
@@ -573,6 +646,10 @@ def run(client) -> None:
             _open[(name, ticker)] = {"side": side, "cost": cost, "close_at": now + tl, "coin": n.get("coin")}
     # 12 Nov 16:01 CT (Matt): last ~3 minutes, use the edge board + what the other coins are doing
     _last3(b, now)
+    try:
+        _momentum_ride(client, b, now)   # 13 Nov 18:52 CT (Matt): momentum ride, paper
+    except Exception as e:
+        print(f"[MOM-PAPER] pass failed ({e}).")
     # settle
     for (name, ticker), p in list(_open.items()):
         if now < p["close_at"] + 60:
