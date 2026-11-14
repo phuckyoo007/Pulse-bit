@@ -554,7 +554,7 @@ def _momentum_ride(client, b, now):
                 key = (v, ticker)
                 p = _mom_pos.get(key)
                 if p and p["side"] == side:
-                    if tl > 5 and bid >= p["entry"] + 0.20 - 1e-9:   # 13 Nov 19:03 CT (Matt): take +20c
+                    if tl > 5 and bid >= p["entry"] + 0.15 - 1e-9:   # 13 Nov 19:06 CT (Matt): take +15c
                         _mom_close(v, ticker, _mom_pos.pop(key), bid, f"take profit +{(bid - p['entry'])*100:.0f}c")
                     elif tl > 5 and m_side < sell_below:
                         _mom_close(v, ticker, _mom_pos.pop(key), max(bid, 0.0),
