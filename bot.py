@@ -905,6 +905,25 @@ def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-st
         return False
 
 
+def _bot_filled(client: KalshiClient, ticker: str):
+    """How many contracts this bot's own ENTRY orders have filled on this market (None if unknown)."""
+    try:
+        resp = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 100})
+        tot, seen = 0.0, False
+        for o in resp.get("orders", []) or []:
+            c = str(o.get("client_order_id", ""))
+            if not c.startswith(BOT_ORDER_ID_PREFIX) or c.startswith(BOT_ORDER_ID_PREFIX + "x-"):
+                continue
+            for k in ("fill_count_fp", "fill_count"):
+                if o.get(k) is not None:
+                    tot += float(o.get(k))
+                    seen = True
+                    break
+        return tot if seen else None
+    except Exception:
+        return None
+
+
 def placed_by_pulse(client: KalshiClient, ticker: str):
     """True if Kalshi's order history for this market contains an order this bot placed (its client_order_id starts with
     'pulse-'), False if it has orders but none are ours (i.e. placed by hand), None if the lookup failed or found nothing."""
@@ -1021,6 +1040,14 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         _series = ticker.split("-")[0]
         if by_bot is not True and _series not in PULSE_SERIES:
             by_bot = False
+        if by_bot is True:
+            # 13 Nov 19:41 CT: Ride 82 bought 2 BNB/BTC, got stopped out, then Matt bought 10 BNB / 13 BTC by hand on the
+            # same markets. The adopter saw the bot's old order and treated Matt's bet as Ride 82's -> its 45% stop sold
+            # his 10 BNB (-$5.44). If the position is bigger than everything the bot ever bought there, it's MANUAL.
+            _bf = _bot_filled(client, ticker)
+            if _bf is not None and count > _bf + 0.01:
+                print(f"  {ticker}: holding {count:g} but the bot only ever bought {_bf:g} here -- treating it as MANUAL.")
+                by_bot = False
         is_manual = (by_bot is False)
         state[ticker] = {"count": count, "entry_price": entry_price, "side": side,
                           "dry_run": False, "peak_gain_per_contract": 0.0,
