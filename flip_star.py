@@ -295,7 +295,11 @@ def _side_numbers(m: dict, age: float, coins: dict = None):
             "title": m.get("title", m.get("ticker")),
             "chg_1m": ((coins or {}).get(m.get("coin")) or {}).get("chg_1m"),
             "chg_5m": ((coins or {}).get(m.get("coin")) or {}).get("chg_5m"),
-            "mid_chg_1m": m.get("mid_chg_1m"), "flips": m.get("flips")}
+            "mid_chg_1m": m.get("mid_chg_1m"), "flips": m.get("flips"),
+            # 13 Nov 19:43 CT: for FINAL60 (settlement = average of the last 60 one-second index prints)
+            "spot": m.get("spot"), "strike": m.get("strike"), "dir": m.get("dir"),
+            "vol": (((coins or {}).get(m.get("coin")) or {}).get("ann_vol_30m")
+                    or ((coins or {}).get(m.get("coin")) or {}).get("ann_vol_24h"))}
 
 
 _mom = {}   # coin -> smoothed momentum, same math as the edge board's MOMENTUM meter

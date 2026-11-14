@@ -34,6 +34,7 @@ import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history repl
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
+import final60   # 13 Nov 19:43 CT: settlement-average edge (paper)
 import late78   # 13 Nov 19:31 CT (Matt): 78c+ in the last 2 min, 80% stop, sell at 99c, 2 shares live
 import momride   # 13 Nov 18:54 CT (Matt): momentum ride -- buy at 90% momentum, sell under 50%, 2 shares live
 import ride82   # 13 Nov 03:33 CT (Matt): BTC/XRP/DOGE at 82c+ in the last 4 min, 40% stop
@@ -1701,6 +1702,10 @@ def run():
             late60.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[LATE60] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            final60.run(client)
+        except Exception as e:
+            print(f"[FINAL60-PAPER] pass failed (non-fatal): {e}")
         try:
             late78.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
