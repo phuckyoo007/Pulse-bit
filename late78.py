@@ -24,7 +24,7 @@ LATE78_MIN_PRICE = 0.78
 LATE78_MAX_PRICE = 0.98
 LATE78_STOP_FRACTION = 0.80   # fell back 20% -> out
 LATE78_TAKE_PROFIT_PRICE = 0.99
-LATE78_BOARD_TOLERANCE = -1.0   # no board-vs-price rule
+LATE78_BOARD_TOLERANCE = -0.02   # 13 Nov 23:46 CT (loss review): board within 2 pts of the price, like Ride 82 -- 11 PM losses had board 5-25 pts UNDER the price (BNB 56% vs 81c, SOL 74% vs 80c, BTC 85% vs 90c)
 LATE78_MIN_EDGE = 0.0
 LATE78_MIN_EDGE_UNDER90 = 0.0
 
