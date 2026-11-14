@@ -208,6 +208,10 @@ def _history(client):
         except Exception as e:
             print(f"[COMBO] crashed ({e}).")
         try:
+            _segments()
+        except Exception as e:
+            print(f"[SEGMENT] crashed ({e}).")
+        try:
             _cheap()
         except Exception as e:
             print(f"[CHEAP] crashed ({e}).")
@@ -499,6 +503,61 @@ def _cheap():
         print(f"[CHEAP] {tl // 60}:00 left | {why} | {band} | {ex}: {n} bets, {w / n * 100:.1f}% hit target or won, avg price "
               f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet, {p / max(c * HS_SHARES, 1e-9) * 100:+.1f}% of money put in)")
     print("[CHEAP] done.")
+
+
+def _segments():
+    """13 Nov 19:39 CT (Matt): "break it down into 5-minute windows -- first, second and third -- and by time of day;
+    find which works when". For every coin-round, buy the favorite (the side priced over 50c) once in each third of
+    the round (at 13:00, 8:00 and 3:00 left), hold to the end. Group by third x Central-time hour x price band.
+    Cells are picked on the first 70% of the days (TRAIN) and checked on the last 30% (TEST)."""
+    ts = sorted(_rounds)
+    if not ts:
+        return
+    cut = ts[0] + (ts[-1] - ts[0]) * 0.7
+    bands = ((0.50, 0.65), (0.65, 0.80), (0.80, 0.90), (0.90, 0.98))
+    cells = {}
+    for close_ts, coins in _rounds.items():
+        hour = _ct_hour(close_ts)
+        part = 0 if close_ts < cut else 1
+        for coin, (c, res) in coins.items():
+            for third, tl in (("1st 5 min", 780), ("2nd 5 min", 480), ("3rd 5 min", 180)):
+                a = _at(c, tl)
+                if not a:
+                    continue
+                ya, yb = a
+                side = "yes" if (ya + yb) / 2 >= 0.5 else "no"
+                cost = ya if side == "yes" else 1 - yb
+                band = next((f"{int(lo*100)}-{int(hi*100)}c" for lo, hi in bands if lo <= cost < hi), None)
+                if not band:
+                    continue
+                won = res == side
+                pnl = ((1.0 if won else 0.0) - cost) * HS_SHARES - _fee(cost, HS_SHARES)
+                for key in ((third, hour, band), (third, "all hours", band), (third, hour, "all prices")):
+                    v = cells.setdefault(key, [[0, 0, 0.0], [0, 0, 0.0]])[part]
+                    v[0] += 1
+                    v[1] += 1 if won else 0
+                    v[2] += pnl
+    print(f"[SEGMENT] ===== buy the favorite in each 5-minute third, by Central hour and price, hold to end; "
+          f"{HS_DAYS} days, {HS_SHARES} shares, after fees. TRAIN = first 70% of days, TEST = last 30% =====")
+    for third in ("1st 5 min", "2nd 5 min", "3rd 5 min"):
+        for (lo, hi) in bands:
+            band = f"{int(lo*100)}-{int(hi*100)}c"
+            tr, te = cells.get((third, "all hours", band), [[0, 0, 0.0], [0, 0, 0.0]])
+            if tr[0]:
+                print(f"[SEGMENT] {third} | all hours | {band}: TRAIN {tr[0]} bets ${tr[2]:+.2f} | TEST {te[0]} bets ${te[2]:+.2f}")
+    good = [(k, v) for k, v in cells.items() if k[1] != "all hours" and v[0][0] >= 25 and v[1][0] >= 10
+            and v[0][2] > 0 and v[1][2] > 0]
+    good.sort(key=lambda kv: -(kv[1][0][2] + kv[1][1][2]))
+    print(f"[SEGMENT] cells positive in BOTH train and test (25+ train bets, 10+ test): {len(good)}")
+    for (third, hour, band), (tr, te) in good[:40]:
+        print(f"[SEGMENT] GOOD {third} | {hour:02d}h CT | {band}: TRAIN {tr[0]} bets, won {tr[1]}, ${tr[2]:+.2f} | "
+              f"TEST {te[0]} bets, won {te[1]}, ${te[2]:+.2f}")
+    bad = [(k, v) for k, v in cells.items() if k[1] != "all hours" and k[2] == "all prices" and v[0][0] >= 25
+           and v[0][2] < 0 and v[1][2] < 0]
+    bad.sort(key=lambda kv: kv[1][0][2] + kv[1][1][2])
+    for (third, hour, band), (tr, te) in bad[:15]:
+        print(f"[SEGMENT] BAD {third} | {hour:02d}h CT: TRAIN ${tr[2]:+.2f} | TEST ${te[2]:+.2f} -- avoid")
+    print("[SEGMENT] done.")
 
 
 # ---------------- live paper ----------------
