@@ -34,6 +34,7 @@ import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history repl
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
+import momride   # 13 Nov 18:54 CT (Matt): momentum ride -- buy at 90% momentum, sell under 50%, 2 shares live
 import ride82   # 13 Nov 03:33 CT (Matt): BTC/XRP/DOGE at 82c+ in the last 4 min, 40% stop
 import last3   # 12 Nov 16:11 CT (Matt): last-3-minutes crowd + board edge, real money 1 share
 import late80   # 10 Nov 16:46 CT (Matt): board pick at 80-93c with 2:00-4:00 left, 3 shares, held to the end (no stop)
@@ -1037,6 +1038,9 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             elif _placed_by_steady(client, ticker, "pulse-surge-late60-"):
                 state[ticker]["late60"] = True   # 10 Nov: a LATE60 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-momride-"):
+                state[ticker]["momride"] = True   # 13 Nov: momentum ride keeps its momentum exit after a restart
+                state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-ride82-"):
                 state[ticker]["ride82"] = True   # 13 Nov: RIDE82 keeps its hold + 40% stop rule after a restart
                 state[ticker]["flip_star"] = False
@@ -1153,6 +1157,21 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("momride"):
+                    # 13 Nov 18:54 CT (Matt): ride it until the momentum meter toward our side drops under 50%
+                    _mside = None
+                    try:
+                        _ma = flip_star.momentum_against(ticker, position.get("side_name") or ("yes" if position.get("side") == "bid" else "no"))
+                        _mside = None if _ma is None else -_ma
+                    except Exception:
+                        _mside = None
+                    if position.get("bad_fill"):
+                        decision = ExitDecision(True, "stop_bad_fill (filled far under the price seen -- falling fast)")
+                    elif _mside is not None and _mside < momride.MOMRIDE_SELL_MOMENTUM - 1e-9:
+                        decision = ExitDecision(True, f"momentum_faded (momentum toward our side {_mside*100:.0f}% < "
+                                                      f"{momride.MOMRIDE_SELL_MOMENTUM*100:.0f}% -- off the ride)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("late80") or position.get("late60") or position.get("early93") or position.get("last3") or position.get("ride82"):
                     # 11 Nov 00:01 CT (Matt): Follow the crowd -- NO stop, held to the end (78% stop removed)
                     # 11 Nov 02:03 CT (Matt): except a fill more than 5c under the strategy's minimum -> sell right away
@@ -1637,6 +1656,10 @@ def run():
             late60.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[LATE60] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            momride.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[MOMRIDE] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             ride82.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
