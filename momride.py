@@ -15,7 +15,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-MOMRIDE_ENABLED = True   # 13 Nov 18:54 CT (Matt): live, 2 shares
+MOMRIDE_ENABLED = False   # 13 Nov 20:58 CT (Matt): losing -- real money off; paper twin MOM90/MOM80 keeps running in hour_study
 MOMRIDE_SHARES = 2
 MOMRIDE_DOLLARS = 0
 MOMRIDE_COINS = None
