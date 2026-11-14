@@ -1167,6 +1167,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         _mside = None
                     if position.get("bad_fill"):
                         decision = ExitDecision(True, "stop_bad_fill (filled far under the price seen -- falling fast)")
+                    elif _hv >= position["entry_price"] + momride.MOMRIDE_TAKE_PROFIT - 1e-9:
+                        decision = ExitDecision(True, f"take_profit (+{(_hv - position['entry_price'])*100:.0f}c a share -- "
+                                                      f"bought {position['entry_price']*100:.0f}c, now {_hv*100:.0f}c)")
                     elif _mside is not None and _mside < momride.MOMRIDE_SELL_MOMENTUM - 1e-9:
                         decision = ExitDecision(True, f"momentum_faded (momentum toward our side {_mside*100:.0f}% < "
                                                       f"{momride.MOMRIDE_SELL_MOMENTUM*100:.0f}% -- off the ride)")
