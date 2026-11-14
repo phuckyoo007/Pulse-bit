@@ -815,7 +815,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
-            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl); strategy_guard.record(state.get(ticker), pnl)
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl); strategy_guard.record(state.get(ticker), pnl); _BOT_EXITED[ticker] = time.time()
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -904,6 +904,9 @@ def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-st
         return any(str(o.get("client_order_id", "")).startswith(prefix) for o in (resp.get("orders", []) or []))
     except Exception:
         return False
+
+
+_BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
 
 
 def _bot_filled(client: KalshiClient, ticker: str):
@@ -1046,6 +1049,12 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         # 25 Oct 18:35 CT: Pulse only ever bets on the crypto 15-minute coins. Anything else (natural gas etc.) is manual.
         _series = ticker.split("-")[0]
         if by_bot is not True and _series not in PULSE_SERIES:
+            by_bot = False
+        if by_bot is True and ticker in _BOT_EXITED and ticker not in state:
+            # 13 Nov 23:46 CT: Ride 82 sold its 2 ZEC at 23:43, Matt bought 9 ZEC by hand 2 seconds later, and that was
+            # adopted as the bot's and sold by Ride 82's 45% stop (-$3.05). The bot never re-buys a market it already
+            # bet and exited this round, so anything that shows up there afterwards is Matt's.
+            print(f"  {ticker}: the bot already closed its own bet here -- this new position is MANUAL.")
             by_bot = False
         if by_bot is True:
             # 13 Nov 19:41 CT: Ride 82 bought 2 BNB/BTC, got stopped out, then Matt bought 10 BNB / 13 BTC by hand on the
@@ -1485,7 +1494,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 pulse_v2.track_live_exit(ticker, position, exit_value)   # follow it to settlement: did the sell help?
             except Exception:
                 pass
-            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl)
+            flip_star.record_result(position, pnl, "early exit: " + decision.reason[:40]); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl); _BOT_EXITED[ticker] = time.time()
             sht.record_early_exit(ticker, position["side"], position["entry_price"], position["count"],
                                    exit_value, decision.reason, category="crypto")
             del state[ticker]
@@ -1543,7 +1552,7 @@ def check_settlements(client: KalshiClient, state: dict) -> list:
         })
         newly_settled_pnl.append(pnl)
         print(f"Settled {ticker}: result={market['result']}, pnl=${pnl:.2f}")
-        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl)
+        flip_star.record_result(position, pnl, "settled " + str(market.get("result"))); rise.record(position, pnl); closer.record(position, pnl); late80.record(position, pnl); strategy_guard.record(position, pnl); _BOT_EXITED[ticker] = time.time()
     if newly_settled_pnl:
         save_json(SETTLEMENTS_FILE, settlements)
     return newly_settled_pnl
