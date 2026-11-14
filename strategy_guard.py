@@ -16,7 +16,7 @@ ONE_COIN_PER_ROUND = True
 COOLDOWN_AFTER_LOSS = 1800
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
 _cool_until = [0.0]
-_BOT_FLAGS = ("early93", "momride", "ride82", "last3", "late80", "late60", "btc92", "flip_star", "rising", "rise")
+_BOT_FLAGS = ("early93", "late78", "momride", "ride82", "last3", "late80", "late60", "btc92", "flip_star", "rising", "rise")
 _own = {}            # (round id, strategy) -> ticker, for strategies with their own slot
 _said = {}
 _pnl = {}       # strategy -> net P/L since start
@@ -24,7 +24,7 @@ _off = set()
 
 
 def _which(p: dict):
-    for flag in ("early93", "momride", "ride82", "last3", "late80", "late60", "btc92", "rising", "rise"):
+    for flag in ("early93", "late78", "momride", "ride82", "last3", "late80", "late60", "btc92", "rising", "rise"):
         if p.get(flag):
             return flag
     if p.get("flip_star") and not p.get("manually_adopted"):
@@ -33,9 +33,11 @@ def _which(p: dict):
 
 
 def _switch_off(name):
-    import btc92, early93, flip_star, last3, late60, late80, momride, ride82
+    import btc92, early93, flip_star, last3, late60, late78, late80, momride, ride82
     if name == "early93":
         early93.EARLY93_ENABLED = False
+    elif name == "late78":
+        late78.LATE78_ENABLED = False
     elif name == "momride":
         momride.MOMRIDE_ENABLED = False
     elif name == "ride82":

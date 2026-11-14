@@ -34,6 +34,7 @@ import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history repl
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
+import late78   # 13 Nov 19:31 CT (Matt): 78c+ in the last 2 min, 80% stop, sell at 99c, 2 shares live
 import momride   # 13 Nov 18:54 CT (Matt): momentum ride -- buy at 90% momentum, sell under 50%, 2 shares live
 import ride82   # 13 Nov 03:33 CT (Matt): BTC/XRP/DOGE at 82c+ in the last 4 min, 40% stop
 import last3   # 12 Nov 16:11 CT (Matt): last-3-minutes crowd + board edge, real money 1 share
@@ -1038,6 +1039,9 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             elif _placed_by_steady(client, ticker, "pulse-surge-late60-"):
                 state[ticker]["late60"] = True   # 10 Nov: a LATE60 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-late78-"):
+                state[ticker]["late78"] = True   # 13 Nov: LATE78 keeps its 80% stop / 99c exit after a restart
+                state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-momride-"):
                 state[ticker]["momride"] = True   # 13 Nov: momentum ride keeps its momentum exit after a restart
                 state[ticker]["flip_star"] = False
@@ -1157,6 +1161,17 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("late78"):
+                    # 13 Nov 19:31 CT (Matt): out at 80% of entry (fell back 20%); take the profit at 99c; else hold
+                    if position.get("bad_fill"):
+                        decision = ExitDecision(True, "stop_bad_fill (filled well under 78c -- price falling fast)")
+                    elif _hv >= late78.LATE78_TAKE_PROFIT_PRICE - 1e-9:
+                        decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
+                    elif _hv <= position["entry_price"] * late78.LATE78_STOP_FRACTION + 1e-9:
+                        decision = ExitDecision(True, f"stop_80pct (held side {_hv*100:.0f}c <= 80% of entry "
+                                                      f"{position['entry_price']*100:.0f}c -- instant)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("momride"):
                     # 13 Nov 18:54 CT (Matt): ride it until the momentum meter toward our side drops under 50%
                     _mside = None
@@ -1659,6 +1674,10 @@ def run():
             late60.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[LATE60] entry pass failed (non-fatal, other strategies continue): {e}")
+        try:
+            late78.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[LATE78] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             momride.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
