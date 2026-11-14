@@ -907,20 +907,26 @@ def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-st
 
 
 def _bot_filled(client: KalshiClient, ticker: str):
-    """How many contracts this bot's own ENTRY orders have filled on this market (None if unknown)."""
+    """How many contracts this bot's own ENTRY orders actually bought on this market (None if it can't tell).
+    13 Nov 21:44 CT: uses Kalshi's real FILLS (matched to the bot's entry order ids) -- the order list's fill counts came
+    back 0 for a real 4-share bot bet (BNB 21:30), which wrongly made it look manual."""
     try:
-        resp = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 100})
-        tot, seen = 0.0, False
-        for o in resp.get("orders", []) or []:
-            c = str(o.get("client_order_id", ""))
-            if not c.startswith(BOT_ORDER_ID_PREFIX) or c.startswith(BOT_ORDER_ID_PREFIX + "x-"):
+        orders = client._request("GET", "/portfolio/orders", params={"ticker": ticker, "limit": 200}).get("orders", []) or []
+        ids = {o.get("order_id") for o in orders
+               if str(o.get("client_order_id", "")).startswith(BOT_ORDER_ID_PREFIX)
+               and not str(o.get("client_order_id", "")).startswith(BOT_ORDER_ID_PREFIX + "x-")}
+        if not ids:
+            return None
+        fills = client._request("GET", "/portfolio/fills", params={"ticker": ticker, "limit": 200}).get("fills", []) or []
+        tot = 0.0
+        for f in fills:
+            if f.get("order_id") not in ids or str(f.get("action", "buy")) != "buy":
                 continue
-            for k in ("fill_count_fp", "fill_count"):
-                if o.get(k) is not None:
-                    tot += float(o.get(k))
-                    seen = True
+            for k in ("count_fp", "count"):
+                if f.get(k) is not None:
+                    tot += float(f.get(k))
                     break
-        return tot if seen else None
+        return tot if tot > 0 else None   # nothing matched -> can't tell -> keep it as the bot's
     except Exception:
         return None
 
