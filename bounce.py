@@ -39,6 +39,10 @@ VARIANTS = [
     {"tag": "BOUNCE", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": BOUNCE_STOP},
     {"tag": "LOW", "dollars": 0.10, "lo": 0.03, "hi": 0.15, "swing": 0.04, "take": 2.00, "stop": 0.50},
+    # 15 Nov 13:18 CT (Matt): "in the first five minutes it's all the way up to 90 and the other side is 10 -- the 90
+    # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
+    {"tag": "EARLY10", "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
+     "min_left": 600},
 ]
 
 _last = [0.0]
@@ -148,12 +152,12 @@ def run(client) -> None:
                 bid = yb if p["side"] == "yes" else 1 - ya
                 if bid >= p["cost"] * v["take"] - 1e-9:
                     _close(key, _pos.pop(key), bid, f"+{(bid / p['cost'] - 1)*100:.0f}% -- cashing out")
-                elif bid <= p["cost"] * v["stop"] + 1e-9:
+                elif v["stop"] > 0 and bid <= p["cost"] * v["stop"] + 1e-9:
                     _close(key, _pos.pop(key), bid, f"cut at {bid / p['cost']*100:.0f}% of cost")
                 elif sl < BOUNCE_EXIT_SECONDS_LEFT:
                     _close(key, _pos.pop(key), bid, f"{sl:.0f}s left -- out")
                 continue
-            if key in _done or sl < BOUNCE_MIN_SECONDS_LEFT or len(h) < 10:
+            if key in _done or sl < v.get("min_left", BOUNCE_MIN_SECONDS_LEFT) or len(h) < 10:
                 continue
             for side in ("yes", "no"):
                 ask = ya if side == "yes" else 1 - yb
