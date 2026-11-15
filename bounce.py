@@ -168,6 +168,11 @@ def run(client) -> None:
                 lo_before_hi = min(mids[:mids.index(hi) + 1])
                 now_mid = mids[-1]
                 # it already swung UP inside the window, and is back near the low now
+                # 15 Nov 13:24 CT: first live paper rides caught CRASHES (60c -> 82c -> 29c), not bounces.  A real bounce
+                # stays in the cheap zone the whole time (20 -> 30 -> 20), and today's price is back near the start,
+                # not breaking lower.
+                if v["swing"] > 0 and (hi > v["hi"] + 2 * v["swing"] + 1e-9 or now_mid < lo_before_hi - 0.03):
+                    continue
                 if hi - lo_before_hi >= v["swing"] - 1e-9 and hi - now_mid >= v["swing"] * 0.8 - 1e-9:
                     count = max(1, math.floor(v["dollars"] / ask + 1e-9))
                     _pos[key] = {"v": v["tag"], "side": side, "cost": ask, "count": count, "at": now, "kind": _kind(t)}
