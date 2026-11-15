@@ -22,7 +22,7 @@ LATE78_MAX_SECONDS_LEFT = 240
 LATE78_MIN_SECONDS_LEFT = 8
 LATE78_MIN_PRICE = 0.78
 LATE78_MAX_PRICE = 0.98
-LATE78_STOP_FRACTION = 0.85   # fell back 20% -> out
+LATE78_STOP_FRACTION = 0.80   # 15 Nov 13:13 CT (Matt): 80% backup stop -- the sigma exit should catch it first
 LATE78_TAKE_PROFIT_PRICE = 0.99
 # 15 Nov 13:12 CT (Matt): "put a minimum sigma on Late 78 -- once it falls below that value, use that as the loss".
 # Buy only with our side LATE78_MIN_SIGMA+ from flipping; sell the moment it drops under it (the 85% stop stays as a backup).
