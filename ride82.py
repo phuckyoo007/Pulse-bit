@@ -139,7 +139,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         _done[ticker] = now
         strategy_guard.note_entry(ticker, own_slot="RIDE82-" + str(n.get("coin")))
-        qty = max(0.01, int(RIDE82_DOLLARS / limit * 100) / 100) if RIDE82_DOLLARS else float(RIDE82_SHARES)
+        qty = max(0.01, int(RIDE82_DOLLARS / limit * 100) / 100) if RIDE82_DOLLARS else float(strategy_guard.bet_shares(limit, RIDE82_SHARES))
         print(f"[RIDE82] ENTRY {ticker} ({n.get('coin')}): board pick {side_name.upper()} ({(n.get('p') or 0)*100:.0f}%), "
               f"{int(tl)}s left -- {'DRY-RUN ' if dry_run else ''}buying {qty:.2f} share up to ${limit:.2f} "
               f"(about ${qty*limit:.2f})")

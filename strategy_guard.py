@@ -7,6 +7,32 @@ import time
 STRATEGY_MAX_LOSS = 10.00   # 15 Nov 13:32 CT (Matt): "$10 loss limit" (was $4)
 MAX_LOSS_BY_STRATEGY = {}   # 15 Nov 13:32 CT: Flip Star also $10 now (was $2)
 
+# 15 Nov 16:29 CT (Matt: "I'd like to see the entire balance being used by multiple bets during the round" -- confirmed
+# "Yes, whole balance"): every live strategy sizes its bet from the Kalshi cash balance instead of fixed shares.
+# The balance at the start of each 15-minute round is split BALANCE_SPLIT ways (up to 6 bets a round, ~1/6 each).
+# Set BALANCE_SIZING = False to go back to each strategy's own fixed share count.
+BALANCE_SIZING = True
+BALANCE_SPLIT = 6
+BANKROLL = [None]   # bot.py keeps this at the latest Kalshi cash balance (dollars)
+_size_round = {"key": None, "bank": None}
+
+
+def bet_shares(price, default):
+    """Shares for one bet at `price`: (round-start balance / BALANCE_SPLIT) / price, at least 1; `default` if unknown."""
+    try:
+        if not BALANCE_SIZING or not BANKROLL[0] or not price or price <= 0:
+            return default
+        from datetime import datetime, timezone
+        u = datetime.now(timezone.utc)
+        key = u.strftime("%Y%m%d%H") + str(u.minute // 15)
+        if _size_round["key"] != key or not _size_round["bank"]:
+            _size_round["key"], _size_round["bank"] = key, float(BANKROLL[0])
+            print(f"[SIZE] round start: balance ${_size_round['bank']:.2f} -> about ${_size_round['bank'] / BALANCE_SPLIT:.2f} a bet "
+                  f"(up to {BALANCE_SPLIT} bets this round).")
+        return max(1, int((_size_round["bank"] / BALANCE_SPLIT) / float(price)))
+    except Exception:
+        return default
+
 # 12 Nov 14:53 CT (Matt: "tighten every strategy so the losses don't happen again").
 # Paper + real records 11-12 Nov: most losses come in rounds where SEVERAL coins crash together (all 7 coins move
 # together -- e.g. noon 11 Nov lost 5 coins in one round, 6 AM 12 Nov lost 4). So:

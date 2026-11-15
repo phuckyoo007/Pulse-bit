@@ -1683,6 +1683,7 @@ def run():
 
     while True:
         bankroll = bankroll_and_breaker["bankroll"]
+        strategy_guard.BANKROLL[0] = bankroll   # 15 Nov 16:29 CT: live bets are sized from this (whole balance per round)
         breaker = bankroll_and_breaker["breaker"]
         with STATE_LOCK:
             adopt_manual_positions(client, state)

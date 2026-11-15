@@ -744,6 +744,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         strategy_guard.note_entry(ticker)
         why = "RED STAR" if n["lock"] else (f"To flip GREEN {n['zs']:.1f} sigma" if n["zs"] >= 2 else f"To flip YELLOW 1 (bid zone) {n['zs']:.1f} sigma")
         want, boosted = shares_for(n["coin"])
+        want = strategy_guard.bet_shares(limit_side_price, want)   # 15 Nov 16:29 CT (Matt): whole balance split over the round
         print(f"[FLIP] ENTRY {ticker} ({n['coin']}): {why}, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "
               f"{'DRY-RUN ' if dry_run else ''}buying {want} {n['side'].upper()} up to ${limit_side_price:.2f}")
         if dry_run:

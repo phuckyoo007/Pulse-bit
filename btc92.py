@@ -95,15 +95,16 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         _done[ticker] = now
         strategy_guard.note_entry(ticker)
+        _qty = strategy_guard.bet_shares(limit, BTC92_SHARES)
         print(f"[BTC92] ENTRY {ticker} ({n.get('coin')}): {side_name.upper()} at {n['p']*100:.0f}%, {int(tl)}s left -- "
-              f"{'DRY-RUN ' if dry_run else ''}buying {BTC92_SHARES} up to ${limit:.2f}")
+              f"{'DRY-RUN ' if dry_run else ''}buying {_qty} up to ${limit:.2f}")
         if dry_run:
             continue
         try:
-            ensure_shard_funds(client, ticker, limit * BTC92_SHARES)
+            ensure_shard_funds(client, ticker, limit * _qty)
             yes_price = limit if side == "bid" else round(1 - limit, 2)
             client.create_order(ticker=ticker, client_order_id=f"pulse-surge-btc92-{uuid.uuid4()}", side=side,
-                                count=str(BTC92_SHARES), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
+                                count=str(_qty), price=f"{yes_price:.2f}", time_in_force="immediate_or_cancel")
         except Exception as e:
             print(f"[BTC92] {ticker}: entry order failed ({e}).")
             if "market_closed" in str(e) or "market_not_found" in str(e):
