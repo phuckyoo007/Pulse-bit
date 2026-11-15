@@ -36,6 +36,10 @@ RIDE82_MIN_EDGE_UNDER90 = 0.03
 # 13 Nov 16:28 CT (Matt): "allow a two-point difference all directions" -- the board may be up to 2 points BELOW the
 # price (board lags the live price in a fast move); replaces the +1 / +3 point rules above.
 RIDE82_BOARD_TOLERANCE = -0.02
+# 15 Nov 14:10 CT (Matt: "anything you can do to improve the strategies"): since 13 Nov Ride 82 has had ~29 stop-outs
+# at about -$1.10 each against ~$0.19 average wins -- it needs 86%+ winners just to break even.  Same two filters
+# as Late 78: our side must be 1.3+ sigma from flipping, and skip a coin whose board pick changed sides in 6 minutes.
+RIDE82_ENTRY_SIGMA = 1.3
 RIDE82_MIN_PRICE = 0.82
 RIDE82_MAX_PRICE = 0.97
 
@@ -86,6 +90,14 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         side_name = n.get("side")
         if side_name not in ("yes", "no"):
             continue
+        if n.get("zs") is None or n["zs"] < RIDE82_ENTRY_SIGMA - 1e-9:
+            continue
+        try:
+            import late78 as _l78
+            if _l78.flipped_recently(ticker):
+                continue
+        except Exception:
+            pass
         _mc = n.get("mid_chg_1m")
         if _mc is not None and _mc * (1 if side_name == "yes" else -1) < -1e-9:
             continue   # our side's price fell over the last minute -- not "riding"

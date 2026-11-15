@@ -53,21 +53,17 @@ def _log_once(key, msg):
         print(msg)
 
 
+def flipped_recently(ticker) -> bool:
+    """True when the board's pick for this market changed sides in the last LATE78_FLIP_LOOKBACK seconds (shared with Ride 82)."""
+    return len({sd for _, sd in _side_seen.get(ticker, [])}) > 1
+
+
 def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, ensure_shard_funds) -> None:
-    if not LATE78_ENABLED or flip_star.in_pause():
-        return
     b = flip_star.board()
     if not b:
         return
     now = time.time()
-    try:
-        kalshi_ws.watch_extra([t for t, x in b.items() if "15M" in t.split("-")[0].upper()])
-    except Exception:
-        pass
-    for t in [t for t, at in _done.items() if now - at > 1800]:
-        _done.pop(t, None)
-        _tries.pop(t, None)
-    for t_, x_ in b.items():
+    for t_, x_ in b.items():   # side history is kept even while paused, so the flip check is always current
         if x_.get("side") in ("yes", "no"):
             h_ = _side_seen.setdefault(t_, [])
             h_.append((now, x_["side"]))
@@ -75,6 +71,15 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 h_.pop(0)
     for t_ in [t_ for t_ in _side_seen if t_ not in b]:
         _side_seen.pop(t_, None)
+    if not LATE78_ENABLED or flip_star.in_pause():
+        return
+    try:
+        kalshi_ws.watch_extra([t for t, x in b.items() if "15M" in t.split("-")[0].upper()])
+    except Exception:
+        pass
+    for t in [t for t, at in _done.items() if now - at > 1800]:
+        _done.pop(t, None)
+        _tries.pop(t, None)
     for ticker, n in flip_star.by_priority(b):
         if "15M" not in ticker.split("-")[0].upper():   # 13 Nov: every coin -- no coin filter for LATE78
             continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
@@ -95,7 +100,7 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         if n.get("zs") is None or n["zs"] < LATE78_ENTRY_SIGMA - 1e-9:
             continue   # 15 Nov (Matt): minimum sigma to buy (1.3 to buy, 1.0 to sell)
-        if len({sd for _, sd in _side_seen.get(ticker, [])}) > 1:
+        if flipped_recently(ticker):
             _log_once("flip" + ticker, f"[LATE78] {ticker}: board pick changed sides in the last "
                       f"{LATE78_FLIP_LOOKBACK // 60} min -- choppy, skipping.")
             continue
