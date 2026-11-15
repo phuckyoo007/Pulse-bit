@@ -4,8 +4,8 @@ started), that strategy is switched off until the bot is restarted. Other strate
 """
 import time
 
-STRATEGY_MAX_LOSS = 4.00
-MAX_LOSS_BY_STRATEGY = {"flip_star": 2.00}   # 12 Nov 15:08 CT: Flip Star switches off sooner (-$2)
+STRATEGY_MAX_LOSS = 10.00   # 15 Nov 13:32 CT (Matt): "$10 loss limit" (was $4)
+MAX_LOSS_BY_STRATEGY = {}   # 15 Nov 13:32 CT: Flip Star also $10 now (was $2)
 
 # 12 Nov 14:53 CT (Matt: "tighten every strategy so the losses don't happen again").
 # Paper + real records 11-12 Nov: most losses come in rounds where SEVERAL coins crash together (all 7 coins move
