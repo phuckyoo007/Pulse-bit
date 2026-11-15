@@ -33,6 +33,14 @@ BOUNCE_TAKE = 1.50
 BOUNCE_STOP = 0.60
 BOUNCE_MIN_SECONDS_LEFT = 180
 BOUNCE_EXIT_SECONDS_LEFT = 60
+# 15 Nov 16:45 CT (Matt: "improve the paper versions so they don't have any losses").  Paper so far: 41 rides, 13 up.
+#  1) Most losing BOUNCE rides came in rounds where 3-4 coins all triggered the SAME way within a minute
+#     (16:30 round: ZEC/XRP/SOL/BTC YES all cut; 17:00 round: DOGE/BNB/SOL/XRP NO all cut) -- that is the whole
+#     market trending, not a bounce.  Skip when 2+ other coins' cheap side on the same YES/NO side fell in the last minute.
+#  2) Only buy a cheap side the board's model thinks is UNDER-priced: model chance >= ask + BOUNCE_MODEL_EDGE.
+#     Markets with no model (commodities / currencies) are skipped -- the one currency ride (EUR/USD) lost.
+BOUNCE_MARKET_MOVE = 2
+BOUNCE_MODEL_EDGE = 0.03
 
 # 15 Nov 13:16 CT (Matt): "it climbs really fast on the low end, 5-10c doubles your money ... buy at 3c, exit at 12c,
 # a dollar turns into four ... try it with dimes ($0.10)".  Two paper versions side by side:
@@ -164,6 +172,23 @@ def _close(key, p, bid, why, client=None, place_exit=None, settled=False):
     return True
 
 
+def _market_falling(ticker, side, now):
+    """How many OTHER crypto markets' `side` price fell 3c+ over the last minute."""
+    n = 0
+    for t2, h2 in _hist.items():
+        if t2 == ticker or _kind(t2) != "crypto" or len(h2) < 2:
+            continue
+        old = [x for x in h2 if now - x[0] >= 50]
+        if not old:
+            continue
+        o, c = old[-1], h2[-1]
+        m_old = (o[1] + o[2]) / 2 if side == "yes" else 1 - (o[1] + o[2]) / 2
+        m_now = (c[1] + c[2]) / 2 if side == "yes" else 1 - (c[1] + c[2]) / 2
+        if m_old - m_now >= 0.03:
+            n += 1
+    return n
+
+
 def T_off(v):
     return _tot[v["tag"]].get("off", False)
 
@@ -195,11 +220,15 @@ def run(client, place_exit=None, state=None) -> None:
     rkey = utc.strftime("%Y%m%d%H") + str(utc.minute // 15)
     if _round["key"] != rkey and (utc.minute % 15) >= 1:
         _round["key"] = rkey
-        _round["mk"] = _discover(client)
+        _round["mk"] = []   # 15 Nov 16:45 CT: crypto only now (needs the board's model) -- no commodity/currency lookups,
+        # which also saves Kalshi API calls (the bot has been getting "too many requests" on its balance check)
         _done.clear()
     quotes = {}   # ticker -> (yes_bid, yes_ask, secs_left)
+    model = {}    # ticker -> model chance that YES wins (crypto board)
     try:
         for t, n in (flip_star.board() or {}).items():
+            if n.get("p") is not None and n.get("side") in ("yes", "no"):
+                model[t] = float(n["p"]) if n["side"] == "yes" else 1 - float(n["p"])
             if "15M" in t.split("-")[0].upper() and n.get("yes_ask") is not None and n.get("no_ask") is not None \
                     and n.get("tl") is not None:
                 quotes[t] = (1 - float(n["no_ask"]), float(n["yes_ask"]), float(n["tl"]))
@@ -241,6 +270,13 @@ def run(client, place_exit=None, state=None) -> None:
                 ask = ya if side == "yes" else 1 - yb
                 if not (v["lo"] - 1e-9 <= ask <= v["hi"] + 1e-9) or ya - yb > 0.04:
                     continue
+                if t not in model:
+                    continue   # no model chance for this market
+                chance = model[t] if side == "yes" else 1 - model[t]
+                if chance < ask + BOUNCE_MODEL_EDGE - 1e-9:
+                    continue   # the board doesn't think this cheap side is under-priced
+                if _market_falling(t, side, now) >= BOUNCE_MARKET_MOVE:
+                    continue   # the whole market is moving against this side -- a trend, not a bounce
                 mids = [((b + a) / 2 if side == "yes" else 1 - (b + a) / 2) for _, b, a in h]
                 hi = max(mids)
                 lo_before_hi = min(mids[:mids.index(hi) + 1])
