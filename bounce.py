@@ -124,11 +124,11 @@ def _discover(client):
     return out
 
 
-def _close(key, p, bid, why, client=None, place_exit=None):
+def _close(key, p, bid, why, client=None, place_exit=None, settled=False):
     ticker = key[1]
     T = _tot[p["v"]]
     n = p["count"]
-    if p.get("live") and bid is not None:
+    if p.get("live") and not settled:
         try:
             r = place_exit(client, ticker, "ask" if p["side"] == "yes" else "bid", n, dry_run=False, entry_price=p["cost"])
         except Exception as e:
@@ -175,7 +175,7 @@ def _settle_left(client, place_exit):
             continue
         res = m.get("result")
         if res in ("yes", "no"):
-            _close(key, p, 1.0 if res == p["side"] else 0.0, f"settled {res.upper()}")
+            _close(key, p, 1.0 if res == p["side"] else 0.0, f"settled {res.upper()}", settled=True)
 
 
 def run(client, place_exit=None, state=None) -> None:
