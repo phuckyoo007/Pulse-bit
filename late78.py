@@ -14,7 +14,7 @@ import strategy_guard
 import kalshi_ws
 
 LATE78_ENABLED = True   # 13 Nov 19:31 CT (Matt): live
-LATE78_SHARES = 2
+LATE78_SHARES = 6
 LATE78_DOLLARS = 0
 LATE78_COINS = None
 LATE78_SKIP_COINS = {"DOGE"}
