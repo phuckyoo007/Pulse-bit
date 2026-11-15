@@ -10,6 +10,8 @@ MAX_LOSS_BY_STRATEGY = {}   # 15 Nov 13:32 CT: Flip Star also $10 now (was $2)
 # 15 Nov 16:29 CT (Matt: "I'd like to see the entire balance being used by multiple bets during the round" -- confirmed
 # "Yes, whole balance"): every live strategy sizes its bet from the Kalshi cash balance instead of fixed shares.
 # The balance at the start of each 15-minute round is split BALANCE_SPLIT ways (up to 6 bets a round, ~1/6 each).
+# 15 Nov 16:31 CT (Matt: "Only the winners"): only Early settle, Flip Star and BTC92 size from the balance; Last 3,
+# Late 78 and Ride 82 keep their fixed share counts.
 # Set BALANCE_SIZING = False to go back to each strategy's own fixed share count.
 BALANCE_SIZING = True
 BALANCE_SPLIT = 6
