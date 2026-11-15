@@ -34,7 +34,7 @@ import hour_study   # 11 Nov 15:20 CT (Matt): P/L by hour of day -- history repl
 import strategy_guard   # 11 Nov 11:24 CT (Matt): a strategy that loses $4 net switches off until restart
 import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 left, 2 shares, held to the end
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
-import bounce   # 15 Nov 13:14 CT (Matt): buy the cheap side on a bounce, sell at +50% (paper)
+import bounce   # 15 Nov (Matt): buy the cheap side on a bounce -- LIVE at 1 share since 14:06 CT
 import final60   # 13 Nov 19:43 CT: settlement-average edge (paper)
 import late78   # 13 Nov 19:31 CT (Matt): 78c+ in the last 2 min, 80% stop, sell at 99c, 2 shares live
 import momride   # 13 Nov 18:54 CT (Matt): momentum ride -- buy at 90% momentum, sell under 50%, 2 shares live
@@ -725,7 +725,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             ticker = p.get("ticker")
             if not ticker:
                 continue
-            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned():
+            if ticker in _permanently_unexitable_tickers or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in bounce.owned() or ticker in pulse_v2.owned():
                 continue
             position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
             if position_fp == 0:
@@ -1001,7 +1001,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
     real_positions = positions_resp.get("market_positions", positions_resp.get("positions", []))
     for p in real_positions:
         ticker = p.get("ticker")
-        if ticker and ticker in state and (ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned()):
+        if ticker and ticker in state and (ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in bounce.owned() or ticker in pulse_v2.owned()):
             state.pop(ticker, None)   # the commodity/currency bot or live V2 owns this one -- Pulse lets it go
             continue
         if ticker and ticker not in state:
@@ -1028,7 +1028,7 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                         _pos["count"], _pos["entry_price"] = abs(_fp), _new_entry   # (caller already holds STATE_LOCK)
             except Exception as _e:
                 print(f"  couldn't resync manual bet {ticker} ({_e})")
-        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in pulse_v2.owned():
+        if not ticker or ticker in state or ticker in flip_star.pending_tickers() or ticker in markets_paper.owned() or ticker in mk_scalp.owned() or ticker in bounce.owned() or ticker in pulse_v2.owned():
             continue   # (a resting flip-star bid that just filled is flip_star's to record, not a manual bet)
         position_fp = float(p.get("position_fp", p.get("position", 0)) or 0)
         if position_fp == 0:
@@ -1689,7 +1689,7 @@ def run():
 
         flip_star.LOSS_HALT[0] = _loss_limit_hit(client, state)   # 3 Nov 15:18 CT (Matt): down $4 today -> in_pause() blocks every new entry
         try:
-            flip_star.external_owned[0] = pulse_v2.owned   # live V2's markets are off-limits to Pulse
+            flip_star.external_owned[0] = lambda: pulse_v2.owned() | bounce.owned()   # + live Bounce rides (15 Nov) -- live V2's markets are off-limits to Pulse
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")
@@ -1734,9 +1734,9 @@ def run():
         except Exception as e:
             print(f"[LATE60] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
-            bounce.run(client)
+            bounce.run(client, place_exit, state)
         except Exception as e:
-            print(f"[BOUNCE-PAPER] pass failed (non-fatal): {e}")
+            print(f"[BOUNCE] pass failed (non-fatal): {e}")
         try:
             final60.run(client)
         except Exception as e:
