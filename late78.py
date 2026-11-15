@@ -27,6 +27,12 @@ LATE78_TAKE_PROFIT_PRICE = 0.99
 # 15 Nov 13:12 CT (Matt): "put a minimum sigma on Late 78 -- once it falls below that value, use that as the loss".
 # Buy only with our side LATE78_MIN_SIGMA+ from flipping; sell the moment it drops under it (the 85% stop stays as a backup).
 LATE78_MIN_SIGMA = 1.0
+# 15 Nov 14:06 CT loss review: XRP bought at 1.09 sigma, dipped to 0.88 eight seconds later -> sigma exit -$0.20 (then it
+# won).  Buying right on the exit line = whipsaw.  Buy only at 1.3+; the sell line stays at 1.0.
+LATE78_ENTRY_SIGMA = 1.3
+# 15 Nov 14:06 CT loss review: BNB NO @ 83c -$1.42 -- the board had flipped YES->NO earlier that round and kept swinging
+# (82-90c), then dropped to 62c faster than the sigma exit.  Skip a coin whose board pick changed sides in the last 6 min.
+LATE78_FLIP_LOOKBACK = 360
 LATE78_BOARD_TOLERANCE = -0.02   # 13 Nov 23:46 CT (loss review): board within 2 pts of the price, like Ride 82 -- 11 PM losses had board 5-25 pts UNDER the price (BNB 56% vs 81c, SOL 74% vs 80c, BTC 85% vs 90c)
 LATE78_MIN_EDGE = 0.0
 LATE78_MIN_EDGE_UNDER90 = 0.0
@@ -34,6 +40,7 @@ LATE78_MIN_EDGE_UNDER90 = 0.0
 _done = {}   # ticker -> time (one bet per round)
 _tries = {}
 _note = {}
+_side_seen = {}   # ticker -> [(t, side)]
 
 
 def record(position, pnl) -> None:
@@ -60,6 +67,14 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
     for t in [t for t, at in _done.items() if now - at > 1800]:
         _done.pop(t, None)
         _tries.pop(t, None)
+    for t_, x_ in b.items():
+        if x_.get("side") in ("yes", "no"):
+            h_ = _side_seen.setdefault(t_, [])
+            h_.append((now, x_["side"]))
+            while h_ and now - h_[0][0] > LATE78_FLIP_LOOKBACK:
+                h_.pop(0)
+    for t_ in [t_ for t_ in _side_seen if t_ not in b]:
+        _side_seen.pop(t_, None)
     for ticker, n in flip_star.by_priority(b):
         if "15M" not in ticker.split("-")[0].upper():   # 13 Nov: every coin -- no coin filter for LATE78
             continue   # 7 Nov 14:10 CT (Matt): Bitcoin + the coin with the 2nd-biggest volume
@@ -78,8 +93,12 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         side_name = n.get("side")
         if side_name not in ("yes", "no"):
             continue
-        if n.get("zs") is None or n["zs"] < LATE78_MIN_SIGMA - 1e-9:
-            continue   # 15 Nov (Matt): minimum sigma to buy
+        if n.get("zs") is None or n["zs"] < LATE78_ENTRY_SIGMA - 1e-9:
+            continue   # 15 Nov (Matt): minimum sigma to buy (1.3 to buy, 1.0 to sell)
+        if len({sd for _, sd in _side_seen.get(ticker, [])}) > 1:
+            _log_once("flip" + ticker, f"[LATE78] {ticker}: board pick changed sides in the last "
+                      f"{LATE78_FLIP_LOOKBACK // 60} min -- choppy, skipping.")
+            continue
         side = "bid" if side_name == "yes" else "ask"
         try:
             held, _ = flip_star._held_count(client, ticker)
