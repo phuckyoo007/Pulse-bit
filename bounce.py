@@ -20,7 +20,7 @@ import flip_star
 import markets_paper as mk
 
 BOUNCE_ENABLED = True
-BOUNCE_PAPER = False   # 15 Nov 14:06 CT (Matt): "run them as 5 cent trades" -- LIVE, 1 share each
+BOUNCE_PAPER = True   # 15 Nov 14:34 CT (Matt): back to PAPER "until you refine them, perfect them" (was live 1 share 14:06-14:34)
 BOUNCE_SHARES = 1
 BOUNCE_LOSS_LIMIT = 10.00   # per version; a version that loses $10 net switches itself off
 BOUNCE_DOLLARS = 1.00
@@ -57,7 +57,7 @@ _tot = {v["tag"]: {"n": 0, "up": 0, "pnl": 0.0, "by": {}} for v in VARIANTS}
 
 
 def owned() -> set:
-    return {k[1] for k in _pos} if not BOUNCE_PAPER else set()
+    return {k[1] for k, p in _pos.items() if p.get("live")}
 
 
 def _tag():
@@ -128,7 +128,7 @@ def _close(key, p, bid, why, client=None, place_exit=None):
     ticker = key[1]
     T = _tot[p["v"]]
     n = p["count"]
-    if not BOUNCE_PAPER and bid is not None:
+    if p.get("live") and bid is not None:
         try:
             r = place_exit(client, ticker, "ask" if p["side"] == "yes" else "bid", n, dry_run=False, entry_price=p["cost"])
         except Exception as e:
@@ -179,13 +179,13 @@ def _settle_left(client, place_exit):
 
 
 def run(client, place_exit=None, state=None) -> None:
-    if not BOUNCE_ENABLED or (not BOUNCE_PAPER and place_exit is None):
+    if not BOUNCE_ENABLED or place_exit is None:
         return
     now = time.time()
     if now - _last[0] < BOUNCE_POLL:
         return
     _last[0] = now
-    if not BOUNCE_PAPER:
+    if any(p.get("live") for p in _pos.values()):
         _settle_left(client, place_exit)
     utc = datetime.now(timezone.utc)
     rkey = utc.strftime("%Y%m%d%H") + str(utc.minute // 15)
@@ -262,7 +262,8 @@ def run(client, place_exit=None, state=None) -> None:
                             print(f"[BOUNCE] {v['tag']} {t}: {side.upper()} @ {ask*100:.0f}c did not fill.")
                             break
                         ask = fill
-                    _pos[key] = {"v": v["tag"], "side": side, "cost": ask, "count": count, "at": now, "kind": _kind(t)}
+                    _pos[key] = {"v": v["tag"], "side": side, "cost": ask, "count": count, "at": now, "kind": _kind(t),
+                                 "live": not BOUNCE_PAPER}
                     print(f"{_tag()} {v['tag']} BUY {t} ({_kind(t)}) {side.upper()} {count} @ {ask*100:.0f}c "
                           f"(~${count*ask:.2f}): cheap side swung {lo_before_hi*100:.0f}c -> {hi*100:.0f}c and is back at "
                           f"{now_mid*100:.0f}c, {sl:.0f}s left")
