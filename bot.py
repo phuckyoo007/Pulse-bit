@@ -906,6 +906,18 @@ def _placed_by_steady(client: KalshiClient, ticker: str, prefix: str = "pulse-st
         return False
 
 
+def _late78_sigma(ticker, position):
+    """Our side's sigma-from-flipping right now (edge board), or None."""
+    try:
+        n = (flip_star.board() or {}).get(ticker)
+        if not n or n.get("zs") is None:
+            return None
+        ours = "yes" if position.get("side") == "bid" else "no"
+        return float(n["zs"]) if n.get("side") == ours else -float(n["zs"])
+    except Exception:
+        return None
+
+
 _BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
 
 
@@ -1210,6 +1222,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, "stop_bad_fill (filled well under 78c -- price falling fast)")
                     elif _hv >= late78.LATE78_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
+                    elif _late78_sigma(ticker, position) is not None and _late78_sigma(ticker, position) < late78.LATE78_MIN_SIGMA - 1e-9:
+                        decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
+                                                      f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
                     elif _hv <= position["entry_price"] * late78.LATE78_STOP_FRACTION + 1e-9:
                         decision = ExitDecision(True, f"stop_80pct (held side {_hv*100:.0f}c <= 80% of entry "
                                                       f"{position['entry_price']*100:.0f}c -- instant)")

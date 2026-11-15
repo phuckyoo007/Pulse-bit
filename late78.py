@@ -24,6 +24,9 @@ LATE78_MIN_PRICE = 0.78
 LATE78_MAX_PRICE = 0.98
 LATE78_STOP_FRACTION = 0.85   # fell back 20% -> out
 LATE78_TAKE_PROFIT_PRICE = 0.99
+# 15 Nov 13:12 CT (Matt): "put a minimum sigma on Late 78 -- once it falls below that value, use that as the loss".
+# Buy only with our side LATE78_MIN_SIGMA+ from flipping; sell the moment it drops under it (the 85% stop stays as a backup).
+LATE78_MIN_SIGMA = 1.0
 LATE78_BOARD_TOLERANCE = -0.02   # 13 Nov 23:46 CT (loss review): board within 2 pts of the price, like Ride 82 -- 11 PM losses had board 5-25 pts UNDER the price (BNB 56% vs 81c, SOL 74% vs 80c, BTC 85% vs 90c)
 LATE78_MIN_EDGE = 0.0
 LATE78_MIN_EDGE_UNDER90 = 0.0
@@ -75,6 +78,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         side_name = n.get("side")
         if side_name not in ("yes", "no"):
             continue
+        if n.get("zs") is None or n["zs"] < LATE78_MIN_SIGMA - 1e-9:
+            continue   # 15 Nov (Matt): minimum sigma to buy
         side = "bid" if side_name == "yes" else "ask"
         try:
             held, _ = flip_star._held_count(client, ticker)
