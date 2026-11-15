@@ -42,6 +42,10 @@ VARIANTS = [
     {"tag": "BOUNCE", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": BOUNCE_STOP},
     {"tag": "LOW", "dollars": 0.10, "lo": 0.03, "hi": 0.15, "swing": 0.04, "take": 2.00, "stop": 0.50},
+    # 15 Nov 16:45 CT paper refinement: BOUNCE's -40% stop fired on 16 of 23 rides, mostly 20-40s after buying (normal
+    # wiggle), while winners ran +50-148%.  Same entry, NO stop -- hold for +50% or sell with a minute left.
+    {"tag": "BOUNCE-NS", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
+     "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": 0.0},
     # 15 Nov 13:18 CT (Matt): "in the first five minutes it's all the way up to 90 and the other side is 10 -- the 90
     # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
     {"tag": "EARLY10", "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
@@ -231,7 +235,7 @@ def run(client, place_exit=None, state=None) -> None:
                 continue
             if key in _done or sl < v.get("min_left", BOUNCE_MIN_SECONDS_LEFT) or len(h) < 10 or T_off(v):
                 continue
-            if any(k[1] == t for k in _pos) or (state is not None and t in state):
+            if (not BOUNCE_PAPER and any(k[1] == t for k in _pos)) or (state is not None and t in state):
                 continue   # one bounce ride per market, and never a market another strategy holds
             for side in ("yes", "no"):
                 ask = ya if side == "yes" else 1 - yb
