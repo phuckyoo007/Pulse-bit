@@ -36,6 +36,7 @@ import early93   # 11 Nov 01:56 CT (Matt): board pick at 93-98c with 7:00-4:00 l
 import late60   # 10 Nov 18:03 CT (Matt): board pick at 60-80c, 2:00-4:00 left, momentum our way, 1 share, held to the end
 import bounce   # 15 Nov (Matt): buy the cheap side on a bounce -- LIVE at 1 share since 14:06 CT
 import final60   # 13 Nov 19:43 CT: settlement-average edge (paper)
+import ta_paper   # 16 Nov 17:55 CT (Matt): EMA pullback + Bollinger mean reversion -- PAPER
 import rsi_paper   # 16 Nov 14:07 CT (Matt): RSI momentum strategies -- PAPER
 import last120   # 16 Nov 11:20 CT (Matt): last 120s, 86-97c held 4s, 85% stop, 99c exit, 3 shares LIVE
 import late78   # 13 Nov 19:31 CT (Matt): 78c+ in the last 2 min, 80% stop, sell at 99c, 2 shares live
@@ -1794,6 +1795,10 @@ def run():
             bounce.run(client, place_exit, state)
         except Exception as e:
             print(f"[BOUNCE] pass failed (non-fatal): {e}")
+        try:
+            ta_paper.run(client)
+        except Exception as e:
+            print(f"[TA-PAPER] pass failed (non-fatal): {e}")
         try:
             rsi_paper.run(client)
         except Exception as e:
