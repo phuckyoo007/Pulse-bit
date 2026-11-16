@@ -38,6 +38,7 @@ import bounce   # 15 Nov (Matt): buy the cheap side on a bounce -- LIVE at 1 sha
 import final60   # 13 Nov 19:43 CT: settlement-average edge (paper)
 import ta_paper   # 16 Nov 17:55 CT (Matt): EMA pullback + Bollinger mean reversion -- PAPER
 import rsi_paper   # 16 Nov 14:07 CT (Matt): RSI momentum strategies -- PAPER
+import maker93   # 16 Nov 17:58 CT (Matt): live resting-bid favourite strategy (paper MAKER93S went 35/36)
 import last120   # 16 Nov 11:20 CT (Matt): last 120s, 86-97c held 4s, 85% stop, 99c exit, 3 shares LIVE
 import late78   # 13 Nov 19:31 CT (Matt): 78c+ in the last 2 min, 80% stop, sell at 99c, 2 shares live
 import momride   # 13 Nov 18:54 CT (Matt): momentum ride -- buy at 90% momentum, sell under 50%, 2 shares live
@@ -1131,6 +1132,9 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
             elif _placed_by_steady(client, ticker, "pulse-surge-late60-"):
                 state[ticker]["late60"] = True   # 10 Nov: a LATE60 bet keeps its hold-to-the-end rule after a restart
                 state[ticker]["flip_star"] = False
+            elif _placed_by_steady(client, ticker, "pulse-surge-maker93-"):
+                state[ticker]["maker93"] = True
+                state[ticker]["flip_star"] = False
             elif _placed_by_steady(client, ticker, "pulse-surge-last120-"):
                 state[ticker]["last120"] = True   # 16 Nov: LAST120 keeps its 85% stop / 99c exit after a restart
                 state[ticker]["flip_star"] = False
@@ -1256,6 +1260,13 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     print(f"{ticker}: back out of red (To flip {('?' if _zr is None else f'{_zr:.2f}')} sigma) -- holding.")
                 if position.get("force_exit"):
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
+                elif position.get("maker93"):
+                    # 16 Nov 17:58 CT: MAKER93 holds to the end; 76%-of-cost stop as the backup (Matt's rule)
+                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost, bought "
+                                                      f"{position['entry_price']*100:.0f}c)")
+                    else:
+                        decision = ExitDecision(False, "")
                 elif position.get("last120"):
                     # 16 Nov 11:19 CT (Matt): 85% stop, early exit at 99c, else hold to the end
                     if position.get("bad_fill"):
@@ -1742,12 +1753,16 @@ def run():
             adopt_manual_positions(client, state)
 
         flip_star.LOSS_HALT[0] = _loss_limit_hit(client, state)   # 3 Nov 15:18 CT (Matt): down $4 today -> in_pause() blocks every new entry
+        try:
+            maker93.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[MAKER93] pass failed (non-fatal): {e}")
         try:   # 16 Nov 12:33 CT (Matt): LAST120 is the main strategy -- it gets first pick every pass
             last120.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
             print(f"[LAST120] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
-            flip_star.external_owned[0] = lambda: pulse_v2.owned() | bounce.owned()   # + live Bounce rides (15 Nov) -- live V2's markets are off-limits to Pulse
+            flip_star.external_owned[0] = lambda: pulse_v2.owned() | bounce.owned() | maker93.owned()   # + live Bounce rides (15 Nov) -- live V2's markets are off-limits to Pulse
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
         except Exception as e:
             print(f"[FLIP] entry pass failed (non-fatal, other strategies continue): {e}")

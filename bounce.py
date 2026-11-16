@@ -111,7 +111,7 @@ VARIANTS = [
     # 16 Nov 10:30 CT paper check: MAKER93 reached 52 rides, 45 won, -$4.34 -- 7 losses of ~$0.95 all in two rounds
     # (9:00 and 9:15 CT) where several coins flipped together; at 93-95c it needs ~95% winners.  The live 96c strategies
     # that DO win all require the board's sigma.  MAKER93S = MAKER93 + the board must pick that side 1.5+ sigma from flipping.
-    {"tag": "MAKER93S", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    {"tag": "MAKER93S", "off": True, "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02, "min_sigma": 1.5},
     # 16 Nov 11:19 CT (Matt): "new strategy -- last 120 seconds, anything 86c and over on every coin, the price has to
     # HOLD 86+ for four seconds before buying, 85% stop loss, early exit at 99c, floor 86 ceiling 97".
