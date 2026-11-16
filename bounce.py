@@ -119,6 +119,14 @@ VARIANTS = [
     # falls to 85% of what we paid; otherwise held to the end.  One bet per coin per round.  PAPER until Matt says live.
     {"tag": "LAST120", "off": True, "kind": "fav", "dollars": 5.00, "lo": 0.86, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.85, "min_left": 5, "max_left": 120, "exit_left": 0, "hold_secs": 4, "take_price": 0.99},
+    # 16 Nov 11:26 CT (Matt: Ride 82 off "till you make the changes that will fix it to positive").  Ride 82 lost
+    # -$6.09 over 28 bets: 9 losses of ~-$1.05 each (its 45% stop sells after a 50c+ fall) vs ~+$0.15 wins.  Late 78 (same
+    # idea, +$6.57) cuts losers early when sigma drops under 1.0.  R82-FIX = Ride 82's entry (82-97c, last 4 min) + board
+    # sigma 1.3+ held 4s + Late 78's exits (sell when sigma < 1.0 or the board flips; sell at 99c; 80% backup stop).
+    # $2/ride (~2 shares, like Ride 82).  If it's positive over 30+ rides, Ride 82 goes back on with these rules.
+    {"tag": "R82-FIX", "kind": "fav", "dollars": 2.00, "lo": 0.82, "hi": 0.97, "swing": 0.0, "take": 0.0,
+     "stop": 0.80, "min_left": 15, "max_left": 240, "exit_left": 0, "hold_secs": 4, "take_price": 0.99,
+     "min_sigma": 1.3, "sigma_exit": 1.0},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -341,7 +349,11 @@ def run(client, place_exit=None, state=None) -> None:
                 _ch = None
                 if t in model:
                     _ch = model[t] if p["side"] == "yes" else 1 - model[t]
-                if v.get("take_price") and bid >= v["take_price"] - 1e-9:
+                _zs = zside.get(t)
+                if v.get("sigma_exit") and _zs and (_zs[0] != p["side"] or _zs[1] < v["sigma_exit"] - 1e-9):
+                    _close(key, p, bid, f"sigma {('flipped' if _zs[0] != p['side'] else f'{_zs[1]:.2f}')} -- out",
+                           client, place_exit)
+                elif v.get("take_price") and bid >= v["take_price"] - 1e-9:
                     _close(key, p, bid, f"hit {v['take_price']*100:.0f}c -- cashing in", client, place_exit)
                 elif v.get("converge") and _ch is not None and bid >= _ch - 0.01 and _net > 0.005:
                     _close(key, p, bid, f"price caught up to the model ({_ch*100:.0f}%) -- taking +${_net:.2f}",
@@ -374,6 +386,10 @@ def run(client, place_exit=None, state=None) -> None:
                 ask_f = ya if fav == "yes" else 1 - yb
                 if not (v["lo"] - 1e-9 <= ask_f <= v["hi"] + 1e-9) or ya - yb > 0.04:
                     continue
+                if v.get("min_sigma"):
+                    zs_ = zside.get(t)
+                    if not zs_ or zs_[0] != fav or zs_[1] < v["min_sigma"] - 1e-9:
+                        continue
                 # held 86c+ for hold_secs straight (every reading in that window, at least 2 readings)
                 win = [(x[2] if fav == "yes" else 1 - x[1]) for x in h if now - x[0] <= v["hold_secs"] + 0.5]
                 if len(win) < 2 or min(win) < v["lo"] - 1e-9 or now - min(x[0] for x in h if now - x[0] <= v["hold_secs"] + 0.5) < v["hold_secs"] - 0.5:
