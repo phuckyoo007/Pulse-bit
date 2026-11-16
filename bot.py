@@ -332,7 +332,7 @@ LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 #   Flip Star (FLIP98):     60% stop -$16.36 vs 40% -$26.65 vs no stop -$38.49
 #   BTC92 (BTC94): 60% -$28.61 vs 40% -$30.09 -- too close to change, stays 40%.
 STOP_BY_STRATEGY = {"early93": 0.60, "flip_star": 0.60,
-                    "ride82": 0.45}   # 13 Nov 18:39 CT (Matt): Ride 82 stop back on at 45% of entry (was off since 17:04)
+                    "ride82": 0.92}   # 16 Nov 11:27 CT (Matt): "92% stop" (was 45%) -- sells after an ~8% drop
 
 
 def _stop_frac(position):

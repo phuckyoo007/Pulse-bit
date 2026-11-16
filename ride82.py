@@ -18,8 +18,8 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-RIDE82_ENABLED = False   # 16 Nov 11:26 CT (Matt): off "till you make the changes that will fix it to positive" (-$6.09 over 28 bets since 15 Nov)
-RIDE82_SHARES = 2   # 13 Nov 17:04 CT (Matt): cut 50% (was 4)
+RIDE82_ENABLED = True   # 16 Nov 11:27 CT (Matt): back on -- 75c+, last 4 min, 1 share, 92% stop
+RIDE82_SHARES = 1   # 16 Nov 11:27 CT (Matt): "one share"
 RIDE82_DOLLARS = 0
 RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round
 RIDE82_MAX_SECONDS_LEFT = 240
@@ -40,7 +40,7 @@ RIDE82_BOARD_TOLERANCE = -0.02
 # at about -$1.10 each against ~$0.19 average wins -- it needs 86%+ winners just to break even.  Same two filters
 # as Late 78: our side must be 1.3+ sigma from flipping, and skip a coin whose board pick changed sides in 6 minutes.
 RIDE82_ENTRY_SIGMA = 1.3
-RIDE82_MIN_PRICE = 0.82
+RIDE82_MIN_PRICE = 0.75   # 16 Nov 11:27 CT (Matt): "anything 75 and over" (was 82c)
 RIDE82_MAX_PRICE = 0.97
 
 _done = {}   # ticker -> time (one bet per round)
@@ -193,4 +193,4 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if entry_price < RIDE82_MIN_PRICE - 0.005:
             print(f"[RIDE82] {ticker}: filled at ${entry_price:.2f}, under the {RIDE82_MIN_PRICE*100:.0f}c minimum -- "
                   f"price is falling fast, selling right away (11 Nov, Matt).")
-        print(f"[RIDE82] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- held to the end (40% stop).")
+        print(f"[RIDE82] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- held to the end (92% stop).")
