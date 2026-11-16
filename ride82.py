@@ -18,7 +18,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-RIDE82_ENABLED = True   # 16 Nov 11:27 CT (Matt): back on -- 75c+, last 4 min, 1 share, 92% stop
+RIDE82_ENABLED = False   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- Ride 82 -$0.61 today, OFF
 RIDE82_SHARES = 1   # 16 Nov 11:27 CT (Matt): "one share"
 RIDE82_DOLLARS = 0
 RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round

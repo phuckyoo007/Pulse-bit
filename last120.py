@@ -13,7 +13,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-LAST120_ENABLED = True   # 16 Nov 11:20 CT (Matt): "run it live"
+LAST120_ENABLED = False   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- LAST120 -$1.00 today, OFF
 LAST120_SHARES = 2       # 16 Nov 13:16 CT (Matt): 2 shares after the HYPE loss (was 3)
 LAST120_DOLLARS = 0
 LAST120_MAX_SECONDS_LEFT = 180   # 16 Nov 12:06 CT (Matt): last 3 minutes (was 2)
