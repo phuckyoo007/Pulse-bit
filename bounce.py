@@ -73,6 +73,21 @@ VARIANTS = [
     # moment selling would make money after Kalshi fees both ways.
     {"tag": "LATE5-ANY", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 0.0, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False, "any_profit": True},
+    # 15 Nov 21:39 CT (Matt: "keep developing strategies on paper, look on the net for which ones work, test until one
+    # is positive").  Live paper LATE5 lost ~$5 in one round when 5 coins all failed together -> LATE5-1 = one coin per round.
+    {"tag": "LATE5-1", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+     "min_left": 45, "max_left": 300, "exit_left": 20, "model": False, "per_round": 1},
+    # From the web (dev.to "momentum lag arbitrage", clawd "15min signal optimization"): after a sharp spot move the
+    # 15-minute market price lags the spot-implied chance by 30-90s.  Our board's model IS the spot-implied chance.
+    # LAG8: minutes 4-10 of the round, buy the side whose model chance is 8+ pts above its price (15-85c), sell when the
+    # price catches up to the model (or the model drops below what we paid), else sell with 60s left.
+    # LAG12: same with a 12-pt gap.  LAG8-H: same entry, hold to the end.
+    {"tag": "LAG8", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
+    {"tag": "LAG12", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.12, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
+    {"tag": "LAG8-H", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 0},
     {"tag": "LATE5-50", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -206,6 +221,21 @@ def _market_falling(ticker, side, now):
     return n
 
 
+_per_round = {}   # (variant tag, round key) -> entries this round
+
+
+def _enter(v, key, t, side, ask, sl, now, client, why):
+    """Paper entry (lag variants)."""
+    if not BOUNCE_PAPER:
+        return
+    _per_round[(v["tag"], _round["key"])] = _per_round.get((v["tag"], _round["key"]), 0) + 1
+    count = max(1, math.floor(v["dollars"] / ask + 1e-9))
+    _done.add(key)
+    _pos[key] = {"v": v["tag"], "side": side, "cost": ask, "count": count, "at": now, "kind": _kind(t), "live": False}
+    print(f"{_tag()} {v['tag']} BUY {t} ({_kind(t)}) {side.upper()} {count} @ {ask*100:.0f}c (~${count*ask:.2f}): {why}, "
+          f"{sl:.0f}s left")
+
+
 def T_off(v):
     return _tot[v["tag"]].get("off", False)
 
@@ -273,7 +303,16 @@ def run(client, place_exit=None, state=None) -> None:
                     continue
                 bid = yb if p["side"] == "yes" else 1 - ya
                 _net = (bid - p["cost"]) * p["count"] - _fee(p["cost"], p["count"]) - _fee(bid, p["count"])
-                if v.get("any_profit") and _net > 0.005:
+                _ch = None
+                if t in model:
+                    _ch = model[t] if p["side"] == "yes" else 1 - model[t]
+                if v.get("converge") and _ch is not None and bid >= _ch - 0.01 and _net > 0.005:
+                    _close(key, p, bid, f"price caught up to the model ({_ch*100:.0f}%) -- taking +${_net:.2f}",
+                           client, place_exit)
+                elif v.get("converge") and _ch is not None and _ch < p["cost"] - 1e-9:
+                    _close(key, p, bid, f"model fell to {_ch*100:.0f}% (paid {p['cost']*100:.0f}c) -- out",
+                           client, place_exit)
+                elif v.get("any_profit") and _net > 0.005:
                     _close(key, p, bid, f"+${_net:.2f} after fees -- taking it", client, place_exit)
                 elif v["take"] > 0 and bid >= p["cost"] * v["take"] - 1e-9:
                     _close(key, p, bid, f"+{(bid / p['cost'] - 1)*100:.0f}% -- cashing out", client, place_exit)
@@ -291,10 +330,21 @@ def run(client, place_exit=None, state=None) -> None:
                 continue
             if (not BOUNCE_PAPER and any(k[1] == t for k in _pos)) or (state is not None and t in state):
                 continue   # one bounce ride per market, and never a market another strategy holds
+            if v.get("per_round") and _per_round.get((v["tag"], _round["key"]), 0) >= v["per_round"]:
+                continue
             for side in ("yes", "no"):
                 ask = ya if side == "yes" else 1 - yb
                 if not (v["lo"] - 1e-9 <= ask <= v["hi"] + 1e-9) or ya - yb > 0.04:
                     continue
+                if v.get("kind") == "lag":
+                    if t not in model:
+                        continue
+                    chance = model[t] if side == "yes" else 1 - model[t]
+                    if chance - ask < v["edge"] - 1e-9:
+                        continue
+                    _enter(v, key, t, side, ask, sl, now, client,
+                           f"model {chance*100:.0f}% vs price {ask*100:.0f}c (+{(chance-ask)*100:.0f} pts)")
+                    break
                 if t not in model:
                     continue   # no model chance for this market
                 chance = model[t] if side == "yes" else 1 - model[t]
@@ -313,6 +363,7 @@ def run(client, place_exit=None, state=None) -> None:
                 if v["swing"] > 0 and (hi > v["hi"] + 2 * v["swing"] + 1e-9 or now_mid < lo_before_hi - 0.03):
                     continue
                 if hi - lo_before_hi >= v["swing"] - 1e-9 and hi - now_mid >= v["swing"] * 0.8 - 1e-9:
+                    _per_round[(v["tag"], _round["key"])] = _per_round.get((v["tag"], _round["key"]), 0) + 1
                     count = max(1, math.floor(v["dollars"] / ask + 1e-9))
                     _done.add(key)
                     if not BOUNCE_PAPER:
