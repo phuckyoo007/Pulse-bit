@@ -335,6 +335,9 @@ STOP_BY_STRATEGY = {"early93": 0.60, "flip_star": 0.60,
                     "ride82": 0.92}   # 16 Nov 11:27 CT (Matt): "92% stop" (was 45%) -- sells after an ~8% drop
 
 
+RIDE82_KICKOFF_SECS = 20   # 16 Nov 11:28 CT (Matt): give Ride 82 its kick-off before the 8% trailing stop arms
+
+
 def _stop_frac(position):
     for k, v in STOP_BY_STRATEGY.items():
         if position.get(k):
@@ -1262,6 +1265,24 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _mside is not None and _mside < momride.MOMRIDE_SELL_MOMENTUM - 1e-9:
                         decision = ExitDecision(True, f"momentum_faded (momentum toward our side {_mside*100:.0f}% < "
                                                       f"{momride.MOMRIDE_SELL_MOMENTUM*100:.0f}% -- off the ride)")
+                    else:
+                        decision = ExitDecision(False, "")
+                elif position.get("ride82") and not position.get("bad_fill"):
+                    # 16 Nov 11:28 CT (Matt): "8% drop after the initial kickoff -- they start a little low".  For the first
+                    # RIDE82_KICKOFF_SECS after buying only a wide safety stop (80% of entry) applies; after that the stop
+                    # trails 8% under the HIGHEST price reached since buying (sell at 92% of the peak).
+                    _pk = max(position.get("peak_val") or 0.0, _hv, position["entry_price"])
+                    position["peak_val"] = _pk
+                    _age = time.time() - (position.get("entry_time") or time.time())
+                    if _age < RIDE82_KICKOFF_SECS:
+                        if _hv <= position["entry_price"] * 0.80 + 1e-9:
+                            decision = ExitDecision(True, f"stop_kickoff (held side {_hv*100:.0f}c <= 80% of entry "
+                                                          f"{position['entry_price']*100:.0f}c in the first {RIDE82_KICKOFF_SECS}s)")
+                        else:
+                            decision = ExitDecision(False, "")
+                    elif _hv <= _pk * _stop_frac(position) + 1e-9:
+                        decision = ExitDecision(True, f"stop_92pct_of_peak (held side {_hv*100:.0f}c <= 92% of its high "
+                                                      f"{_pk*100:.0f}c since buying at {position['entry_price']*100:.0f}c)")
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("late80") or position.get("late60") or position.get("early93") or position.get("last3") or position.get("ride82"):
