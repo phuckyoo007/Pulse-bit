@@ -1237,6 +1237,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, "stop_bad_fill (filled well under 86c -- price falling fast)")
                     elif _hv >= last120.LAST120_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
+                    elif _late78_sigma(ticker, position) is not None and _late78_sigma(ticker, position) < last120.LAST120_EXIT_SIGMA - 1e-9:
+                        decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
+                                                      f"under the {last120.LAST120_EXIT_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
                         decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 

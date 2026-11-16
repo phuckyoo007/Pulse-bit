@@ -14,7 +14,7 @@ import strategy_guard
 import kalshi_ws
 
 LAST120_ENABLED = True   # 16 Nov 11:20 CT (Matt): "run it live"
-LAST120_SHARES = 3       # 16 Nov 11:20 CT (Matt): "three shares"
+LAST120_SHARES = 2       # 16 Nov 13:16 CT (Matt): 2 shares after the HYPE loss (was 3)
 LAST120_DOLLARS = 0
 LAST120_MAX_SECONDS_LEFT = 180   # 16 Nov 12:06 CT (Matt): last 3 minutes (was 2)
 LAST120_MIN_SECONDS_LEFT = 5
@@ -26,6 +26,15 @@ LAST120_TAKE_PROFIT_PRICE = 0.99
 # 16 Nov 11:55 CT review: its only loss so far was DOGE (91c -> 68c in 70s, -$0.69).  DOGE was already pulled from
 # Ride 82 / Late 78 on 13 Nov after every early Ride 82 loss was DOGE.  Same rule here.
 LAST120_SKIP_COINS = {"DOGE"}
+# 16 Nov 13:16 CT (Matt: "figure out how that loss happened, restructure it, make the changes").  LAST120 is 8 won /
+# 3 lost (DOGE 91c -$0.69, ZEC 94c -$0.63, HYPE 89c -$1.01).  HYPE: the price showed 86c+ for 4s, but the board had
+# sigma 0.6 and had flipped sides 27 times that round -- it fell to 55c four seconds after we bought.  Late 78 (same
+# idea WITH sigma checks) went from 9 big losses to 1 after adding them.  LAST120 now uses the same protection:
+#   * buy only when the board picks the same side, 1.3+ sigma from flipping, HELD 30s unbroken;
+#   * skip a coin whose board pick changed sides in the last 6 minutes;
+#   * (bot.py) sell early the moment our side drops under 1.0 sigma; 76% stop stays as the backup.
+LAST120_ENTRY_SIGMA = 1.3
+LAST120_EXIT_SIGMA = 1.0
 
 _done = {}
 _tries = {}
@@ -102,6 +111,14 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         side_name = "yes" if h[-1][1] >= h[-1][2] else "no"   # the favourite = the pricier side
         if not _held(ticker, side_name, now):
+            continue
+        if n.get("side") != side_name or n.get("zs") is None or n["zs"] < LAST120_ENTRY_SIGMA - 1e-9:
+            continue   # the board must agree, 1.3+ sigma from flipping
+        try:
+            import late78 as _l78
+            if not _l78.sigma_steady(ticker) or _l78.flipped_recently(ticker):
+                continue   # sigma must have held 1.3+ for 30s, and no side flip in 6 min
+        except Exception:
             continue
         side = "bid" if side_name == "yes" else "ask"
         try:
