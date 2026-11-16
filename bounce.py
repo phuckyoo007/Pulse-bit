@@ -100,10 +100,12 @@ VARIANTS = [
     # one per coin per round); it fills only if the price comes down to us within 60s; hold to the end.
     # 16 Nov 02:40 CT: at $5 a ride MAKER90 hit the $10 paper limit after 7 rides (4 won +$0.28-0.61, 3 lost $4.35-4.72,
     # all three were 86-94c bids filled on a price DROP -- the dip kept going).  $1 a ride so it collects enough rides to judge.
-    {"tag": "MAKER90", "kind": "maker", "dollars": 1.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    {"tag": "MAKER90", "off": True, "kind": "maker", "dollars": 1.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
     # 16 Nov 04:25 CT paper check: MAKER90 at $1 = 22 rides, 18 won, -$2.05.  Fills at 86-90c: 10 won / 6 lost
     # (losses -$0.89 each wipe out +$0.12 wins); fills at 92c+: 13 won / 1 lost.  MAKER93 = same idea, only bids of 93c+.
+    # 16 Nov 07:30 CT paper check: MAKER90 48 more rides, -$4.96 (its 86-90c fills keep losing $0.87-0.89) -> OFF.
+    # MAKER93: 22 rides, 22 won, +$1.09 -- keep collecting (needs 50+ rides before it's a live candidate).
     {"tag": "MAKER93", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
