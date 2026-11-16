@@ -931,6 +931,26 @@ def _late78_sigma(ticker, position):
         return None
 
 
+# 16 Nov 14:15 CT (Matt: "how did the 2:15 loss happen -- fix it").  Late 78 SOL @ 96c, -$0.37: sigma dipped to 0.95
+# for ONE reading, the sigma exit sold, then sigma went 1.03 -> 1.17 -> 1.84 -> 2.22 and SOL won (+$0.24 missed).
+# XRP on 15 Nov did the same (sold at 0.88, then won).  The early sale now needs CONFIRMATION: our side under the
+# minimum for SIGMA_EXIT_CONFIRM_SECS straight -- or a deep drop under SIGMA_EXIT_HARD, which still sells at once.
+# The 76% stop stays as the backup either way.
+SIGMA_EXIT_CONFIRM_SECS = 8
+SIGMA_EXIT_HARD = 0.8
+
+
+def _sigma_exit_confirmed(ticker, position, minimum):
+    z = _late78_sigma(ticker, position)
+    if z is None or z >= minimum - 1e-9:
+        position.pop("sig_low_since", None)
+        return False
+    if z < SIGMA_EXIT_HARD - 1e-9:
+        return True
+    t0 = position.setdefault("sig_low_since", time.time())
+    return time.time() - t0 >= SIGMA_EXIT_CONFIRM_SECS
+
+
 _BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
 
 
@@ -1238,7 +1258,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, "stop_bad_fill (filled well under 86c -- price falling fast)")
                     elif _hv >= last120.LAST120_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
-                    elif _late78_sigma(ticker, position) is not None and _late78_sigma(ticker, position) < last120.LAST120_EXIT_SIGMA - 1e-9:
+                    elif _sigma_exit_confirmed(ticker, position, last120.LAST120_EXIT_SIGMA):
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {last120.LAST120_EXIT_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
@@ -1252,7 +1272,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, "stop_bad_fill (filled well under 78c -- price falling fast)")
                     elif _hv >= late78.LATE78_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
-                    elif _late78_sigma(ticker, position) is not None and _late78_sigma(ticker, position) < late78.LATE78_MIN_SIGMA - 1e-9:
+                    elif _sigma_exit_confirmed(ticker, position, late78.LATE78_MIN_SIGMA):
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
