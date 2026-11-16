@@ -117,7 +117,7 @@ VARIANTS = [
     # HOLD 86+ for four seconds before buying, 85% stop loss, early exit at 99c, floor 86 ceiling 97".
     # LAST120: favourite side 86-97c with 120s or less left, priced 86c+ for 4s straight -> buy (~$5); sell at 99c, or if it
     # falls to 85% of what we paid; otherwise held to the end.  One bet per coin per round.  PAPER until Matt says live.
-    {"tag": "LAST120", "kind": "fav", "dollars": 5.00, "lo": 0.86, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    {"tag": "LAST120", "off": True, "kind": "fav", "dollars": 5.00, "lo": 0.86, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.85, "min_left": 5, "max_left": 120, "exit_left": 0, "hold_secs": 4, "take_price": 0.99},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
