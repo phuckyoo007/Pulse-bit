@@ -341,7 +341,8 @@ STOP_PRICE = 0.76
 
 
 def _stop_line(entry):
-    return STOP_PRICE if entry > 0.80 + 1e-9 else entry * 0.76
+    # 16 Nov 12:36 CT (Matt): back to 76% OF WHAT WE PAID (not the 76c line)
+    return entry * 0.76
 
 
 def _stop_frac(position):
@@ -1237,7 +1238,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _hv >= last120.LAST120_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1251,7 +1252,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1280,7 +1281,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
                                                       f"under the minimum -- price falling fast)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1289,14 +1290,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no red-card sell, held to the end
                     # 11 Nov 11:15 CT (Matt): ...except the 40% stop
                     if _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")

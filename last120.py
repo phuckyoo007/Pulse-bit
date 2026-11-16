@@ -190,4 +190,4 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if entry_price < LAST120_MIN_PRICE - 0.005:
             print(f"[LAST120] {ticker}: filled at ${entry_price:.2f}, under the {LAST120_MIN_PRICE*100:.0f}c minimum -- "
                   f"price is falling fast, selling right away (11 Nov, Matt).")
-        print(f"[LAST120] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 76c stop, sells at 99c, else held to the end.")
+        print(f"[LAST120] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 76% stop, sells at 99c, else held to the end.")
