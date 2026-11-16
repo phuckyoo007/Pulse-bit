@@ -24,13 +24,13 @@ FLIP_ENABLED = True   # 12 Nov 23:50 CT (Matt): back on (not doing that bad), 2 
 # 24 Oct 12:49 CT (per Matthew): never bid on these coins. Dropped from board() below, so neither flip-star nor the
 # RIDE paper trial (which reads flip_star.board()) can open anything on them. NEAR: -$16.20 crash_stop 24 Oct 17:43 UTC.
 FLIP_EXCLUDED_COINS = {"NEAR", "ETH"}   # 26 Oct 15:11 CT (per Matthew): ETH off temporarily after -$12.84   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
-FLIP_HOLD_TO_END = True            # 11 Nov 02:46 CT (Matt): no red-card sell, no stop -- held to the end (backtest: 99% won)
+FLIP_SHARES = 2   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: 2 shares, fixed (not balance-sized)
+FLIP_HOLD_TO_END = False   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: hold through yellow, sell the moment "To flip" turns RED
 # 20 Oct 19:27 CT (NEAR 19:14: one 15-share bet = most of the account, wiped out by a 4-second spike to 25c).
 # A spike that fast can't be stopped by any stop, so cap how much one bet (and all open bets) can lose:
 FLIP_MAX_BET_FRACTION = 0.98      # 21 Oct 21:19 CT: two full 10-share bets (~$20 total) per Matthew; 2% left for fees
 FLIP_MAX_OPEN = 4                 # 25 Oct 13:33 CT (per Matthew): was 9 -- at most 4 Pulse bets open at once   # 5 Nov 13:20 CT (Matt): back to the 29 Oct settings
-FLIP_MAX_SECONDS_LEFT = 300        # 7 Nov 23:07 CT (Matt): nothing above 80c unless in the last 5 minutes -- Flip Star only buys 94c+, so last 5:00 only
+FLIP_MAX_SECONDS_LEFT = 480   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: last 8 minutes
 FLIP_MIN_SECONDS_LEFT = 2         # too close to the bell to get a clean fill
 FLIP_NONSTAR_MIN_SECONDS_LEFT = 3   # green / Yellow 1: allowed right up to the last 30s again (was blocked under 2.5 min)
 FLIP_ENTRY_SIGMA_STRICT = 2.0     # 6 Nov 01:29 CT (Matt): GREEN only (2.0+ sigma to flip)
@@ -81,9 +81,13 @@ except Exception:
     pass
 
 
+# 16 Nov 15:00 CT (Matt: "change Flip Star back to how you originally had it"): the 15 Oct original --
+#   last 8 minutes, bid when the edge board shows the RED STAR or "To flip" in the GREEN (2.0+ sigma), YES or NO,
+#   2 shares, hold through yellow, pull out the moment "To flip" turns RED (under 0.5 sigma).  Still never pays 99c
+#   (FLIP_FILL_CAP), ZEC stays off, and the 76% stop / $10 limit stay as backups.
 # WIN-% BREAKER (20 Oct 21:11 CT, Matthew): entries allowed at 97%+, but the first losing bet that was bought under
 # 98% puts the minimum back to 98% (saved to a file so a restart keeps it; a fresh deploy starts at 97% again).
-FLIP_WIN_SAFE_MIN = 0.98   # 16 Nov 12:34 CT (Matt): back to the 12 Nov 98% version that was working
+FLIP_WIN_SAFE_MIN = 0.0   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: no win-% minimum
 _WIN_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_win_breaker.json")
 try:
     if os.path.exists(_WIN_BREAKER_FILE):
@@ -106,7 +110,7 @@ except Exception:
 # (3) PAUSE 2:50-4:10 pm Central: the 3 pm hour lost 15% of its bets (-$18.93) -- the US stock close shakes crypto.
 PAUSE_CT = PAUSE_CT = ((0, 0), (0, 0))
 # (4) NO bets need a red star AND 98%+ win: NO bets made -$9.81 (7.7% lost) while YES bets made +$23.51 (5.2% lost).
-NO_SIDE_NEEDS_STAR = True
+NO_SIDE_NEEDS_STAR = False   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: YES or NO, red star or green
 NO_SIDE_MIN_WIN = 0.98   # 16 Nov 12:34 CT (Matt): back to the 12 Nov 98% version that was working
 # (5) Shares by coin: BTC (+$22.39) and XRP (+$25.22) get 1.5x, DOGE and BNB (slightly negative) get 0.5x. The first losing
 # BOOSTED bet turns the boosts off for good (flip_boost_breaker.json); the cuts stay.
@@ -116,7 +120,7 @@ FLIP_ADD_TOP_VOLUME = 0    # 7 Nov 20:36 CT (Matt): fixed BTC + XRP (no live vol
 _vol24 = {}                # coin -> 24h volume of its current 15-minute market (from the board)
 _vol_pick = [None]
 _vhist = {}               # coin -> [(time, volume)] for the last 30 minutes
-FLIP_MAX_ROUND_FLIPS = 1   # 12 Nov 15:08 CT (Matt: tighter) was 2;  # 6 Nov 02:15 CT (Matt): SOL had flipped ~15 times when a 98c red star crashed in 20s
+FLIP_MAX_ROUND_FLIPS = 99   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: no flip-count limit (was 1)
 _BOOST_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_boost_breaker.json")
 BOOST_ACTIVE = not os.path.exists(_BOOST_BREAKER_FILE)
 
@@ -155,7 +159,7 @@ def _trip_boost(pnl, how):
 # trips and reverts to this state if there's a loss." The STRICT values below are exactly the settings as of 28 Oct
 # 01:48 CT (98% win, 1.8 sigma, 94c floor). While loose mode is on the bot bids on the LOOSE values; the FIRST losing
 # Pulse bet of any kind trips it: everything snaps back to STRICT and stays there (flip_loose_breaker.json).
-LOOSE_STRICT = {"win": 0.98, "sigma": 2.0, "floor": 0.96}   # 16 Nov 12:34 CT (Matt): back to the 12 Nov 98% version that was working (was 96% / 1.75 sigma)
+LOOSE_STRICT = {"win": 0.0, "sigma": 2.0, "floor": 0.0}   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star: red star or GREEN To flip (2.0+ sigma), no win-%/price floor. 98% version was {"win": 0.98, "sigma": 2.0, "floor": 0.96}
 LOOSE_VALUES = {"win": 0.97, "sigma": 2.0, "floor": 0.96}   # 6 Nov 01:29 CT (Matt): green only
 _LOOSE_BREAKER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flip_loose_breaker.json")
 LOOSE_ACTIVE = False   # 12 Nov 15:08 CT: was re-arming at 97% on every deploy -- strict 98% always now
@@ -744,7 +748,7 @@ def run_entries(client, state: dict, excluded_tickers: set, state_lock, dry_run:
         strategy_guard.note_entry(ticker)
         why = "RED STAR" if n["lock"] else (f"To flip GREEN {n['zs']:.1f} sigma" if n["zs"] >= 2 else f"To flip YELLOW 1 (bid zone) {n['zs']:.1f} sigma")
         want, boosted = shares_for(n["coin"])
-        want = strategy_guard.bet_shares(limit_side_price, want)   # 15 Nov 16:29 CT (Matt): whole balance split over the round
+        # 16 Nov 15:00 CT (Matt): original Flip Star = fixed 2 shares (balance sizing off for Flip Star)
         print(f"[FLIP] ENTRY {ticker} ({n['coin']}): {why}, win {n['p']*100:.0f}%, {int(n['tl'])}s left -- "
               f"{'DRY-RUN ' if dry_run else ''}buying {want} {n['side'].upper()} up to ${limit_side_price:.2f}")
         if dry_run:
