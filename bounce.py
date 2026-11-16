@@ -46,6 +46,10 @@ BOUNCE_MODEL_EDGE = 0.03
 # a dollar turns into four ... try it with dimes ($0.10)".  Two paper versions side by side:
 #   BOUNCE = cheap side 10-30c, sell at +50%     (his first idea, $1 a ride)
 #   LOW    = cheap side 3-15c, sell at double     ($0.10 a ride, like he asked)
+# 15 Nov 22:10 CT: the 14-day history test ([LATE5 TEST], 4,988 bets) killed the last-5-minutes cheap-side idea:
+# -25% of the money put in with every exit (double, +50%, any profit).  When the cheap side lost at the end (93% of
+# the time) only 14-23% of rides ever showed a profit.  All LATE5* versions are switched OFF below.
+_LATE5_OFF = True
 VARIANTS = [
     {"tag": "BOUNCE", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": BOUNCE_STOP},
@@ -65,17 +69,17 @@ VARIANTS = [
     # side goes 5% -> 10-15%".  Buy the 3-10c side in the last 5 minutes (down to 45s left), sell at DOUBLE, otherwise
     # hold it to the end (a flip pays $1).  No stop.  LATE5 = pure price idea; LATE5-M = only when the board's model
     # also says that side is under-priced.
-    {"tag": "LATE5", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+    {"tag": "LATE5", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
-    {"tag": "LATE5-M", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+    {"tag": "LATE5-M", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": True},
     # 15 Nov 19:37 CT (Matt): "it doesn't have to wait for a double -- capture any profit".  LATE5-ANY sells the
     # moment selling would make money after Kalshi fees both ways.
-    {"tag": "LATE5-ANY", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 0.0, "stop": 0.0,
+    {"tag": "LATE5-ANY", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 0.0, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False, "any_profit": True},
     # 15 Nov 21:39 CT (Matt: "keep developing strategies on paper, look on the net for which ones work, test until one
     # is positive").  Live paper LATE5 lost ~$5 in one round when 5 coins all failed together -> LATE5-1 = one coin per round.
-    {"tag": "LATE5-1", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+    {"tag": "LATE5-1", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False, "per_round": 1},
     # From the web (dev.to "momentum lag arbitrage", clawd "15min signal optimization"): after a sharp spot move the
     # 15-minute market price lags the spot-implied chance by 30-90s.  Our board's model IS the spot-implied chance.
@@ -88,7 +92,7 @@ VARIANTS = [
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
     {"tag": "LAG8-H", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 0},
-    {"tag": "LATE5-50", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
+    {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
 
@@ -237,7 +241,7 @@ def _enter(v, key, t, side, ask, sl, now, client, why):
 
 
 def T_off(v):
-    return _tot[v["tag"]].get("off", False)
+    return v.get("off", False) or _tot[v["tag"]].get("off", False)
 
 
 def _settle_left(client, place_exit):
