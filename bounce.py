@@ -58,14 +58,19 @@ VARIANTS = [
     # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
     {"tag": "EARLY10", "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 600},
+    # 15 Nov 19:36 CT (Matt): "nothing to do with how they finish -- buy in the last five minutes and walk with the
+    # profit".  So these never hold to the end: sell at the target, or sell whatever it's worth with 20s left.
+    # LATE5-50 takes +50% instead of waiting for a double.
     # 15 Nov 19:35 CT (Matt): "in the last five minutes the favourite is at 90-95% and falls from 95 to 85 -- the other
     # side goes 5% -> 10-15%".  Buy the 3-10c side in the last 5 minutes (down to 45s left), sell at DOUBLE, otherwise
     # hold it to the end (a flip pays $1).  No stop.  LATE5 = pure price idea; LATE5-M = only when the board's model
     # also says that side is under-priced.
     {"tag": "LATE5", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
-     "min_left": 45, "max_left": 300, "exit_left": 0, "model": False},
+     "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
     {"tag": "LATE5-M", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
-     "min_left": 45, "max_left": 300, "exit_left": 0, "model": True},
+     "min_left": 45, "max_left": 300, "exit_left": 20, "model": True},
+    {"tag": "LATE5-50", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
+     "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
 
 _last = [0.0]
