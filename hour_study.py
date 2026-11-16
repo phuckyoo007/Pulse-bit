@@ -216,6 +216,10 @@ def _history(client):
         except Exception as e:
             print(f"[CHEAP] crashed ({e}).")
         try:
+            _late5()
+        except Exception as e:
+            print(f"[LATE5 TEST] crashed ({e}).")
+        try:
             _turn()
         except Exception as e:
             print(f"[TURN] crashed ({e}).")
@@ -503,6 +507,61 @@ def _cheap():
         print(f"[CHEAP] {tl // 60}:00 left | {why} | {band} | {ex}: {n} bets, {w / n * 100:.1f}% hit target or won, avg price "
               f"{c / n * 100:.1f}c, P/L ${p:+.2f} (${p / n:+.3f} a bet, {p / max(c * HS_SHARES, 1e-9) * 100:+.1f}% of money put in)")
     print("[CHEAP] done.")
+
+
+def _late5():
+    """15 Nov 19:38 CT (Matt): run the last-5-minutes cheap-side idea against the board's history -- including the sides
+    that did NOT win at the end ("it has nothing to do with how they finish -- buy, take the profit, walk").
+    First minute in the last 5 (down to 0:45 left) where a side costs 3-10c: buy ~$1 of it at the ask.  Exits tested:
+    ANY profit after fees, +50%, double -- otherwise sell at the bid with ~20s left (never held to the end).
+    1-minute closing prices, real spreads and Kalshi fees both ways.  Split by whether that side won or lost at the end."""
+    res = {}
+    for close_ts, coins in _rounds.items():
+        for coin, (c, r) in coins.items():
+            entry = None
+            for i, (tl, ya, yb) in enumerate(c):
+                if not (45 <= tl <= 300):
+                    continue
+                for side in ("yes", "no"):
+                    cost = ya if side == "yes" else 1 - yb
+                    if 0.03 <= cost <= 0.10 and ya - yb <= 0.04:
+                        entry = (i, tl, side, cost)
+                        break
+                if entry:
+                    break
+            if not entry:
+                continue
+            i, tl0, side, cost = entry
+            n = max(1, int(1.0 / cost))
+            later = [x for x in c[i + 1:] if x[0] >= 20]
+            if not later:
+                continue
+            last_bid = later[-1][2] if side == "yes" else 1 - later[-1][1]
+            fin = "side WON at the end" if r == side else "side LOST at the end"
+            for ex in ("any profit", "+50%", "double"):
+                pnl = None
+                for t2, a2, b2 in later:
+                    bid = b2 if side == "yes" else 1 - a2
+                    net = (bid - cost) * n - _fee(cost, n) - (_fee(bid, n) if bid > 0 else 0)
+                    if (ex == "any profit" and net > 0.005) or (ex == "+50%" and bid >= cost * 1.5 - 1e-9) \
+                            or (ex == "double" and bid >= cost * 2 - 1e-9):
+                        pnl = net
+                        break
+                hit = pnl is not None
+                if pnl is None:
+                    pnl = (last_bid - cost) * n - _fee(cost, n) - (_fee(last_bid, n) if last_bid > 0 else 0)
+                for grp in ("ALL", fin):
+                    v = res.setdefault((ex, grp), [0, 0, 0.0, 0.0])
+                    v[0] += 1
+                    v[1] += 1 if pnl > 0 else 0
+                    v[2] += pnl
+                    v[3] += cost * n
+    print(f"[LATE5 TEST] ===== last 5 min, buy ~$1 of the 3-10c side, take profit and walk (never hold to the end); "
+          f"{HS_DAYS} days, after fees =====")
+    for (ex, grp), (n, w, p, c) in sorted(res.items()):
+        print(f"[LATE5 TEST] {ex:10s} | {grp:20s}: {n} bets, {w / n * 100:.1f}% made money, P/L ${p:+.2f} "
+              f"(${p / n:+.3f} a bet, {p / max(c, 1e-9) * 100:+.1f}% of money put in)")
+    print("[LATE5 TEST] done.")
 
 
 def _segments():
