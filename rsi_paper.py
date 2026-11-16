@@ -122,6 +122,7 @@ def run(client=None) -> None:
             p = _pos.get(key)
             if p:
                 bid = yb if p["side"] == "yes" else nb
+                p["last_bid"] = bid
                 if tl <= 3:   # settled: a side worth 50c+ in the last seconds wins $1
                     _close(key, p, 1.0 if bid >= 0.5 else 0.0, f"held to the end -- {'WON' if bid >= 0.5 else 'lost'}")
                 elif v.get("stop") and bid <= p["cost"] * v["stop"] + 1e-9:
@@ -157,5 +158,8 @@ def run(client=None) -> None:
             _done.add(key)
             print(f"[RSI-PAPER] {v['tag']} BUY {t} ({coin}) {side.upper()} {count} @ {ask*100:.0f}c: 1-min RSI "
                   f"{'?' if prev is None else f'{prev:.0f}'} -> {cur:.0f}, 5-min RSI {r['r5']:.0f}, {tl:.0f}s left")
+    # 16 Nov 16:35 CT fix: the board drops a market a few seconds before the close, so "gone" is NOT a loss --
+    # settle it from the last price we saw (50c+ = that side won).  Earlier "counted as a loss" rides were wrong.
     for k in [k for k in _pos if k[1] not in b]:
-        _close(k, _pos[k], 0.0, "market gone before settlement was seen -- counted as a loss")
+        lb = _pos[k].get("last_bid", 0.0)
+        _close(k, _pos[k], 1.0 if lb >= 0.5 else 0.0, f"round ended (last price {lb*100:.0f}c) -- {'WON' if lb >= 0.5 else 'lost'}")

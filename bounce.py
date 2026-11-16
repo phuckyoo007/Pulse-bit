@@ -124,7 +124,9 @@ VARIANTS = [
     # idea, +$6.57) cuts losers early when sigma drops under 1.0.  R82-FIX = Ride 82's entry (82-97c, last 4 min) + board
     # sigma 1.3+ held 4s + Late 78's exits (sell when sigma < 1.0 or the board flips; sell at 99c; 80% backup stop).
     # $2/ride (~2 shares, like Ride 82).  If it's positive over 30+ rides, Ride 82 goes back on with these rules.
-    {"tag": "R82-FIX", "kind": "fav", "dollars": 2.00, "lo": 0.82, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    # 16 Nov 16:35 CT paper check: R82-FIX 49 rides, 26 won, -$3.48 -- the sigma exit fires too often at these
+    # prices (many -$0.10 to -$0.50 exits vs +$0.03-0.15 wins).  OFF.
+    {"tag": "R82-FIX", "off": True, "kind": "fav", "dollars": 2.00, "lo": 0.82, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.80, "min_left": 15, "max_left": 240, "exit_left": 0, "hold_secs": 4, "take_price": 0.99,
      "min_sigma": 1.3, "sigma_exit": 1.0},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
