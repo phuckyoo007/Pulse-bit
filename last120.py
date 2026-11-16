@@ -16,7 +16,7 @@ import kalshi_ws
 LAST120_ENABLED = True   # 16 Nov 11:20 CT (Matt): "run it live"
 LAST120_SHARES = 3       # 16 Nov 11:20 CT (Matt): "three shares"
 LAST120_DOLLARS = 0
-LAST120_MAX_SECONDS_LEFT = 120
+LAST120_MAX_SECONDS_LEFT = 180   # 16 Nov 12:06 CT (Matt): last 3 minutes (was 2)
 LAST120_MIN_SECONDS_LEFT = 5
 LAST120_MIN_PRICE = 0.86
 LAST120_MAX_PRICE = 0.97
