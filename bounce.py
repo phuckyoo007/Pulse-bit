@@ -56,7 +56,7 @@ VARIANTS = [
     {"tag": "LOW", "off": True, "dollars": 0.10, "lo": 0.03, "hi": 0.15, "swing": 0.04, "take": 2.00, "stop": 0.50},
     # 15 Nov 16:45 CT paper refinement: BOUNCE's -40% stop fired on 16 of 23 rides, mostly 20-40s after buying (normal
     # wiggle), while winners ran +50-148%.  Same entry, NO stop -- hold for +50% or sell with a minute left.
-    {"tag": "BOUNCE-NS", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
+    {"tag": "BOUNCE-NS", "off": True, "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": 0.0},
     # 15 Nov 13:18 CT (Matt): "in the first five minutes it's all the way up to 90 and the other side is 10 -- the 90
     # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
@@ -90,7 +90,7 @@ VARIANTS = [
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
     {"tag": "LAG12", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.12, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
-    {"tag": "LAG8-H", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
+    {"tag": "LAG8-H", "off": True, "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 0},
     # 16 Nov 01:20 CT paper check: BOUNCE (32 rides, -$6.52), LAG8 (42, -$10.42), LOW (9, 0 up), BOUNCE-NS and LAG8-H
     # (hit -$10) all lose -- every cheap-side idea loses.  Research explains it: a UCD study of Kalshi (Whelan,
@@ -101,6 +101,10 @@ VARIANTS = [
     # 16 Nov 02:40 CT: at $5 a ride MAKER90 hit the $10 paper limit after 7 rides (4 won +$0.28-0.61, 3 lost $4.35-4.72,
     # all three were 86-94c bids filled on a price DROP -- the dip kept going).  $1 a ride so it collects enough rides to judge.
     {"tag": "MAKER90", "kind": "maker", "dollars": 1.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
+    # 16 Nov 04:25 CT paper check: MAKER90 at $1 = 22 rides, 18 won, -$2.05.  Fills at 86-90c: 10 won / 6 lost
+    # (losses -$0.89 each wipe out +$0.12 wins); fills at 92c+: 13 won / 1 lost.  MAKER93 = same idea, only bids of 93c+.
+    {"tag": "MAKER93", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
