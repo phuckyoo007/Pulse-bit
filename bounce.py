@@ -22,7 +22,7 @@ import markets_paper as mk
 BOUNCE_ENABLED = True
 BOUNCE_PAPER = True   # 15 Nov 14:34 CT (Matt): back to PAPER "until you refine them, perfect them" (was live 1 share 14:06-14:34)
 BOUNCE_SHARES = 1
-BOUNCE_LOSS_LIMIT = 10.00   # per version; a version that loses $10 net switches itself off
+BOUNCE_LOSS_LIMIT = (25.00 if BOUNCE_PAPER else 10.00)   # paper versions get $25 room to collect data; per version; a version that loses $10 net switches itself off
 BOUNCE_DOLLARS = 1.00
 BOUNCE_POLL = 3
 BOUNCE_LOOKBACK = 300
@@ -98,7 +98,9 @@ VARIANTS = [
     # above 50c earn small positive returns -- and "makers" (resting limit orders) earn ~1.9% after fees vs takers
     # who cross the spread.  So: MAKER90 = rest a bid 2c under the favourite's ask (88-97c ask, last 5 minutes,
     # one per coin per round); it fills only if the price comes down to us within 60s; hold to the end.
-    {"tag": "MAKER90", "kind": "maker", "dollars": 5.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    # 16 Nov 02:40 CT: at $5 a ride MAKER90 hit the $10 paper limit after 7 rides (4 won +$0.28-0.61, 3 lost $4.35-4.72,
+    # all three were 86-94c bids filled on a price DROP -- the dip kept going).  $1 a ride so it collects enough rides to judge.
+    {"tag": "MAKER90", "kind": "maker", "dollars": 1.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
