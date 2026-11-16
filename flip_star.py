@@ -202,7 +202,7 @@ FLIP_6040_HELD = 0.80             # 25 Oct 14:07 CT (per Matthew): instant sell 
 FLIP_CRASH_FRACTION = 0.87        # (was 0.50) instant sell when the position is worth 70% or less of what was paid
 # 24 Oct 13:53 CT (per Matthew): manually entered bets (bot.py "manually_adopted") also get an instant stop at 85% of what
 # was paid, all round long incl. the last 45s. The 75c line and 70% crash stops above still apply to them too.
-MANUAL_STOP_FRACTION = 0.99   # 16 Nov 11:48 CT (Matt): manual bets stop at 99% (was 85%)
+MANUAL_STOP_FRACTION = 0.35   # 16 Nov 14:02 CT (Matt): manual bets stop at 35% (was 99%)
 FLIP_PAUSED = False                # 3 Nov 14:19 CT (Matt): Flip Star back on, 4 shares per bet
 FLIP_HALTED = FLIP_PAUSED
 _halt_note_at = 0.0
