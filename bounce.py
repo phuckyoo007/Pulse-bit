@@ -260,6 +260,9 @@ def _market_falling(ticker, side, now):
     return n
 
 
+# 16 Nov 13:35 CT paper check: R82-FIX's losses were 5 of 9 DOGE (+1 ZEC); MAKER93S's only loss was ZEC.  DOGE is off
+# Ride 82 / Late 78 / LAST120 live and ZEC is off everything live, so the paper versions skip them too.
+PAPER_SKIP_PREFIXES = ("KXDOGE", "KXZEC")
 _per_round = {}   # (variant tag, round key) -> entries this round
 _orders = {}      # (variant tag, ticker) -> paper resting bid {"side", "price", "at"}
 
@@ -374,6 +377,8 @@ def run(client, place_exit=None, state=None) -> None:
                     _close(key, p, 1.0 if bid >= 0.5 else 0.0, f"held to the end -- {'WON' if bid >= 0.5 else 'lost'}",
                            client, place_exit, settled=True)
                 continue
+            if any(t.upper().startswith(p) for p in PAPER_SKIP_PREFIXES):
+                continue   # mirror the live coin list
             if key in _done or sl < v.get("min_left", BOUNCE_MIN_SECONDS_LEFT) or sl > v.get("max_left", 9999) \
                     or len(h) < 10 or T_off(v):
                 continue
