@@ -22,7 +22,7 @@ LATE78_MAX_SECONDS_LEFT = 240
 LATE78_MIN_SECONDS_LEFT = 8
 LATE78_MIN_PRICE = 0.90   # 15 Nov 20:30 CT loss review: today fills under 90c went 1 win / 4 losses (BNB 83c -1.42, BNB 89c -1.17, BNB 84c -0.18, HYPE 85c -0.12) -- the 80% stop costs $1+ there vs +$0.10-0.50 wins; 90c+ fills are net positive. (Was 0.78.)
 LATE78_MAX_PRICE = 0.98
-LATE78_STOP_FRACTION = 0.80   # 15 Nov 13:13 CT (Matt): 80% backup stop -- the sigma exit should catch it first
+LATE78_STOP_FRACTION = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 80%; sigma exit still sells first)
 LATE78_TAKE_PROFIT_PRICE = 0.99
 # 15 Nov 13:12 CT (Matt): "put a minimum sigma on Late 78 -- once it falls below that value, use that as the loss".
 # Buy only with our side LATE78_MIN_SIGMA+ from flipping; sell the moment it drops under it (the 85% stop stays as a backup).
@@ -215,4 +215,4 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if entry_price < LATE78_MIN_PRICE - 0.005:
             print(f"[LATE78] {ticker}: filled at ${entry_price:.2f}, under the {LATE78_MIN_PRICE*100:.0f}c minimum -- "
                   f"price is falling fast, selling right away (11 Nov, Matt).")
-        print(f"[LATE78] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 80% stop, sells at 99c, else held to the end.")
+        print(f"[LATE78] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 76% stop, sells at 99c, else held to the end.")

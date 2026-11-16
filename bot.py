@@ -331,11 +331,7 @@ LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 #   Early settle (EARLY96): 60% stop -$0.47 vs 40% -$10.77 vs no stop -$41.52
 #   Flip Star (FLIP98):     60% stop -$16.36 vs 40% -$26.65 vs no stop -$38.49
 #   BTC92 (BTC94): 60% -$28.61 vs 40% -$30.09 -- too close to change, stays 40%.
-STOP_BY_STRATEGY = {"early93": 0.60, "flip_star": 0.60,
-                    "ride82": 0.92}   # 16 Nov 11:27 CT (Matt): "92% stop" (was 45%) -- sells after an ~8% drop
-
-
-RIDE82_KICKOFF_SECS = 20   # 16 Nov 11:28 CT (Matt): give Ride 82 its kick-off before the 8% trailing stop arms
+STOP_BY_STRATEGY = {"early93": 0.76, "flip_star": 0.76, "ride82": 0.76}   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (were 60/60/92)
 
 
 def _stop_frac(position):
@@ -345,7 +341,7 @@ def _stop_frac(position):
     return HOLD_STOP_FRACTION
 
 
-HOLD_STOP_FRACTION = 0.40   # 11 Nov 11:15 CT (Matt): every bot bet sells the moment its side falls to 40% of what was paid
+HOLD_STOP_FRACTION = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 40%)
 BASE_PULSE_ENTRIES = False   # 11 Nov 00:00 CT (Matt): the original Pulse model entries are off
 STOP_FRACTION_OF_ENTRY = 0.78   # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
@@ -1231,7 +1227,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _hv >= last120.LAST120_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
                     elif _hv <= position["entry_price"] * last120.LAST120_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"stop_85pct (held side {_hv*100:.0f}c <= 85% of entry "
+                        decision = ExitDecision(True, f"stop_{last120.LAST120_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {last120.LAST120_STOP_FRACTION*100:.0f}% of entry "
                                                       f"{position['entry_price']*100:.0f}c -- instant)")
                     else:
                         decision = ExitDecision(False, "")
@@ -1245,7 +1241,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
                     elif _hv <= position["entry_price"] * late78.LATE78_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"stop_80pct (held side {_hv*100:.0f}c <= 80% of entry "
+                        decision = ExitDecision(True, f"stop_{late78.LATE78_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {late78.LATE78_STOP_FRACTION*100:.0f}% of entry "
                                                       f"{position['entry_price']*100:.0f}c -- instant)")
                     else:
                         decision = ExitDecision(False, "")
@@ -1265,24 +1261,6 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _mside is not None and _mside < momride.MOMRIDE_SELL_MOMENTUM - 1e-9:
                         decision = ExitDecision(True, f"momentum_faded (momentum toward our side {_mside*100:.0f}% < "
                                                       f"{momride.MOMRIDE_SELL_MOMENTUM*100:.0f}% -- off the ride)")
-                    else:
-                        decision = ExitDecision(False, "")
-                elif position.get("ride82") and not position.get("bad_fill"):
-                    # 16 Nov 11:28 CT (Matt): "8% drop after the initial kickoff -- they start a little low".  For the first
-                    # RIDE82_KICKOFF_SECS after buying only a wide safety stop (80% of entry) applies; after that the stop
-                    # trails 8% under the HIGHEST price reached since buying (sell at 92% of the peak).
-                    _pk = max(position.get("peak_val") or 0.0, _hv, position["entry_price"])
-                    position["peak_val"] = _pk
-                    _age = time.time() - (position.get("entry_time") or time.time())
-                    if _age < RIDE82_KICKOFF_SECS:
-                        if _hv <= position["entry_price"] * 0.80 + 1e-9:
-                            decision = ExitDecision(True, f"stop_kickoff (held side {_hv*100:.0f}c <= 80% of entry "
-                                                          f"{position['entry_price']*100:.0f}c in the first {RIDE82_KICKOFF_SECS}s)")
-                        else:
-                            decision = ExitDecision(False, "")
-                    elif _hv <= _pk * _stop_frac(position) + 1e-9:
-                        decision = ExitDecision(True, f"stop_92pct_of_peak (held side {_hv*100:.0f}c <= 92% of its high "
-                                                      f"{_pk*100:.0f}c since buying at {position['entry_price']*100:.0f}c)")
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("late80") or position.get("late60") or position.get("early93") or position.get("last3") or position.get("ride82"):

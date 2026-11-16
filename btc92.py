@@ -22,7 +22,7 @@ BTC92_MIN_WIN = 0.94   # 13 Nov 15:30 CT (Matt): board one-to-one with the price
 # (was) BTC92_MIN_WIN = 0.96   # 12 Nov 15:58 CT: was 92% -- board must agree with the 94c+ price (same lesson as Early settle)
 BTC92_MIN_PRICE = 0.94   # 12 Nov 14:53 CT: was 92c -- 92-93c lost -$2.72 on paper, 94c+ +$8.75
 BTC92_MAX_PRICE = 0.98
-BTC92_STOP_FRACTION = 0.78  # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (was 86%)
+BTC92_STOP_FRACTION = 0.76  # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 78%)
 BTC92_MIN_SIGMA = 1.5       # 7 Nov 14:09 CT (Matt): only when 'To flip' is GREEN (2+) or YELLOW 1 (1.5-2 sigma)
 
 _done = {}   # ticker -> time (one bet per round)

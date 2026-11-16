@@ -21,7 +21,7 @@ LAST120_MIN_SECONDS_LEFT = 5
 LAST120_MIN_PRICE = 0.86
 LAST120_MAX_PRICE = 0.97
 LAST120_HOLD_SECS = 4
-LAST120_STOP_FRACTION = 0.85
+LAST120_STOP_FRACTION = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 85%)
 LAST120_TAKE_PROFIT_PRICE = 0.99
 
 _done = {}
@@ -185,4 +185,4 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
         if entry_price < LAST120_MIN_PRICE - 0.005:
             print(f"[LAST120] {ticker}: filled at ${entry_price:.2f}, under the {LAST120_MIN_PRICE*100:.0f}c minimum -- "
                   f"price is falling fast, selling right away (11 Nov, Matt).")
-        print(f"[LAST120] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 85% stop, sells at 99c, else held to the end.")
+        print(f"[LAST120] FILLED {ticker}: {count:g} {side_name.upper()} @ ${entry_price:.2f} -- 76% stop, sells at 99c, else held to the end.")
