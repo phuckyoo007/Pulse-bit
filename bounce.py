@@ -51,9 +51,9 @@ BOUNCE_MODEL_EDGE = 0.03
 # the time) only 14-23% of rides ever showed a profit.  All LATE5* versions are switched OFF below.
 _LATE5_OFF = True
 VARIANTS = [
-    {"tag": "BOUNCE", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
+    {"tag": "BOUNCE", "off": True, "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": BOUNCE_STOP},
-    {"tag": "LOW", "dollars": 0.10, "lo": 0.03, "hi": 0.15, "swing": 0.04, "take": 2.00, "stop": 0.50},
+    {"tag": "LOW", "off": True, "dollars": 0.10, "lo": 0.03, "hi": 0.15, "swing": 0.04, "take": 2.00, "stop": 0.50},
     # 15 Nov 16:45 CT paper refinement: BOUNCE's -40% stop fired on 16 of 23 rides, mostly 20-40s after buying (normal
     # wiggle), while winners ran +50-148%.  Same entry, NO stop -- hold for +50% or sell with a minute left.
     {"tag": "BOUNCE-NS", "dollars": BOUNCE_DOLLARS, "lo": BOUNCE_MIN_PRICE, "hi": BOUNCE_MAX_PRICE,
@@ -86,12 +86,20 @@ VARIANTS = [
     # LAG8: minutes 4-10 of the round, buy the side whose model chance is 8+ pts above its price (15-85c), sell when the
     # price catches up to the model (or the model drops below what we paid), else sell with 60s left.
     # LAG12: same with a 12-pt gap.  LAG8-H: same entry, hold to the end.
-    {"tag": "LAG8", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
+    {"tag": "LAG8", "off": True, "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
     {"tag": "LAG12", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.12, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
     {"tag": "LAG8-H", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 0},
+    # 16 Nov 01:20 CT paper check: BOUNCE (32 rides, -$6.52), LAG8 (42, -$10.42), LOW (9, 0 up), BOUNCE-NS and LAG8-H
+    # (hit -$10) all lose -- every cheap-side idea loses.  Research explains it: a UCD study of Kalshi (Whelan,
+    # WP2025_19) found contracts under 10c lose 60%+ of the money put in (favourite-longshot bias), while contracts
+    # above 50c earn small positive returns -- and "makers" (resting limit orders) earn ~1.9% after fees vs takers
+    # who cross the spread.  So: MAKER90 = rest a bid 2c under the favourite's ask (88-97c ask, last 5 minutes,
+    # one per coin per round); it fills only if the price comes down to us within 60s; hold to the end.
+    {"tag": "MAKER90", "kind": "maker", "dollars": 5.00, "lo": 0.88, "hi": 0.97, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -226,6 +234,7 @@ def _market_falling(ticker, side, now):
 
 
 _per_round = {}   # (variant tag, round key) -> entries this round
+_orders = {}      # (variant tag, ticker) -> paper resting bid {"side", "price", "at"}
 
 
 def _enter(v, key, t, side, ask, sl, now, client, why):
@@ -335,6 +344,26 @@ def run(client, place_exit=None, state=None) -> None:
             if (not BOUNCE_PAPER and any(k[1] == t for k in _pos)) or (state is not None and t in state):
                 continue   # one bounce ride per market, and never a market another strategy holds
             if v.get("per_round") and _per_round.get((v["tag"], _round["key"]), 0) >= v["per_round"]:
+                continue
+            if v.get("kind") == "maker":
+                o = _orders.get(key)
+                if o:
+                    ask_o = ya if o["side"] == "yes" else 1 - yb
+                    if ask_o <= o["price"] + 1e-9:   # the price came down to our resting bid -> filled
+                        _orders.pop(key, None)
+                        _done.add(key)
+                        count = max(1, math.floor(v["dollars"] / o["price"] + 1e-9))
+                        _pos[key] = {"v": v["tag"], "side": o["side"], "cost": o["price"], "count": count, "at": now,
+                                     "kind": _kind(t), "live": False}
+                        print(f"{_tag()} {v['tag']} FILLED {t} {o['side'].upper()} {count} @ {o['price']*100:.0f}c "
+                              f"(resting bid hit after {now - o['at']:.0f}s), {sl:.0f}s left -- holding to the end")
+                    elif now - o["at"] > 60:
+                        _orders.pop(key, None)   # not filled in 60s -- cancel, may re-post next pass
+                    continue
+                fav = "yes" if (ya + yb) / 2 >= 0.5 else "no"
+                ask_f = ya if fav == "yes" else 1 - yb
+                if v["lo"] - 1e-9 <= ask_f <= v["hi"] + 1e-9 and ya - yb <= 0.04:
+                    _orders[key] = {"side": fav, "price": round(max(0.85, ask_f - v["under"]), 2), "at": now}
                 continue
             for side in ("yes", "no"):
                 ask = ya if side == "yes" else 1 - yb
