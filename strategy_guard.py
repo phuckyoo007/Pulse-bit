@@ -96,9 +96,15 @@ def _say(key, msg):
         print(msg)
 
 
+# 16 Nov 12:33 CT (Matt): "temporarily take ZEC off of the coin list" -- no live strategy bets ZEC until removed here.
+BLOCKED_PREFIXES = ("KXZEC",)
+
+
 def can_enter(ticker, state=None, tag="", own_slot=False) -> bool:
     """False while cooling down after a loss, or if another coin is already bet this round.
     own_slot=True (13 Nov, RIDE82): the strategy gets its own one-bet-per-round slot instead of sharing."""
+    if any(ticker.upper().startswith(p) for p in BLOCKED_PREFIXES):
+        return False   # coin temporarily off the list for every live strategy
     now = time.time()
     if now < _cool_until[0]:
         _say("cool", f"[GUARD] cooling down after a loss -- no new real bets for {(_cool_until[0] - now) / 60:.0f} more min.")
