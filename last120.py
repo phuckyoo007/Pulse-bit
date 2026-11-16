@@ -23,6 +23,9 @@ LAST120_MAX_PRICE = 0.97
 LAST120_HOLD_SECS = 4
 LAST120_STOP_FRACTION = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 85%)
 LAST120_TAKE_PROFIT_PRICE = 0.99
+# 16 Nov 11:55 CT review: its only loss so far was DOGE (91c -> 68c in 70s, -$0.69).  DOGE was already pulled from
+# Ride 82 / Late 78 on 13 Nov after every early Ride 82 loss was DOGE.  Same rule here.
+LAST120_SKIP_COINS = {"DOGE"}
 
 _done = {}
 _tries = {}
@@ -91,6 +94,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 or ticker in flip_star.external_owned[0]():
             continue
         if not strategy_guard.can_enter(ticker, state, "LAST120-" + str(n.get("coin")), own_slot=True):
+            continue
+        if n.get("coin") in LAST120_SKIP_COINS:
             continue
         h = _px.get(ticker)
         if not h:
