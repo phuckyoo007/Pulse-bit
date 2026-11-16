@@ -69,6 +69,10 @@ VARIANTS = [
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
     {"tag": "LATE5-M", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": True},
+    # 15 Nov 19:37 CT (Matt): "it doesn't have to wait for a double -- capture any profit".  LATE5-ANY sells the
+    # moment selling would make money after Kalshi fees both ways.
+    {"tag": "LATE5-ANY", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 0.0, "stop": 0.0,
+     "min_left": 45, "max_left": 300, "exit_left": 20, "model": False, "any_profit": True},
     {"tag": "LATE5-50", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -268,7 +272,10 @@ def run(client, place_exit=None, state=None) -> None:
                 if p.get("await_settle"):
                     continue
                 bid = yb if p["side"] == "yes" else 1 - ya
-                if bid >= p["cost"] * v["take"] - 1e-9:
+                _net = (bid - p["cost"]) * p["count"] - _fee(p["cost"], p["count"]) - _fee(bid, p["count"])
+                if v.get("any_profit") and _net > 0.005:
+                    _close(key, p, bid, f"+${_net:.2f} after fees -- taking it", client, place_exit)
+                elif v["take"] > 0 and bid >= p["cost"] * v["take"] - 1e-9:
                     _close(key, p, bid, f"+{(bid / p['cost'] - 1)*100:.0f}% -- cashing out", client, place_exit)
                 elif v["stop"] > 0 and bid <= p["cost"] * v["stop"] + 1e-9:
                     _close(key, p, bid, f"cut at {bid / p['cost']*100:.0f}% of cost", client, place_exit)
