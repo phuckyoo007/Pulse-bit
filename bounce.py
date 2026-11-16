@@ -58,6 +58,14 @@ VARIANTS = [
     # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
     {"tag": "EARLY10", "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 600},
+    # 15 Nov 19:35 CT (Matt): "in the last five minutes the favourite is at 90-95% and falls from 95 to 85 -- the other
+    # side goes 5% -> 10-15%".  Buy the 3-10c side in the last 5 minutes (down to 45s left), sell at DOUBLE, otherwise
+    # hold it to the end (a flip pays $1).  No stop.  LATE5 = pure price idea; LATE5-M = only when the board's model
+    # also says that side is under-priced.
+    {"tag": "LATE5", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+     "min_left": 45, "max_left": 300, "exit_left": 0, "model": False},
+    {"tag": "LATE5-M", "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 2.00, "stop": 0.0,
+     "min_left": 45, "max_left": 300, "exit_left": 0, "model": True},
 ]
 
 _last = [0.0]
@@ -259,10 +267,15 @@ def run(client, place_exit=None, state=None) -> None:
                     _close(key, p, bid, f"+{(bid / p['cost'] - 1)*100:.0f}% -- cashing out", client, place_exit)
                 elif v["stop"] > 0 and bid <= p["cost"] * v["stop"] + 1e-9:
                     _close(key, p, bid, f"cut at {bid / p['cost']*100:.0f}% of cost", client, place_exit)
-                elif sl < BOUNCE_EXIT_SECONDS_LEFT:
+                elif v.get("exit_left", BOUNCE_EXIT_SECONDS_LEFT) > 0 and sl < v.get("exit_left", BOUNCE_EXIT_SECONDS_LEFT):
                     _close(key, p, bid, f"{sl:.0f}s left -- out", client, place_exit)
+                elif v.get("exit_left", BOUNCE_EXIT_SECONDS_LEFT) == 0 and sl < 4:
+                    # held to the end: count it as settled -- a side priced 50c+ in the last seconds wins $1
+                    _close(key, p, 1.0 if bid >= 0.5 else 0.0, f"held to the end -- {'WON' if bid >= 0.5 else 'lost'}",
+                           client, place_exit, settled=True)
                 continue
-            if key in _done or sl < v.get("min_left", BOUNCE_MIN_SECONDS_LEFT) or len(h) < 10 or T_off(v):
+            if key in _done or sl < v.get("min_left", BOUNCE_MIN_SECONDS_LEFT) or sl > v.get("max_left", 9999) \
+                    or len(h) < 10 or T_off(v):
                 continue
             if (not BOUNCE_PAPER and any(k[1] == t for k in _pos)) or (state is not None and t in state):
                 continue   # one bounce ride per market, and never a market another strategy holds
@@ -273,7 +286,7 @@ def run(client, place_exit=None, state=None) -> None:
                 if t not in model:
                     continue   # no model chance for this market
                 chance = model[t] if side == "yes" else 1 - model[t]
-                if chance < ask + BOUNCE_MODEL_EDGE - 1e-9:
+                if v.get("model", True) and chance < ask + BOUNCE_MODEL_EDGE - 1e-9:
                     continue   # the board doesn't think this cheap side is under-priced
                 if _market_falling(t, side, now) >= BOUNCE_MARKET_MOVE:
                     continue   # the whole market is moving against this side -- a trend, not a bounce
