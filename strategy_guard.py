@@ -41,7 +41,7 @@ def bet_shares(price, default):
 #   * ONE coin per 15-minute round across every real-money strategy (the most stable coin that qualifies first);
 #   * after ANY losing real bet, no new real bets for COOLDOWN_AFTER_LOSS seconds (losses come in clusters).
 ONE_COIN_PER_ROUND = True
-COOLDOWN_AFTER_LOSS = 1800
+COOLDOWN_AFTER_LOSS = 900   # 16 Nov 12:38 CT (Matt): 15-minute pause after a loss (was 30)
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
 _cool_until = [0.0]
 _BOT_FLAGS = ("early93", "last120", "late78", "momride", "ride82", "last3", "late80", "late60", "btc92", "flip_star", "rising", "rise")
