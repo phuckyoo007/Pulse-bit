@@ -334,6 +334,16 @@ LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 STOP_BY_STRATEGY = {"early93": 0.76, "flip_star": 0.76, "ride82": 0.76}   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (were 60/60/92)
 
 
+# 16 Nov 12:07 CT (Matt): "76% of what we paid -- not that -- 76 CENTS rather".  Every bot strategy now sells when its
+# side's price falls to 76c.  Exception: a bet bought at 80c or less (Ride 82 buys from 75c) would be at/under 76c right
+# away, so those keep the 76%-of-what-we-paid stop.
+STOP_PRICE = 0.76
+
+
+def _stop_line(entry):
+    return STOP_PRICE if entry > 0.80 + 1e-9 else entry * 0.76
+
+
 def _stop_frac(position):
     for k, v in STOP_BY_STRATEGY.items():
         if position.get(k):
@@ -1226,9 +1236,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, "stop_bad_fill (filled well under 86c -- price falling fast)")
                     elif _hv >= last120.LAST120_TAKE_PROFIT_PRICE - 1e-9:
                         decision = ExitDecision(True, f"take_profit_99 (held side {_hv*100:.0f}c -- cashing in)")
-                    elif _hv <= position["entry_price"] * last120.LAST120_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"stop_{last120.LAST120_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {last120.LAST120_STOP_FRACTION*100:.0f}% of entry "
-                                                      f"{position['entry_price']*100:.0f}c -- instant)")
+                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("late78"):
@@ -1240,9 +1250,9 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _late78_sigma(ticker, position) is not None and _late78_sigma(ticker, position) < late78.LATE78_MIN_SIGMA - 1e-9:
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
-                    elif _hv <= position["entry_price"] * late78.LATE78_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"stop_{late78.LATE78_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {late78.LATE78_STOP_FRACTION*100:.0f}% of entry "
-                                                      f"{position['entry_price']*100:.0f}c -- instant)")
+                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("momride"):
@@ -1269,25 +1279,25 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if position.get("bad_fill"):
                         decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
                                                       f"under the minimum -- price falling fast)")
-                    elif _hv <= position["entry_price"] * _stop_frac(position) + 1e-9:
-                        decision = ExitDecision(True, f"stop_{_stop_frac(position)*100:.0f}pct (held side {_hv*100:.0f}c <= "
-                                                      f"{_stop_frac(position)*100:.0f}% of entry {position['entry_price']*100:.0f}c -- instant)")
+                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+
                     else:
                         decision = ExitDecision(False, "")
                 elif (position.get("flip_star") and flip_star.FLIP_HOLD_TO_END) or \
                         (position.get("btc92") and btc92.BTC92_HOLD_TO_END):
                     # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no red-card sell, held to the end
                     # 11 Nov 11:15 CT (Matt): ...except the 40% stop
-                    if _hv <= position["entry_price"] * _stop_frac(position) + 1e-9:
-                        decision = ExitDecision(True, f"stop_{_stop_frac(position)*100:.0f}pct (held side {_hv*100:.0f}c <= "
-                                                      f"{_stop_frac(position)*100:.0f}% of entry {position['entry_price']*100:.0f}c -- instant)")
+                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
-                    if _hv <= position["entry_price"] * btc92.BTC92_STOP_FRACTION + 1e-9:
-                        decision = ExitDecision(True, f"btc92_stop (held side {_hv*100:.0f}c <= {btc92.BTC92_STOP_FRACTION*100:.0f}% "
-                                                      f"of entry {position['entry_price']*100:.0f}c -- instant)")
+                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                        decision = ExitDecision(True, f"stop_76c (held side {_hv*100:.0f}c <= stop line {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("rising"):
