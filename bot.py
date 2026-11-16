@@ -937,7 +937,10 @@ def _late78_sigma(ticker, position):
 # minimum for SIGMA_EXIT_CONFIRM_SECS straight -- or a deep drop under SIGMA_EXIT_HARD, which still sells at once.
 # The 76% stop stays as the backup either way.
 SIGMA_EXIT_CONFIRM_SECS = 8
-SIGMA_EXIT_HARD = 0.8
+SIGMA_EXIT_HARD = 0.0   # 16 Nov 17:45 CT (Matt: "fix the flaws of those last two losses"): no instant sigma sale any more.
+# XRP 14:27 CT (sigma 0.58, -$1.36) and BTC 17:28 CT (sigma 0.72, -$2.01) were both ONE-reading flash dips that were back
+# above 1.0 within ~12s and won.  Every sigma sale now needs SIGMA_EXIT_CONFIRM_SECS under 1.0; the 76% stop still
+# catches a real crash at once.
 
 
 def _sigma_exit_confirmed(ticker, position, minimum):
