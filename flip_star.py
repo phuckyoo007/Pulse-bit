@@ -199,7 +199,7 @@ _loss_count = 0
 #   60/40: sell when the side we hold is at/under 60c (other side at/over 40c), any time in the round
 #   50% crash: sell when the position is worth half (or less) of what was paid
 # The red <0.2 sigma exit, 70/30 hard stop, 72% backstop, win-% collapse and 80c stop are all off while this is True.
-FLIP_STOPS_ONLY_6040_AND_CRASH = True   # 20 Oct 15:45 CT (5-day data): price stops only -- 70/30 (60/40 last 45s) + 50% crash; red/win-collapse exits OFF
+FLIP_STOPS_ONLY_6040_AND_CRASH = False   # 16 Nov 15:00 CT (Matt): ORIGINAL Flip Star -- the red-card sell is back ON (was price stops only since 20 Oct)
 # 24 Oct 12:49 CT (per Matthew): stops tightened after the last losses -- NEAR crash_stop 18c (entry 99c, -$16.20),
 # DOGE crash_stop 41c (entry 94c, -$10.79), HYPE stop_6040 68c after 6.6s (-$7.13). All three sold far below the line.
 FLIP_6040_HELD = 0.80             # 25 Oct 14:07 CT (per Matthew): instant sell at/under 80c (was 75c); last-45s line stays 0.70 in bot.py
