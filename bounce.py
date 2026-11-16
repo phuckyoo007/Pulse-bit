@@ -106,8 +106,13 @@ VARIANTS = [
     # (losses -$0.89 each wipe out +$0.12 wins); fills at 92c+: 13 won / 1 lost.  MAKER93 = same idea, only bids of 93c+.
     # 16 Nov 07:30 CT paper check: MAKER90 48 more rides, -$4.96 (its 86-90c fills keep losing $0.87-0.89) -> OFF.
     # MAKER93: 22 rides, 22 won, +$1.09 -- keep collecting (needs 50+ rides before it's a live candidate).
-    {"tag": "MAKER93", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
+    {"tag": "MAKER93", "off": True, "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02},
+    # 16 Nov 10:30 CT paper check: MAKER93 reached 52 rides, 45 won, -$4.34 -- 7 losses of ~$0.95 all in two rounds
+    # (9:00 and 9:15 CT) where several coins flipped together; at 93-95c it needs ~95% winners.  The live 96c strategies
+    # that DO win all require the board's sigma.  MAKER93S = MAKER93 + the board must pick that side 1.5+ sigma from flipping.
+    {"tag": "MAKER93S", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
+     "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02, "min_sigma": 1.5},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -293,10 +298,13 @@ def run(client, place_exit=None, state=None) -> None:
         _done.clear()
     quotes = {}   # ticker -> (yes_bid, yes_ask, secs_left)
     model = {}    # ticker -> model chance that YES wins (crypto board)
+    zside = {}    # ticker -> (board side, sigma from flipping)
     try:
         for t, n in (flip_star.board() or {}).items():
             if n.get("p") is not None and n.get("side") in ("yes", "no"):
                 model[t] = float(n["p"]) if n["side"] == "yes" else 1 - float(n["p"])
+                if n.get("zs") is not None:
+                    zside[t] = (n["side"], float(n["zs"]))
             if "15M" in t.split("-")[0].upper() and n.get("yes_ask") is not None and n.get("no_ask") is not None \
                     and n.get("tl") is not None:
                 quotes[t] = (1 - float(n["no_ask"]), float(n["yes_ask"]), float(n["tl"]))
@@ -370,6 +378,10 @@ def run(client, place_exit=None, state=None) -> None:
                     continue
                 fav = "yes" if (ya + yb) / 2 >= 0.5 else "no"
                 ask_f = ya if fav == "yes" else 1 - yb
+                if v.get("min_sigma"):
+                    zs_ = zside.get(t)
+                    if not zs_ or zs_[0] != fav or zs_[1] < v["min_sigma"] - 1e-9:
+                        continue   # the board must agree AND be min_sigma+ from flipping
                 if v["lo"] - 1e-9 <= ask_f <= v["hi"] + 1e-9 and ya - yb <= 0.04:
                     _orders[key] = {"side": fav, "price": round(max(0.85, ask_f - v["under"]), 2), "at": now}
                 continue
