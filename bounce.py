@@ -24,7 +24,7 @@ BOUNCE_PAPER = True   # 15 Nov 14:34 CT (Matt): back to PAPER "until you refine 
 BOUNCE_SHARES = 1
 BOUNCE_LOSS_LIMIT = (25.00 if BOUNCE_PAPER else 10.00)   # paper versions get $25 room to collect data; per version; a version that loses $10 net switches itself off
 BOUNCE_DOLLARS = 1.00
-BOUNCE_POLL = 3
+BOUNCE_POLL = 2   # 16 Nov: 2s so LAST120 can check a 4-second hold (crypto quotes come from the board cache -- no extra API calls)
 BOUNCE_LOOKBACK = 300
 BOUNCE_SWING = 0.08
 BOUNCE_MIN_PRICE = 0.10
@@ -113,6 +113,12 @@ VARIANTS = [
     # that DO win all require the board's sigma.  MAKER93S = MAKER93 + the board must pick that side 1.5+ sigma from flipping.
     {"tag": "MAKER93S", "kind": "maker", "dollars": 1.00, "lo": 0.95, "hi": 0.97, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 30, "max_left": 300, "exit_left": 0, "under": 0.02, "min_sigma": 1.5},
+    # 16 Nov 11:19 CT (Matt): "new strategy -- last 120 seconds, anything 86c and over on every coin, the price has to
+    # HOLD 86+ for four seconds before buying, 85% stop loss, early exit at 99c, floor 86 ceiling 97".
+    # LAST120: favourite side 86-97c with 120s or less left, priced 86c+ for 4s straight -> buy (~$5); sell at 99c, or if it
+    # falls to 85% of what we paid; otherwise held to the end.  One bet per coin per round.  PAPER until Matt says live.
+    {"tag": "LAST120", "kind": "fav", "dollars": 5.00, "lo": 0.86, "hi": 0.97, "swing": 0.0, "take": 0.0,
+     "stop": 0.85, "min_left": 5, "max_left": 120, "exit_left": 0, "hold_secs": 4, "take_price": 0.99},
     {"tag": "LATE5-50", "off": True, "dollars": 1.00, "lo": 0.03, "hi": 0.10, "swing": 0.0, "take": 1.50, "stop": 0.0,
      "min_left": 45, "max_left": 300, "exit_left": 20, "model": False},
 ]
@@ -335,7 +341,9 @@ def run(client, place_exit=None, state=None) -> None:
                 _ch = None
                 if t in model:
                     _ch = model[t] if p["side"] == "yes" else 1 - model[t]
-                if v.get("converge") and _ch is not None and bid >= _ch - 0.01 and _net > 0.005:
+                if v.get("take_price") and bid >= v["take_price"] - 1e-9:
+                    _close(key, p, bid, f"hit {v['take_price']*100:.0f}c -- cashing in", client, place_exit)
+                elif v.get("converge") and _ch is not None and bid >= _ch - 0.01 and _net > 0.005:
                     _close(key, p, bid, f"price caught up to the model ({_ch*100:.0f}%) -- taking +${_net:.2f}",
                            client, place_exit)
                 elif v.get("converge") and _ch is not None and _ch < p["cost"] - 1e-9:
@@ -360,6 +368,17 @@ def run(client, place_exit=None, state=None) -> None:
             if (not BOUNCE_PAPER and any(k[1] == t for k in _pos)) or (state is not None and t in state):
                 continue   # one bounce ride per market, and never a market another strategy holds
             if v.get("per_round") and _per_round.get((v["tag"], _round["key"]), 0) >= v["per_round"]:
+                continue
+            if v.get("kind") == "fav":
+                fav = "yes" if (ya + yb) / 2 >= 0.5 else "no"
+                ask_f = ya if fav == "yes" else 1 - yb
+                if not (v["lo"] - 1e-9 <= ask_f <= v["hi"] + 1e-9) or ya - yb > 0.04:
+                    continue
+                # held 86c+ for hold_secs straight (every reading in that window, at least 2 readings)
+                win = [(x[2] if fav == "yes" else 1 - x[1]) for x in h if now - x[0] <= v["hold_secs"] + 0.5]
+                if len(win) < 2 or min(win) < v["lo"] - 1e-9 or now - min(x[0] for x in h if now - x[0] <= v["hold_secs"] + 0.5) < v["hold_secs"] - 0.5:
+                    continue
+                _enter(v, key, t, fav, ask_f, sl, now, client, f"{fav.upper()} held {v['lo']*100:.0f}c+ for {v['hold_secs']}s")
                 continue
             if v.get("kind") == "maker":
                 o = _orders.get(key)
