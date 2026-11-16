@@ -18,7 +18,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-RIDE82_ENABLED = True   # 15 Nov 14:05 CT (Matt): back on with the $10 loss limit
+RIDE82_ENABLED = False   # 16 Nov 11:26 CT (Matt): off "till you make the changes that will fix it to positive" (-$6.09 over 28 bets since 15 Nov)
 RIDE82_SHARES = 2   # 13 Nov 17:04 CT (Matt): cut 50% (was 4)
 RIDE82_DOLLARS = 0
 RIDE82_COINS = None   # 13 Nov 03:35 CT (Matt): EVERY coin on the board (all nine, ETH + NEAR included), one bet per coin per round
