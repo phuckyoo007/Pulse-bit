@@ -94,8 +94,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         try:
             import late78 as _l78
-            if _l78.flipped_recently(ticker):
-                continue
+            if _l78.flipped_recently(ticker) or not _l78.sigma_steady(ticker):
+                continue   # 16 Nov: board flipped lately, or sigma hasn't held 1.3+ for 30s
         except Exception:
             pass
         _mc = n.get("mid_chg_1m")

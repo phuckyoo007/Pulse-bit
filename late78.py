@@ -41,6 +41,7 @@ _done = {}   # ticker -> time (one bet per round)
 _tries = {}
 _note = {}
 _side_seen = {}   # ticker -> [(t, side)]
+_zs_since = {}    # ticker -> first time (in the current unbroken run) sigma was >= LATE78_ENTRY_SIGMA
 
 
 def record(position, pnl) -> None:
@@ -51,6 +52,17 @@ def _log_once(key, msg):
     if _note.get(key) != msg:
         _note[key] = msg
         print(msg)
+
+
+# 16 Nov 06:45 CT loss review: Ride 82 XRP @ 94c (-$1.05) -- sigma sat at 0.6-1.0 the whole round and spiked to 1.53
+# for ONE reading right when it bought, then fell straight back.  Sigma must now hold 1.3+ for 30 seconds straight.
+LATE78_SIGMA_STEADY = 30
+
+
+def sigma_steady(ticker, secs=None) -> bool:
+    """True when this market's sigma has stayed at/above the entry sigma, unbroken, for `secs` seconds."""
+    t0 = _zs_since.get(ticker)
+    return t0 is not None and time.time() - t0 >= (LATE78_SIGMA_STEADY if secs is None else secs)
 
 
 def flipped_recently(ticker) -> bool:
@@ -71,6 +83,11 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
                 h_.pop(0)
     for t_ in [t_ for t_ in _side_seen if t_ not in b]:
         _side_seen.pop(t_, None)
+    for t_, x_ in b.items():   # how long has our side been at/above the entry sigma without a break?
+        if x_.get("zs") is not None and x_["zs"] >= LATE78_ENTRY_SIGMA - 1e-9:
+            _zs_since.setdefault(t_, now)
+        else:
+            _zs_since.pop(t_, None)
     if not LATE78_ENABLED or flip_star.in_pause():
         return
     try:
@@ -100,6 +117,8 @@ def run(client, state: dict, excluded_tickers: set, state_lock, dry_run: bool, e
             continue
         if n.get("zs") is None or n["zs"] < LATE78_ENTRY_SIGMA - 1e-9:
             continue   # 15 Nov (Matt): minimum sigma to buy (1.3 to buy, 1.0 to sell)
+        if not sigma_steady(ticker):
+            continue   # sigma has to HOLD 1.3+ for 30s, not just spike once
         if flipped_recently(ticker):
             _log_once("flip" + ticker, f"[LATE78] {ticker}: board pick changed sides in the last "
                       f"{LATE78_FLIP_LOOKBACK // 60} min -- choppy, skipping.")
