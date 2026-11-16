@@ -1713,6 +1713,10 @@ def run():
             adopt_manual_positions(client, state)
 
         flip_star.LOSS_HALT[0] = _loss_limit_hit(client, state)   # 3 Nov 15:18 CT (Matt): down $4 today -> in_pause() blocks every new entry
+        try:   # 16 Nov 12:33 CT (Matt): LAST120 is the main strategy -- it gets first pick every pass
+            last120.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
+        except Exception as e:
+            print(f"[LAST120] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             flip_star.external_owned[0] = lambda: pulse_v2.owned() | bounce.owned()   # + live Bounce rides (15 Nov) -- live V2's markets are off-limits to Pulse
             flip_star.run_entries(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, log_trade, ensure_shard_funds)
@@ -1766,10 +1770,6 @@ def run():
             final60.run(client)
         except Exception as e:
             print(f"[FINAL60-PAPER] pass failed (non-fatal): {e}")
-        try:
-            last120.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
-        except Exception as e:
-            print(f"[LAST120] entry pass failed (non-fatal, other strategies continue): {e}")
         try:
             late78.run(client, state, excluded_tickers, STATE_LOCK, DRY_RUN, ensure_shard_funds)
         except Exception as e:
