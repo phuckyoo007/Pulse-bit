@@ -830,7 +830,7 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                 continue
             pnl = (current_value - real_entry_price) * count
             triggered_pnls.append(pnl)
-            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl); strategy_guard.record(state.get(ticker), pnl); _BOT_EXITED[ticker] = time.time()
+            flip_star.record_result(state.get(ticker), pnl, "emergency backstop"); rise.record(state.get(ticker), pnl); closer.record(state.get(ticker), pnl); late80.record(state.get(ticker), pnl); strategy_guard.record(state.get(ticker), pnl); _BOT_EXITED[ticker] = time.time(); _BOT_EXIT_COUNT[ticker] = count
             if ticker in state:
                 del state[ticker]
         except Exception as e:
@@ -957,6 +957,7 @@ def _sigma_exit_confirmed(ticker, position, minimum):
 
 
 _BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
+_BOT_EXIT_COUNT = {}   # 16 Nov 19:00 CT: shares the backstop was selling -- an unfilled leftover of that size is still the bot's
 
 
 def _bot_filled(client: KalshiClient, ticker: str):
@@ -1100,7 +1101,12 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
         _series = ticker.split("-")[0]
         if by_bot is not True and _series not in PULSE_SERIES:
             by_bot = False
-        if by_bot is True and ticker in _BOT_EXITED and ticker not in state:
+        if by_bot is True and ticker in _BOT_EXITED and ticker not in state and _BOT_EXIT_COUNT.get(ticker) is not None \
+                and time.time() - _BOT_EXITED[ticker] < 120 and count <= _BOT_EXIT_COUNT[ticker] + 1e-9:
+            # 16 Nov 19:00 CT: SOL MAKER93 -- the backstop's sell didn't fill, and the 1 share left over was re-adopted as
+            # MANUAL (85% stop). A leftover no bigger than what the bot was selling, within 2 min, is still the bot's.
+            print(f"  {ticker}: the bot's own sell didn't fully fill -- keeping the leftover as the bot's.")
+        elif by_bot is True and ticker in _BOT_EXITED and ticker not in state:
             # 13 Nov 23:46 CT: Ride 82 sold its 2 ZEC at 23:43, Matt bought 9 ZEC by hand 2 seconds later, and that was
             # adopted as the bot's and sold by Ride 82's 45% stop (-$3.05). The bot never re-buys a market it already
             # bet and exited this round, so anything that shows up there afterwards is Matt's.
