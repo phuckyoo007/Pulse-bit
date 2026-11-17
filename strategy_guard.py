@@ -41,6 +41,7 @@ def bet_shares(price, default):
 #   * ONE coin per 15-minute round across every real-money strategy (the most stable coin that qualifies first);
 #   * after ANY losing real bet, no new real bets for COOLDOWN_AFTER_LOSS seconds (losses come in clusters).
 ONE_COIN_PER_ROUND = True
+MAX_COINS_PER_ROUND = 3   # 17 Nov 16:36 CT (Matt: "slow betting"): up to 3 coins a round (was 1); account ~$8.5 covers it
 COOLDOWN_AFTER_LOSS = 900   # 16 Nov 12:38 CT (Matt): 15-minute pause after a loss (was 30)
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
 _cool_until = [0.0]
@@ -119,17 +120,18 @@ def can_enter(ticker, state=None, tag="", own_slot=False) -> bool:
         return True
     if ONE_COIN_PER_ROUND:
         r = _round(ticker)
-        if r in _rounds and _rounds[r] != ticker:
-            _say("r" + r + tag, f"[GUARD] {tag} {ticker}: already have a bet this round ({_rounds[r]}) -- one coin per round.")
-            return False
+        coins = set(_rounds.get(r, set()))
         for t, pos in list((state or {}).items()):
             # 13 Nov 16:12 CT (Matt: "nothing is bidding"): only the BOT's own crypto bets count -- Matt's manual bets
             # (and commodity markets like KXCOPPER15M) were blocking every strategy for the whole round.
             if not isinstance(pos, dict) or not any(pos.get(f) for f in _BOT_FLAGS):
                 continue
-            if t != ticker and _round(t) == r and "15M" in str(t).split("-")[0].upper():
-                _say("s" + r + tag, f"[GUARD] {tag} {ticker}: already holding {t} this round -- one coin per round.")
-                return False
+            if _round(t) == r and "15M" in str(t).split("-")[0].upper():
+                coins.add(t)
+        if ticker not in coins and len(coins) >= MAX_COINS_PER_ROUND:
+            _say("r" + r + tag, f"[GUARD] {tag} {ticker}: already {len(coins)} coins bet this round "
+                                f"({', '.join(sorted(coins))}) -- max {MAX_COINS_PER_ROUND} per round.")
+            return False
     return True
 
 
@@ -140,7 +142,7 @@ def note_entry(ticker, own_slot=None) -> None:
             for k in list(_own)[:100]:
                 _own.pop(k, None)
         return
-    _rounds[_round(ticker)] = ticker
+    _rounds.setdefault(_round(ticker), set()).add(ticker)
     if len(_rounds) > 200:
         for k in list(_rounds)[:100]:
             _rounds.pop(k, None)
