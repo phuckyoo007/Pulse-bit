@@ -41,7 +41,8 @@ VARIANTS = [
     # 17 Nov 10:45Z: RSI-MID-H = RSI-MID but HOLD TO THE END (no RSI-back-through-50 exit).  One change, to test whether
     # the early RSI exit helps or hurts: RSI-MID's exits sold at 25c/57c/58c, and near-even-money bets that are right pay $1.
     {"tag": "RSI-MID-H", "kind": "cross", "lo": 0.35, "hi": 0.65, "min_left": 300, "max_left": 780, "rsi_exit": False},
-    {"tag": "RSI-FAV", "kind": "fav", "lo": 0.90, "hi": 0.97, "min_left": 10, "max_left": 180, "rsi_exit": False,
+    # 17 Nov 16:47Z: RSI-FAV OFF -- 29 rides, 23 won, -$3.65: small 90c+ wins, and each loss wipes out ~10 of them.
+    {"tag": "RSI-FAV", "off": True, "kind": "fav", "lo": 0.90, "hi": 0.97, "min_left": 10, "max_left": 180, "rsi_exit": False,
      "stop": 0.76},
 ]
 _pos = {}        # (tag, ticker) -> {"side", "cost", "count", "at", "coin", "tag"}
