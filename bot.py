@@ -766,8 +766,9 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
             market_price = (float(yes_ask) + float(yes_bid)) / 2
             current_value = market_price if side == "bid" else (1 - market_price)
             _pos0 = state.get(ticker) or {}
-            if _pos0.get("manually_adopted") or _pos0.get("steady") or _pos0.get("surge"):
-                continue
+            if _pos0.get("manually_adopted") or _pos0.get("steady") or _pos0.get("surge") or ticker in _MANUAL_SEEN:
+                continue   # 17 Nov 15:25 CT: Matt's bets keep their 35% manual stop only -- the backstop was firing on a
+                           # 2c manual BTC every second (re-adopt / backstop loop, dozens of failed sells)
             if _pos0.get("flip_star") and flip_star.FLIP_HOLD_TO_END and not _pos0.get("force_exit"):
                 continue   # 11 Nov 02:46 CT (Matt): Flip Star bets are held to the end -- no emergency backstop   # 1 Nov (Matt): manual bets only exit on their 12c / 20c drops (main exit loop)
             if not _pos0.get("ride") and flip_star.FLIP_STOPS_ONLY_6040_AND_CRASH:
@@ -959,6 +960,7 @@ def _sigma_exit_confirmed(ticker, position, minimum):
 
 
 _BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
+_MANUAL_SEEN = set()   # tickers adopted as MANUAL (Matt's) -- the hard backstop leaves these alone
 _BOT_EXIT_COUNT = {}   # 16 Nov 19:00 CT: shares the backstop was selling -- an unfilled leftover of that size is still the bot's
 
 
@@ -1171,6 +1173,8 @@ def adopt_manual_positions(client: KalshiClient, state: dict) -> None:
                 state[ticker]["rise"] = True   # 5 Nov: a Rise bet keeps its own exits after a restart
         origin = ("MANUAL (no Pulse order in its history) -- 85%-of-cost stop only" if is_manual else
                   "bot-placed" if by_bot else "origin unknown -- normal stop")
+        if is_manual:
+            _MANUAL_SEEN.add(ticker)
         print(f"  ADOPTED {'manual' if is_manual else 'existing'} position: {ticker} {side.upper()} x{count:.0f} @ ~${entry_price:.2f} "
               f"(derived from Kalshi's real position data; {origin}) -- stop-loss now protecting it.")
 
