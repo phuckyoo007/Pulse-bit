@@ -13,7 +13,7 @@ import uuid
 import flip_star
 import strategy_guard
 
-BTC92_ENABLED = True   # 12 Nov 23:50 CT (Matt): back on (not doing that bad), 4 shares, its 4 hours only
+BTC92_ENABLED = False   # 16 Nov 19:54 CT (Matt): "turn first 4 on" -- only Last 3, Early settle, Late 78, Flip Star
 BTC92_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 BTC92_HOLD_TO_END = True   # 11 Nov 02:46 CT (Matt): no stop -- held to the end
 BTC92_WINDOW = 120          # last 2 minutes

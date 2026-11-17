@@ -65,7 +65,7 @@ def _sig_win(ticker, m, side, sl):
     zs = mk._held_sigma(ticker, m, side, sl)
     return zs, (None if zs is None else _phi(zs)), "pulse"
 
-MKS_ENABLED = True
+MKS_ENABLED = False   # 16 Nov 19:54 CT (Matt): only Last 3, Early settle, Late 78, Flip Star live
 MKS_PAPER = False           # 13 Nov 15:27 CT (Matt): run it live at 1 share
 MKS_SHARES = 1
 MKS_POLL_SECONDS = 4

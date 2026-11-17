@@ -14,7 +14,7 @@ import uuid
 import flip_star
 import strategy_guard
 
-MAKER93_ENABLED = True
+MAKER93_ENABLED = False   # 16 Nov 19:54 CT (Matt): "turn first 4 on" -- only Last 3, Early settle, Late 78, Flip Star; MAKER93 -$0.93 today, OFF
 MAKER93_SHARES = 1          # small to start -- the paper version was $1 a ride
 MAKER93_MAX_SECONDS_LEFT = 300
 MAKER93_MIN_SECONDS_LEFT = 30
