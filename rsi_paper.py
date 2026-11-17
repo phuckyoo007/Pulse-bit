@@ -35,7 +35,8 @@ RSI_MAX_PRICE = 0.90
 _last = [0.0]
 _rsi = {}        # coin -> {"r1": [prev, now], "r5": now, "t": time}
 VARIANTS = [
-    {"tag": "RSI-MOM", "kind": "cross", "lo": 0.15, "hi": 0.90, "min_left": 60, "max_left": 900, "rsi_exit": True},
+    # 17 Nov 01:40Z: RSI-MOM OFF -- 7 rides, 2 won, -$7.01 since the settle fix (and losing before it).
+    {"tag": "RSI-MOM", "off": True, "kind": "cross", "lo": 0.15, "hi": 0.90, "min_left": 60, "max_left": 900, "rsi_exit": True},
     {"tag": "RSI-MID", "kind": "cross", "lo": 0.35, "hi": 0.65, "min_left": 300, "max_left": 780, "rsi_exit": True},
     {"tag": "RSI-FAV", "kind": "fav", "lo": 0.90, "hi": 0.97, "min_left": 10, "max_left": 180, "rsi_exit": False,
      "stop": 0.76},
@@ -120,6 +121,8 @@ def run(client=None) -> None:
         for v in VARIANTS:
             key = (v["tag"], t)
             p = _pos.get(key)
+            if v.get("off") and not p:
+                continue
             if p:
                 bid = yb if p["side"] == "yes" else nb
                 p["last_bid"] = bid

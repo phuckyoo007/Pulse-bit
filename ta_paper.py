@@ -227,7 +227,8 @@ def run(client=None) -> None:
             ask = float(n["yes_ask"] if side == "yes" else n["no_ask"])
             if not (TA_MIN_PRICE <= ask <= TA_MAX_PRICE):
                 continue
-            for tag in (strat + "-HOLD", strat + "-1to2"):
+            # 17 Nov 01:40Z: the -15c/+30c exit went 0 for 4 (-$2.61) -- near 50c, normal wiggle hits the -15c stop.
+            for tag in (strat + "-HOLD",):
                 key = (tag, t)
                 if key in _done:
                     continue
