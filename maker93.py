@@ -20,8 +20,9 @@ MAKER93_MAX_SECONDS_LEFT = 300
 MAKER93_MIN_SECONDS_LEFT = 30
 MAKER93_ASK_MIN, MAKER93_ASK_MAX = 0.95, 0.97
 MAKER93_UNDER = 0.02
-MAKER93_MIN_SIGMA = 1.5
+MAKER93_MIN_SIGMA = 2.0          # 16 Nov 19:00 CT: SOL filled as the board slid to 1.28 sigma -- need more cushion
 MAKER93_REST_SECS = 60
+MAKER93_KEEP_SIGMA = 1.7     # cancel the resting bid the moment the board drops under this
 MAKER93_SKIP_COINS = {"DOGE", "ZEC"}
 
 _resting = {}    # ticker -> {"order_id", "side", "price", "at", "n"}
@@ -57,7 +58,7 @@ def _check(client, state, state_lock, b):
             print(f"[MAKER93] {ticker}: couldn't check the resting bid ({e}).")
             continue
         n = b.get(ticker)
-        fav_ok = bool(n) and n.get("side") == r["side"] and (n.get("zs") or 0) >= MAKER93_MIN_SIGMA - 1e-9 \
+        fav_ok = bool(n) and n.get("side") == r["side"] and (n.get("zs") or 0) >= MAKER93_KEEP_SIGMA - 1e-9 \
             and (n.get("tl") or 0) >= MAKER93_MIN_SECONDS_LEFT
         if abs(held) < 1e-9 and fav_ok and now - r["at"] < MAKER93_REST_SECS:
             continue   # still waiting for the price to dip to us
