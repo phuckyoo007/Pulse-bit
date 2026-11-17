@@ -220,7 +220,9 @@ def run(client=None) -> None:
         tl = n.get("tl")
         if not s or tl is None or float(tl) < 900 - TA_ENTRY_WINDOW:
             continue
-        for strat in ("EMA-PB", "BB-MR"):
+        # 17 Nov 07:40Z: EMA-PB OFF -- went negative on paper (13 rides, 7 won, -$0.31) and the 30-day backtest says
+        # it calls the direction only 49.6% of the time.
+        for strat in ("BB-MR",):
             side = s.get(strat)
             if not side:
                 continue
