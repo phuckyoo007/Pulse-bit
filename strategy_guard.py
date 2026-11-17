@@ -40,7 +40,7 @@ def bet_shares(price, default):
 # together -- e.g. noon 11 Nov lost 5 coins in one round, 6 AM 12 Nov lost 4). So:
 #   * ONE coin per 15-minute round across every real-money strategy (the most stable coin that qualifies first);
 #   * after ANY losing real bet, no new real bets for COOLDOWN_AFTER_LOSS seconds (losses come in clusters).
-ONE_COIN_PER_ROUND = True
+ONE_COIN_PER_ROUND = False   # 17 Nov 16:37 CT (Matt): "no one coin per round deal" -- no limit on coins per round
 MAX_COINS_PER_ROUND = 3   # 17 Nov 16:36 CT (Matt: "slow betting"): up to 3 coins a round (was 1); account ~$8.5 covers it
 COOLDOWN_AFTER_LOSS = 900   # 16 Nov 12:38 CT (Matt): 15-minute pause after a loss (was 30)
 _rounds = {}          # round id (e.g. 26NOV121500) -> ticker we bet
