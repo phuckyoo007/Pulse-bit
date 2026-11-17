@@ -334,7 +334,8 @@ LAST_WINDOW_SECONDS = 45   # 19 Oct 21:36 CT: was 30
 #   Early settle (EARLY96): 60% stop -$0.47 vs 40% -$10.77 vs no stop -$41.52
 #   Flip Star (FLIP98):     60% stop -$16.36 vs 40% -$26.65 vs no stop -$38.49
 #   BTC92 (BTC94): 60% -$28.61 vs 40% -$30.09 -- too close to change, stays 40%.
-STOP_BY_STRATEGY = {"early93": 0.76, "flip_star": 0.76, "ride82": 0.76}   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (were 60/60/92)
+STOP_BY_STRATEGY = {"early93": 0.55, "flip_star": 0.55, "ride82": 0.55}   # 16 Nov 20:00 CT: 76% -> 55%. 'Did the sell help' log, 16 Nov: stops sold at 55-84c cost $10.39 (the favourite came back and won), saved $5.07
+_WAS_STOP_BY_STRATEGY = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (were 60/60/92)
 
 
 # 16 Nov 12:07 CT (Matt): "76% of what we paid -- not that -- 76 CENTS rather".  Every bot strategy now sells when its
@@ -345,7 +346,7 @@ STOP_PRICE = 0.76
 
 def _stop_line(entry):
     # 16 Nov 12:36 CT (Matt): back to 76% OF WHAT WE PAID (not the 76c line)
-    return entry * 0.76
+    return entry * HOLD_STOP_FRACTION   # 16 Nov 20:00 CT: was a fixed 0.76
 
 
 def _stop_frac(position):
@@ -355,9 +356,9 @@ def _stop_frac(position):
     return HOLD_STOP_FRACTION
 
 
-HOLD_STOP_FRACTION = 0.76   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 40%)
+HOLD_STOP_FRACTION = 0.55   # 16 Nov 20:00 CT: 76% -> 55%. 'Did the sell help' log, 16 Nov: stops sold at 55-84c cost $10.39 (the favourite came back and won), saved $5.07 (was 0.76)  # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 40%)
 BASE_PULSE_ENTRIES = False   # 11 Nov 00:00 CT (Matt): the original Pulse model entries are off
-STOP_FRACTION_OF_ENTRY = 0.78   # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
+STOP_FRACTION_OF_ENTRY = 0.55   # 16 Nov 20:00 CT: matches the 55% stop (was 0.78)  # 10 Nov 23:27 CT (Matt): firm instant stop at 78% of entry (a 22% loss); was 86%
 LAST_WINDOW_STOP_HELD = 0.80   # 26 Oct 15:09 CT: 80c in the last 45s too (ETH NO sat at 71c for 12s under the old 70c line, then fell to 13c: -$12.84)
 # 21 Oct 23:10 CT (Matthew): the 70/30 and 60/40 line stops must HOLD for this many seconds before selling, so a
 # one-tick spike doesn't sell a winner. The 50% crash stop is still instant. If the price climbs back above the line,
@@ -720,7 +721,8 @@ def _board_says_holding(ticker, position):
     return False
 
 
-HARD_BACKSTOP_FRACTION = 0.72                # was 0.78 -- kept below the 80% stop so it doesn't fire first
+HARD_BACKSTOP_FRACTION = 0.50   # 16 Nov 20:00 CT: kept under the 55% stop (was 0.72)
+_WAS_BACKSTOP = 0.72                # was 0.78 -- kept below the 80% stop so it doesn't fire first
 HARD_BACKSTOP_CRASH_FRACTION = 0.50   # flip/ride positions: below this, sell instantly no matter what
 HARD_BACKSTOP_CONFIRM_SECONDS = 0   # 7 Nov 18:50 CT (Matt): no waits -- fast market
 _backstop_since = {}
@@ -1269,7 +1271,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                 elif position.get("maker93"):
                     # 16 Nov 17:58 CT: MAKER93 holds to the end; 76%-of-cost stop as the backup (Matt's rule)
                     if _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost, bought "
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost, bought "
                                                       f"{position['entry_price']*100:.0f}c)")
                     else:
                         decision = ExitDecision(False, "")
@@ -1283,7 +1285,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {last120.LAST120_EXIT_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1297,7 +1299,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1326,7 +1328,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
                                                       f"under the minimum -- price falling fast)")
                     elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
@@ -1335,14 +1337,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no red-card sell, held to the end
                     # 11 Nov 11:15 CT (Matt): ...except the 40% stop
                     if _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
                     if _hv <= _stop_line(position["entry_price"]) + 1e-9:
-                        decision = ExitDecision(True, f"stop_76pct (held side {_hv*100:.0f}c <= 76% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
+                        decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")

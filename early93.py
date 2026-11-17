@@ -11,7 +11,7 @@ import strategy_guard
 import kalshi_ws
 
 EARLY93_ENABLED = True   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
-EARLY93_SHARES = 4   # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
+EARLY93_SHARES = 1   # 16 Nov 20:00 CT (Matt: 'adjust shares and stop losses to make them more profitable'): account is $1.87 -- 1 share fits; bigger orders just fail (was 4)  # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
 EARLY93_MIN_SECONDS_LEFT = 240
