@@ -38,6 +38,9 @@ VARIANTS = [
     # 17 Nov 01:40Z: RSI-MOM OFF -- 7 rides, 2 won, -$7.01 since the settle fix (and losing before it).
     {"tag": "RSI-MOM", "off": True, "kind": "cross", "lo": 0.15, "hi": 0.90, "min_left": 60, "max_left": 900, "rsi_exit": True},
     {"tag": "RSI-MID", "kind": "cross", "lo": 0.35, "hi": 0.65, "min_left": 300, "max_left": 780, "rsi_exit": True},
+    # 17 Nov 10:45Z: RSI-MID-H = RSI-MID but HOLD TO THE END (no RSI-back-through-50 exit).  One change, to test whether
+    # the early RSI exit helps or hurts: RSI-MID's exits sold at 25c/57c/58c, and near-even-money bets that are right pay $1.
+    {"tag": "RSI-MID-H", "kind": "cross", "lo": 0.35, "hi": 0.65, "min_left": 300, "max_left": 780, "rsi_exit": False},
     {"tag": "RSI-FAV", "kind": "fav", "lo": 0.90, "hi": 0.97, "min_left": 10, "max_left": 180, "rsi_exit": False,
      "stop": 0.76},
 ]
