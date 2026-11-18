@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 
 import flip_star
 
-V2_ENABLED = True
+V2_ENABLED = False   # 18 Nov 00:20 CT (Matt): "turn off all strategies without positive pnl" -- V2 placed no bets of its own, $0.00, OFF
 V2_PAPER = False                 # 26 Oct 19:42 CT (Matthew): "try V2 alongside Pulse" -- LIVE, small (V2_LIVE_SHARES)
 V2_LIVE_SHARES = 1   # 13 Nov 03:51 CT (Matt): everything at 1 share
 V2_LIVE_MAX_OPEN = 0   # 3 Nov 16:43 CT (Matt): no new V2 bets -- Flip Star only (open V2 bets still managed)

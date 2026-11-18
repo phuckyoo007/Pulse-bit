@@ -17,7 +17,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-LAST3_ENABLED = True   # 12 Nov 16:11 CT (Matt): real money, 1 share
+LAST3_ENABLED = False   # 18 Nov 00:20 CT (Matt): "turn off all strategies without positive pnl" -- Last 3 -$0.36 on 17 Nov (+$1.35 since tracking), OFF
 LAST3_SHARES = 1   # 16 Nov 20:00 CT (Matt: 'adjust shares and stop losses to make them more profitable'): account is $1.87 -- 1 share fits; bigger orders just fail (was 4)  # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 LAST3_DOLLARS = 0
 LAST3_MAX_SECONDS_LEFT = 180
