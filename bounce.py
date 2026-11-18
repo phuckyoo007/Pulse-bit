@@ -60,7 +60,7 @@ VARIANTS = [
      "swing": BOUNCE_SWING, "take": BOUNCE_TAKE, "stop": 0.0},
     # 15 Nov 13:18 CT (Matt): "in the first five minutes it's all the way up to 90 and the other side is 10 -- the 90
     # comes back down to 70/60 and the 10 goes to 40".  No bounce needed: first 5 minutes, cheap side 5-12c, sell at 2x.
-    {"tag": "EARLY10", "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
+    {"tag": "EARLY10", "off": True, "dollars": 0.10, "lo": 0.05, "hi": 0.12, "swing": 0.0, "take": 2.00, "stop": 0.0,
      "min_left": 600},
     # 15 Nov 19:36 CT (Matt): "nothing to do with how they finish -- buy in the last five minutes and walk with the
     # profit".  So these never hold to the end: sell at the target, or sell whatever it's worth with 20s left.
@@ -88,7 +88,7 @@ VARIANTS = [
     # LAG12: same with a 12-pt gap.  LAG8-H: same entry, hold to the end.
     {"tag": "LAG8", "off": True, "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
-    {"tag": "LAG12", "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.12, "swing": 0.0, "take": 0.0,
+    {"tag": "LAG12", "off": True, "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.12, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 60, "converge": True},
     {"tag": "LAG8-H", "off": True, "kind": "lag", "dollars": 1.00, "lo": 0.15, "hi": 0.85, "edge": 0.08, "swing": 0.0, "take": 0.0,
      "stop": 0.0, "min_left": 300, "max_left": 660, "exit_left": 0},
