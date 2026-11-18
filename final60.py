@@ -19,7 +19,7 @@ import time
 
 import flip_star
 
-FINAL60_ENABLED = True
+FINAL60_ENABLED = False   # 18 Nov (owner): off, no positive PnL
 FINAL60_PAPER = True
 FINAL60_SHARES = 2
 FINAL60_MAX_SECONDS_LEFT = 45      # need at least 15 of the 60 prints already in

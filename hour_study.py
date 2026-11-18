@@ -33,12 +33,10 @@ RULES = [
     ("EARLY93", 240, 420, 0.93, 0.98, False),
     ("LATE80", 120, 240, 0.80, 0.93, False),
     ("LATE60", 120, 240, 0.60, 0.80, True),
-    ("FLIP94", 10, 300, 0.94, 0.98, False),
     ("BTC92", 10, 120, 0.92, 0.98, False),
     # 12 Nov 14:53 CT: the tightened versions now used for real money
-    ("EARLY96", 240, 420, 0.96, 0.98, False),
     ("BTC94", 10, 120, 0.94, 0.98, False),
-    ("FLIP98", 10, 300, 0.96, 0.98, False),   # live paper also needs 98%+ win and <=2 flips (see run)
+    # 18 Nov (owner): off, no positive PnL -- removed EARLY96, FLIP94, FLIP98 paper rows
 ]
 
 
@@ -633,6 +631,7 @@ _mid_prev = {}  # ticker -> (side, mid)
 # the side we'd buy. Buys at the ask, sells at the bid (both fees), or settles at the end if momentum never fades.
 MOM_VARIANTS = {"MOM90": (0.90, 0.50), "MOM80": (0.80, 0.40)}   # (buy at, sell below)
 MOM_SHARES = 2
+MOM_PAPER_ENABLED = False   # 18 Nov (owner): off, no positive PnL (MOM80 -12.78 over 59 rides, MOM90 -8.02 over 49 rides)
 _mom_pos = {}    # (variant, ticker) -> dict
 _mom_done = set()
 _mom_tot = {v: {"n": 0, "up": 0, "pnl": 0.0} for v in MOM_VARIANTS}
@@ -680,7 +679,7 @@ def _momentum_ride(client, b, now):
                     elif tl <= 5:
                         p["await"] = True
                     continue
-                if p or key in _mom_done or tl < 60:
+                if p or key in _mom_done or tl < 60 or not MOM_PAPER_ENABLED:   # flag gates NEW paper rides only
                     continue
                 if m_side >= buy_at and 0.10 <= ask <= 0.90:
                     _mom_pos[key] = {"side": side, "entry": ask, "at": now, "close_at": now + tl}
