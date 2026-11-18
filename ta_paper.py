@@ -34,7 +34,7 @@ _last = [0.0]
 _sig = {}        # coin -> {"bucket": candle start, "EMA-PB": side|None, "BB-MR": side|None}
 _pos = {}        # (tag, ticker) -> dict
 _done = set()
-TAGS = ("EMA-PB-HOLD", "EMA-PB-1to2", "BB-MR-HOLD", "BB-MR-1to2")
+TAGS = ("EMA-PB-HOLD", "EMA-PB-1to2", "BB-MR-HOLD", "BB-MR-1to2", "BB-MR15-HOLD")
 _tot = {t: {"n": 0, "up": 0, "pnl": 0.0} for t in TAGS}
 _bt_started = [False]
 
@@ -101,6 +101,13 @@ def _signals(c):
                 s["BB-MR"] = "yes"
             elif rp is not None and prev_cl > upper and rp > 70 and cl < c[i][3] and cl < upper:
                 s["BB-MR"] = "no"
+            # 18 Nov 10:56Z: BB-MR15 -- same rule with 1.5-std bands (more signals; mean-reversion "fade the extreme"
+            # setups are often tested at 1.5-2 std -- luxalgo.com/blog/mean-reversion-trading-fading-extremes-with-precision)
+            lo15, hi15 = m - 1.5 * sd, m + 1.5 * sd
+            if rp is not None and prev_cl < lo15 and rp < 30 and cl > c[i][3] and cl > lo15:
+                s["BB-MR15"] = "yes"
+            elif rp is not None and prev_cl > hi15 and rp > 70 and cl < c[i][3] and cl < hi15:
+                s["BB-MR15"] = "no"
         if s:
             out[i] = s
     return out
@@ -222,7 +229,7 @@ def run(client=None) -> None:
             continue
         # 17 Nov 07:40Z: EMA-PB OFF -- went negative on paper (13 rides, 7 won, -$0.31) and the 30-day backtest says
         # it calls the direction only 49.6% of the time.
-        for strat in ("BB-MR",):
+        for strat in ("BB-MR", "BB-MR15"):
             side = s.get(strat)
             if not side:
                 continue
