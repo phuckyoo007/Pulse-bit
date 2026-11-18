@@ -229,7 +229,7 @@ def run(client=None) -> None:
             continue
         # 17 Nov 07:40Z: EMA-PB OFF -- went negative on paper (13 rides, 7 won, -$0.31) and the 30-day backtest says
         # it calls the direction only 49.6% of the time.
-        for strat in ("BB-MR", "BB-MR15"):
+        for strat in ("BB-MR",):   # 18 Nov 11:40Z: BB-MR15 OFF -- 30-day backtest 49.0% right, -3.0c a bet (BB-MR 52.3%, +0.3c)
             side = s.get(strat)
             if not side:
                 continue

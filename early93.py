@@ -10,7 +10,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-EARLY93_ENABLED = True   # 12 Nov 08:43 CT (Matt): run strategies 1-3 (BTC92, Follow the crowd, Early settle) at 1 share
+EARLY93_ENABLED = False   # 18 Nov 05:40 CT: Matt's rule "turn off all strategies without positive pnl" -- 4:41am CT round: 5 coins bought NO at 96-98c with 7 min left, a market-wide rally reversed 3 (SOL/HYPE/DOGE, -$1.88; the 55% stops were right, all 3 lost); Early settle now -$1.66 since 17 Nov 01:56Z
 EARLY93_SHARES = 1   # 16 Nov 20:00 CT (Matt: 'adjust shares and stop losses to make them more profitable'): account is $1.87 -- 1 share fits; bigger orders just fail (was 4)  # 13 Nov 15:27 CT (Matt): crypto strategies at 4 shares
 EARLY93_DOLLARS = 0   # 10 Nov 18:02 CT (Matt): whole shares again (was about 11c per bet)
 EARLY93_MAX_SECONDS_LEFT = 420
