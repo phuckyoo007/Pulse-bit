@@ -808,6 +808,11 @@ def check_hard_backstop(client: KalshiClient, state: dict) -> list:
                         continue
             if _board_says_holding(ticker, state.get(ticker) or {}):
                 continue
+            # 17 Nov 20:29 CT: same 10s flash-dip confirmation as the price stops (BTC 01:28Z 18 Nov dipped to 32c, won)
+            _bl = _backstop_low.setdefault(ticker, {})
+            if not _price_stop_confirmed(ticker, _bl):
+                continue
+            _backstop_low.pop(ticker, None)
             _backstop_since.pop(ticker, None)
             print(f"HARD BACKSTOP TRIGGERED: {ticker} real value ${real_current_dollars:.2f} fell to/below "
                   f"{HARD_BACKSTOP_FRACTION*100:.0f}% of real bet ${real_bet_dollars:.2f} "
@@ -948,6 +953,29 @@ SIGMA_EXIT_HARD = 0.0   # 16 Nov 17:45 CT (Matt: "fix the flaws of those last tw
 # catches a real crash at once.
 
 
+# 17 Nov 20:29 CT (Matt: "figure out how the recent losses happen, make sure they don't happen again").
+# Flip Star BTC 01:28Z 18 Nov: bought NO 95c, board 2.0 sigma our way; one thin-book flash dip put the price at 32c for a
+# few seconds, the 55% stop sold INSTANTLY (-$0.62), and BTC NO was back at 91c 45s later and WON (the sell cost $0.68).
+# Same pattern as Last 3 XRP 08:58Z 17 Nov (stopped at 29c, then won).  The price stops now need the price to STAY under
+# the line for PRICE_STOP_CONFIRM_SECS (seen on consecutive checks, no gap over 5s) before selling.
+PRICE_STOP_CONFIRM_SECS = 10
+
+
+def _price_stop_confirmed(ticker, position):
+    now = time.time()
+    if now - position.get("pstop_last", 0) > 5:
+        position["pstop_since"] = now
+    position["pstop_last"] = now
+    held = now - position["pstop_since"]
+    if held >= PRICE_STOP_CONFIRM_SECS:
+        return True
+    if not position.get("pstop_said"):
+        position["pstop_said"] = True
+        print(f"[STOP WAIT] {ticker}: price under the stop line -- waiting {PRICE_STOP_CONFIRM_SECS}s to make sure it's "
+              f"not a flash dip before selling.")
+    return False
+
+
 def _sigma_exit_confirmed(ticker, position, minimum):
     z = _late78_sigma(ticker, position)
     if z is None or z >= minimum - 1e-9:
@@ -961,6 +989,7 @@ def _sigma_exit_confirmed(ticker, position, minimum):
 
 _BOT_EXITED = {}   # 13 Nov 23:46 CT: ticker -> when the bot closed its own bet there
 _MANUAL_SEEN = set()   # tickers adopted as MANUAL (Matt's) -- the hard backstop leaves these alone
+_backstop_low = {}   # ticker -> flash-dip confirmation state for the hard backstop
 _BOT_EXIT_COUNT = {}   # 16 Nov 19:00 CT: shares the backstop was selling -- an unfilled leftover of that size is still the bot's
 
 
@@ -1274,7 +1303,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     pass   # bad fill outside the allowed price range -- keep the immediate exit
                 elif position.get("maker93"):
                     # 16 Nov 17:58 CT: MAKER93 holds to the end; 76%-of-cost stop as the backup (Matt's rule)
-                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    if (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost, bought "
                                                       f"{position['entry_price']*100:.0f}c)")
                     else:
@@ -1288,7 +1317,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _sigma_exit_confirmed(ticker, position, last120.LAST120_EXIT_SIGMA):
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {last120.LAST120_EXIT_SIGMA:.1f} minimum)")
-                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    elif (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
@@ -1302,7 +1331,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     elif _sigma_exit_confirmed(ticker, position, late78.LATE78_MIN_SIGMA):
                         decision = ExitDecision(True, f"sigma_exit (our side {_late78_sigma(ticker, position):.2f} sigma from flipping, "
                                                       f"under the {late78.LATE78_MIN_SIGMA:.1f} minimum)")
-                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    elif (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
@@ -1331,7 +1360,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                     if position.get("bad_fill"):
                         decision = ExitDecision(True, f"stop_bad_fill (bought {position['entry_price']*100:.0f}c, more than 5c "
                                                       f"under the minimum -- price falling fast)")
-                    elif _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    elif (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
@@ -1340,14 +1369,14 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                         (position.get("btc92") and btc92.BTC92_HOLD_TO_END):
                     # 11 Nov 02:46 CT (Matt): Flip Star and BTC92 -- no red-card sell, held to the end
                     # 11 Nov 11:15 CT (Matt): ...except the 40% stop
-                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    if (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
                         decision = ExitDecision(False, "")
                 elif position.get("btc92"):
                     # 7 Nov 11:30 CT (Matt): BTC92 -- instant stop at 82% of entry, otherwise hold to the end
-                    if _hv <= _stop_line(position["entry_price"]) + 1e-9:
+                    if (_hv <= _stop_line(position["entry_price"]) + 1e-9 and _price_stop_confirmed(ticker, position)):
                         decision = ExitDecision(True, f"stop_{HOLD_STOP_FRACTION*100:.0f}pct (held side {_hv*100:.0f}c <= {HOLD_STOP_FRACTION*100:.0f}% of cost = {_stop_line(position['entry_price'])*100:.0f}c, bought {position['entry_price']*100:.0f}c -- instant)")
 
                     else:
@@ -1425,7 +1454,7 @@ def check_exits(client: KalshiClient, state: dict, excluded_tickers: set) -> lis
                                                       f"{position['entry_price']*100:.0f}c -- selling)")
                     else:
                         decision = ExitDecision(False, "")
-                elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9:
+                elif _hv <= position["entry_price"] * STOP_FRACTION_OF_ENTRY + 1e-9 and _price_stop_confirmed(ticker, position):
                     # 25 Oct 13:27 CT (Matthew): at/under 75c -> sell INSTANTLY, any time in the round.
                     position.pop("crash_since", None)
                     decision = ExitDecision(True, f"stop_{STOP_FRACTION_OF_ENTRY*100:.0f}pct (held side {_hv*100:.0f}c <= {STOP_FRACTION_OF_ENTRY*100:.0f}% of entry ${position['entry_price']:.2f} -- instant)")
