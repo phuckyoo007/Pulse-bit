@@ -14,13 +14,13 @@ import strategy_guard
 import kalshi_ws
 
 LAST120_ENABLED = True   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- LAST120 -$1.00 today, OFF
-LAST120_SHARES = 2       # 16 Nov 13:16 CT (Matt): 2 shares after the HYPE loss (was 3)
+LAST120_SHARES = 5       # 16 Nov 13:16 CT (Matt): 2 shares after the HYPE loss (was 3)
 LAST120_DOLLARS = 0
 LAST120_MAX_SECONDS_LEFT = 120   # 16 Nov 12:06 CT (Matt): last 3 minutes (was 2)
 LAST120_MIN_SECONDS_LEFT = 5
 LAST120_MIN_PRICE = 0.86
-LAST120_MAX_PRICE = 0.97
-LAST120_HOLD_SECS = 4
+LAST120_MAX_PRICE = 0.98
+LAST120_HOLD_SECS = 3
 LAST120_STOP_FRACTION = 0.72   # 16 Nov 11:30 CT (Matt): 76% stop for ALL strategies (was 85%)
 LAST120_TAKE_PROFIT_PRICE = 0.99
 # 16 Nov 11:55 CT review: its only loss so far was DOGE (91c -> 68c in 70s, -$0.69).  DOGE was already pulled from
@@ -33,8 +33,8 @@ LAST120_SKIP_COINS = {"DOGE"}
 #   * buy only when the board picks the same side, 1.3+ sigma from flipping, HELD 30s unbroken;
 #   * skip a coin whose board pick changed sides in the last 6 minutes;
 #   * (bot.py) sell early the moment our side drops under 1.0 sigma; 76% stop stays as the backup.
-LAST120_ENTRY_SIGMA = 1.3
-LAST120_EXIT_SIGMA = 1.0
+LAST120_ENTRY_SIGMA = 1.1
+LAST120_EXIT_SIGMA = 0.5
 
 _done = {}
 _tries = {}
