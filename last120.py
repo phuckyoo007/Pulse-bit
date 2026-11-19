@@ -33,8 +33,8 @@ LAST120_SKIP_COINS = {"DOGE"}
 #   * buy only when the board picks the same side, 1.3+ sigma from flipping, HELD 30s unbroken;
 #   * skip a coin whose board pick changed sides in the last 6 minutes;
 #   * (bot.py) sell early the moment our side drops under 1.0 sigma; 76% stop stays as the backup.
-LAST120_ENTRY_SIGMA = 1.1
-LAST120_EXIT_SIGMA = 0.5
+LAST120_ENTRY_SIGMA = 0.6
+LAST120_EXIT_SIGMA = 0.1
 
 _done = {}
 _tries = {}
