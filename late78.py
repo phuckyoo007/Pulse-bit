@@ -13,7 +13,7 @@ import flip_star
 import strategy_guard
 import kalshi_ws
 
-LATE78_ENABLED = True   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- Late 78 +$0.56 today (+$7 since Sunday), back ON
+LATE78_ENABLED = False   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- Late 78 +$0.56 today (+$7 since Sunday), back ON
 LATE78_SHARES = 1   # 16 Nov 20:00 CT (Matt: 'adjust shares and stop losses to make them more profitable'): account is $1.87 -- 1 share fits; bigger orders just fail
 _WAS_LATE78_SHARES = 6
 LATE78_DOLLARS = 0
