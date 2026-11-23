@@ -14,7 +14,7 @@ import strategy_guard
 import kalshi_ws
 
 LAST120_ENABLED = True   # 16 Nov 17:57 CT (Matt): "only turn on the positive ones" -- LAST120 -$1.00 today, OFF
-LAST120_SHARES = 5       # 16 Nov 13:16 CT (Matt): 2 shares after the HYPE loss (was 3)
+LAST120_SHARES = 4       # 23 Nov 15:32 CT (Matt): 4 shares -- account $3.97, every 5-share order (~$4.60-4.85) failed "insufficient balance"
 LAST120_DOLLARS = 0
 LAST120_MAX_SECONDS_LEFT = 120   # 16 Nov 12:06 CT (Matt): last 3 minutes (was 2)
 LAST120_MIN_SECONDS_LEFT = 5
