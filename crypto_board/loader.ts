@@ -601,5 +601,31 @@ patch(".st.fa{border-color:var(--green)}", `.st.bigc{position:relative}
 .st.fa{border-color:var(--green)}`);
 // 31 Oct: older iPads (iOS 12 Safari) cannot parse "??"; rewrite "x??N" as a plain conditional so the page script loads.
 src = src.replace(/([A-Za-z_][A-Za-z0-9_.]*)\?\?(-?\d+)/g, (_m, a, b) => "(" + a + "!=null?" + a + ":" + b + ")");
+// 23 Nov 16:04 CT (Matt): watch list box at the very top, rows sorted by Rank (#1 first), re-sorted every 10 seconds.
+src = src.replace("</body>", () => `<script>
+(function(){
+  var order=null,busy=0,last=0;
+  function box(){var t=document.getElementById("fxrows");return t?t.closest(".lb"):null;}
+  function moveTop(){var b=box(),w=document.querySelector(".wrap");if(b&&w&&w.firstElementChild!==b)w.insertBefore(b,w.firstElementChild);}
+  function rk(tr){var c=tr.children[1];var m=c&&(c.textContent||"").match(/\\d+/);return m?parseInt(m[0],10):999;}
+  function coin(tr){var m=((tr.children[0]||{}).textContent||"").match(/[A-Z0-9]+/);return m?m[0]:"";}
+  function apply(){
+    var tb=document.getElementById("fxrows");if(!tb||busy)return;
+    var rows=[].slice.call(tb.children);if(rows.length<2||rows[0].children.length<3)return;
+    var now=Date.now();
+    if(!order||now-last>=10000){var r=rows.slice().sort(function(a,b){return rk(a)-rk(b);});order=r.map(coin);last=now;}
+    var pos={};order.forEach(function(c,i){pos[c]=i;});
+    var want=rows.slice().sort(function(a,b){var x=pos[coin(a)],y=pos[coin(b)];return (x==null?99:x)-(y==null?99:y);});
+    var same=true;for(var i=0;i<rows.length;i++)if(rows[i]!==want[i]){same=false;break;}
+    if(same)return;
+    busy=1;try{want.forEach(function(tr){tb.appendChild(tr);});}finally{busy=0;}
+  }
+  moveTop();
+  var tb=document.getElementById("fxrows");
+  if(tb&&window.MutationObserver)new MutationObserver(function(){apply();}).observe(tb,{childList:true});
+  setInterval(function(){moveTop();apply();},1000);apply();
+  var lh=box()&&box().querySelector(".lbhead b");if(lh)lh.textContent="Watch list — sorted by rank (updates every 10 s)";
+})();
+</script></body>`);
 await Bun.write("/tmp/crypto_board.ts", src);
 await import("/tmp/crypto_board.ts");
